@@ -1,0 +1,290 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receipt Design Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --panel:#1c1f26; --panel-2:#23272f; --line:#333a45;
+    --ink:#e7e9ec; --muted:#8b94a3; --accent:#d8623a; /* thermal-burn orange */
+    --desk:#2a2d34; --paper:#fbfbf8;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--panel); color:var(--ink);
+    font-family:var(--mono); font-size:13px;
+    display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  @media(max-width:820px){ body{grid-template-columns:1fr; height:auto} }
+
+  /* ---- left: control panel ---- */
+  .panel{
+    display:flex; flex-direction:column; min-height:0;
+    border-right:1px solid var(--line); background:var(--panel-2);
+  }
+  .bar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:14px 16px; border-bottom:1px solid var(--line);
+  }
+  .brand{font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:11px}
+  .brand b{color:var(--accent)}
+  .spacer{flex:1}
+  .seg{display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden}
+  .seg button{
+    background:transparent; color:var(--muted); border:0; font-family:var(--mono);
+    font-size:11px; padding:6px 10px; cursor:pointer;
+  }
+  .seg button[aria-pressed="true"]{ background:var(--accent); color:#1a1206 }
+  label.chip{color:var(--muted); font-size:11px; display:flex; align-items:center; gap:6px; cursor:pointer}
+
+  .templates{display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px; border-bottom:1px solid var(--line)}
+  .templates button{
+    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:6px; padding:6px 10px; font-family:var(--mono); font-size:11px; cursor:pointer;
+  }
+  .templates button:hover{border-color:var(--accent)}
+
+  .editor{flex:1; min-height:0; display:flex}
+  textarea{
+    flex:1; resize:none; border:0; outline:0; padding:16px;
+    background:#15181e; color:#cfe3d6; font-family:var(--mono);
+    font-size:12.5px; line-height:1.55; tab-size:2;
+  }
+
+  /* ---- right: paper stage ---- */
+  .stage{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #34383f 0%, var(--desk) 60%);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .stagebar{
+    display:flex; align-items:center; gap:14px; padding:14px 16px;
+    border-bottom:1px solid var(--line); color:var(--muted); font-size:11px;
+  }
+  .stagebar .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .scroll{flex:1; overflow:auto; display:flex; justify-content:center; padding:28px 16px 60px}
+  .roll{
+    /* the paper, lit from above */
+    background:var(--paper);
+    box-shadow:0 1px 0 #fff inset, 0 18px 40px rgba(0,0,0,.45);
+    /* faint thermal-paper warmth + perforation edges handled by mask */
+    position:relative;
+  }
+  .roll::after{ /* torn bottom edge */
+    content:""; position:absolute; left:0; right:0; bottom:-9px; height:9px;
+    background:
+      repeating-linear-gradient(135deg, var(--paper) 0 6px, transparent 6px 12px);
+    filter:drop-shadow(0 2px 1px rgba(0,0,0,.25));
+  }
+  #paper{ /* the actual render surface; width set by JS to the print width */
+    color:#000; background:transparent; padding:0;
+  }
+  #thermal{display:none}
+  #thermal canvas{display:block}
+
+  .note{padding:0 16px 18px; color:var(--muted); font-size:11px; line-height:1.5}
+  .kbd{color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:1px 5px}
+
+  /* default receipt styling — overridable by the user's own HTML */
+  .receipt{font-family:var(--mono); font-size:22px; line-height:1.35; padding:26px 22px}
+  .receipt h1{font-size:30px; margin:.1em 0 .35em; text-transform:uppercase; letter-spacing:.04em}
+  .receipt .rule{border-top:2px dashed #000; margin:.6em 0}
+  .receipt .row{display:flex; justify-content:space-between; gap:10px}
+  .receipt .big{font-size:40px; font-weight:700; line-height:1.05}
+  .receipt .center{text-align:center}
+  .receipt small{font-size:17px; color:#000}
+</style>
+
+<div class="panel">
+  <div class="bar">
+    <div class="brand">Receipt <b>Studio</b></div>
+    <div class="spacer"></div>
+    <div class="seg" id="width">
+      <button data-w="576" aria-pressed="true">80mm · 576px</button>
+      <button data-w="384" aria-pressed="false">58mm · 384px</button>
+    </div>
+  </div>
+  <div class="templates" id="templates">
+    <button data-t="brief">Daily brief</button>
+    <button data-t="task">Single task</button>
+    <button data-t="list">To-do list</button>
+    <button data-t="recipe">Recipe slip</button>
+  </div>
+  <div class="editor">
+    <textarea id="src" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stagebar">
+    <span class="dot"></span>
+    <span id="status">live preview</span>
+    <div class="spacer" style="flex:1"></div>
+    <label class="chip"><input type="checkbox" id="thermalToggle"> thermal (1-bit) preview</label>
+    <button id="export" style="background:var(--accent);color:#1a1206;border:0;border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:11px;cursor:pointer">Download print PNG</button>
+  </div>
+  <div class="scroll">
+    <div class="roll" id="roll">
+      <div id="paper"><div id="content"></div></div>
+      <div id="thermal"></div>
+    </div>
+  </div>
+  <div class="note">
+    The paper is shown at the printer's real pixel width, so what fits here fits on the roll.
+    Toggle <span class="kbd">thermal</span> to see the true black-and-white dithered output the print head produces — no greys exist on thermal paper.
+  </div>
+</div>
+
+<script>
+const TEMPLATES = {
+  brief: `<div class="receipt">
+  <h1>Tuesday</h1>
+  <small>June 17 · 6:30 AM</small>
+  <div class="rule"></div>
+  <div class="row"><span>Focus</span><span>Ship the parser</span></div>
+  <div class="rule"></div>
+  <div>9:00  Standup</div>
+  <div>13:00 Dentist</div>
+  <div>18:30 Call mom</div>
+  <div class="rule"></div>
+  <div class="center"><small>weather 64° · light rain pm</small></div>
+</div>`,
+  task: `<div class="receipt center">
+  <small>TASK</small>
+  <div class="big">Reply to<br>Sarah re:<br>invoice</div>
+  <div class="rule"></div>
+  <small>priority HIGH · due today</small>
+</div>`,
+  list: `<div class="receipt">
+  <h1>Today</h1>
+  <div class="rule"></div>
+  <div>[ ] Fix serial baud bug</div>
+  <div>[ ] Order thermal paper</div>
+  <div>[ ] Write /next endpoint</div>
+  <div>[ ] Test paper-out path</div>
+  <div class="rule"></div>
+  <div class="center"><small>4 left · keep it small</small></div>
+</div>`,
+  recipe: `<div class="receipt">
+  <h1>Pancakes</h1>
+  <small>serves 2 · 15 min</small>
+  <div class="rule"></div>
+  <div>1 cup flour</div>
+  <div>1 cup milk</div>
+  <div>1 egg · 1 tbsp sugar</div>
+  <div>2 tsp baking powder</div>
+  <div class="rule"></div>
+  <div>Mix dry, add wet, rest 5 min.</div>
+  <div>Cook 2 min/side, medium heat.</div>
+</div>`
+};
+
+const src = document.getElementById('src');
+const content = document.getElementById('content');
+const paper = document.getElementById('paper');
+const roll = document.getElementById('roll');
+const thermal = document.getElementById('thermal');
+const status = document.getElementById('status');
+const toggle = document.getElementById('thermalToggle');
+
+let width = 576;
+let h2cReady = typeof html2canvas === 'function';
+
+function setWidth(w){
+  width = w;
+  roll.style.width = w + 'px';
+  // scale the roll down if it's wider than the viewport column
+  const avail = roll.parentElement.clientWidth - 32;
+  const scale = Math.min(1, avail / w);
+  roll.style.transform = 'scale(' + scale + ')';
+  roll.style.transformOrigin = 'top center';
+}
+
+function renderLive(){
+  content.innerHTML = src.value;
+  if (toggle.checked) renderThermal();
+}
+
+function floydSteinberg(img){
+  const {data, width:W, height:H} = img;
+  // to grayscale
+  const g = new Float32Array(W*H);
+  for(let i=0;i<W*H;i++){
+    const r=data[i*4],gr=data[i*4+1],b=data[i*4+2],a=data[i*4+3];
+    // white where transparent
+    const lum = a===0 ? 255 : 0.299*r+0.587*gr+0.114*b;
+    g[i]=lum;
+  }
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const i=y*W+x, old=g[i], nv=old<128?0:255, err=old-nv;
+      g[i]=nv;
+      if(x+1<W)     g[i+1]   += err*7/16;
+      if(y+1<H){
+        if(x>0)     g[i+W-1] += err*3/16;
+                    g[i+W]   += err*5/16;
+        if(x+1<W)   g[i+W+1] += err*1/16;
+      }
+    }
+  }
+  for(let i=0;i<W*H;i++){
+    const v=g[i];
+    data[i*4]=data[i*4+1]=data[i*4+2]=v; data[i*4+3]=255;
+  }
+  return img;
+}
+
+function renderThermal(){
+  if(!h2cReady){ status.textContent='thermal preview unavailable (renderer didn’t load)'; return; }
+  status.textContent='rendering thermal…';
+  html2canvas(paper, {width, backgroundColor:'#ffffff', scale:1, logging:false})
+    .then(cv=>{
+      const ctx=cv.getContext('2d');
+      const img=ctx.getImageData(0,0,cv.width,cv.height);
+      ctx.putImageData(floydSteinberg(img),0,0);
+      thermal.innerHTML='';
+      thermal.appendChild(cv);
+      status.textContent='thermal (1-bit) — what the head burns';
+    })
+    .catch(()=>{ status.textContent='thermal render failed'; });
+}
+
+toggle.addEventListener('change',()=>{
+  if(toggle.checked){ paper.style.display='none'; thermal.style.display='block'; renderThermal(); }
+  else { thermal.style.display='none'; paper.style.display='block'; status.textContent='live preview'; }
+});
+
+document.getElementById('width').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', x===b));
+  setWidth(+b.dataset.w);
+  if(toggle.checked) renderThermal();
+});
+
+document.getElementById('templates').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  src.value=TEMPLATES[b.dataset.t]; renderLive();
+});
+
+document.getElementById('export').addEventListener('click',()=>{
+  if(!h2cReady){ status.textContent='renderer didn’t load — can’t export'; return; }
+  status.textContent='building print PNG…';
+  html2canvas(paper, {width, backgroundColor:'#ffffff', scale:1, logging:false})
+    .then(cv=>{
+      const ctx=cv.getContext('2d');
+      ctx.putImageData(floydSteinberg(ctx.getImageData(0,0,cv.width,cv.height)),0,0);
+      const a=document.createElement('a');
+      a.download='ticket.png'; a.href=cv.toDataURL('image/png'); a.click();
+      status.textContent='downloaded ticket.png — drop it in the harness ./jobs folder';
+    });
+});
+
+let t; src.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(renderLive,180); });
+window.addEventListener('resize',()=>setWidth(width));
+
+// boot
+src.value=TEMPLATES.brief;
+setWidth(576);
+renderLive();
+</script>
