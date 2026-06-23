@@ -1,0 +1,14 @@
+node_modules/
+.env
+
+# Generated output from print runs
+*.bin
+out_*.png
+
+# Job queue (runtime data, not source)
+jobs/*
+!jobs/.gitkeep
+
+# Python bytecode
+__pycache__/
+*.pyc
