@@ -158,9 +158,7 @@ function extractGoals(summary) {
       // Second pass: pair each scorer with an assister at the same minute.
       for (const s of scorers) {
         const assist = assisters.find(a => a.minute === s.minute);
-        const key = `${s.athleteId}-${s.minute}`;
         goals.push({
-          key,
           scorer: s.ownGoal ? `${s.name} (OG)` : s.name,
           assist: assist ? assist.name : '',
           minute: s.minute,
@@ -175,6 +173,12 @@ function extractGoals(summary) {
     // Shape didn't match — return whatever we found.
   }
   return goals;
+}
+
+function parseMinute(str) {
+  const m = (str || '').match(/(\d+)(?:\+(\d+))?/);
+  if (!m) return 999;
+  return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
 }
 
 // ---- event parsing ----
@@ -247,7 +251,8 @@ async function poll() {
         awayScore: ev.awayScore,
         kickoffPrinted: ev.state === 'in' || ev.state === 'post',
         fulltimePrinted: ev.state === 'post',
-        printedGoalKeys: [],
+        printedHome: ev.homeScore,
+        printedAway: ev.awayScore,
       };
       console.log(`  ${ev.homeAbbrev} v ${ev.awayAbbrev}: first seen [${ev.state}] ${ev.homeScore}-${ev.awayScore}, snapshotted`);
       stateChanged = true;
@@ -255,6 +260,14 @@ async function poll() {
     }
 
     const prev = state[ev.id];
+
+    // Migrate from key-based to count-based goal dedup.
+    if (prev.printedGoalKeys !== undefined) {
+      prev.printedHome = prev.homeScore;
+      prev.printedAway = prev.awayScore;
+      delete prev.printedGoalKeys;
+      stateChanged = true;
+    }
 
     // ---- KICKOFF ----
     if (ev.state === 'in' && prev.state !== 'in' && !prev.kickoffPrinted) {
@@ -274,76 +287,92 @@ async function poll() {
     const awayDelta = ev.awayScore - prev.awayScore;
     const scoreIncreased = homeDelta > 0 || awayDelta > 0;
 
+    // VAR reversal — score went down: cap printed counts so a re-scored
+    // goal later picks up details from the summary.
+    if (ev.homeScore < prev.printedHome || ev.awayScore < prev.printedAway) {
+      prev.printedHome = Math.min(prev.printedHome, ev.homeScore);
+      prev.printedAway = Math.min(prev.printedAway, ev.awayScore);
+      stateChanged = true;
+    }
+
     if (scoreIncreased) {
+      let homePrinted = 0;
+      let awayPrinted = 0;
+
       // Try summary for detailed goal info.
-      let detailedGoals = [];
       try {
         const summary = await fetchSummary(ev.id);
         if (summary) {
           const allGoals = extractGoals(summary);
-          detailedGoals = allGoals.filter(g => !prev.printedGoalKeys.includes(g.key));
+
+          // Split goals by which team's score they contribute to.
+          // OG by home player → away score increases (and vice versa).
+          const homeScoreGoals = [];
+          const awayScoreGoals = [];
+          for (const g of allGoals) {
+            const side = g.ownGoal
+              ? (g.homeAway === 'home' ? 'away' : 'home')
+              : g.homeAway;
+            (side === 'home' ? homeScoreGoals : awayScoreGoals).push(g);
+          }
+          homeScoreGoals.sort((a, b) => parseMinute(a.minute) - parseMinute(b.minute));
+          awayScoreGoals.sort((a, b) => parseMinute(a.minute) - parseMinute(b.minute));
+
+          // Goals beyond what we've already printed are new.
+          const newHome = homeScoreGoals.slice(prev.printedHome, prev.printedHome + homeDelta);
+          const newAway = awayScoreGoals.slice(prev.printedAway, prev.printedAway + awayDelta);
+
+          for (const g of [...newHome, ...newAway]) {
+            let scoringTeam = g.teamName;
+            if (g.ownGoal) {
+              scoringTeam = g.homeAway === 'home' ? ev.awayName : ev.homeName;
+            }
+            const goalData = {
+              scoringTeam,
+              home: ev.homeName,
+              away: ev.awayName,
+              homeScore: String(ev.homeScore),
+              awayScore: String(ev.awayScore),
+              scorer: g.scorer,
+              minute: g.minute,
+            };
+            if (g.assist) goalData.assist = g.assist;
+            await createJob('WC Goal', goalData);
+          }
+
+          homePrinted = newHome.length;
+          awayPrinted = newAway.length;
         }
       } catch {
-        // Summary failed — fall back to score-diff.
+        // Summary failed — fall through to fallback.
       }
 
-      if (detailedGoals.length > 0) {
-        // Print each new detailed goal.
-        for (const g of detailedGoals) {
-          // For own goals, the scoring team is the OPPOSING team.
-          let scoringTeam = g.teamName;
-          if (g.ownGoal) {
-            scoringTeam = g.homeAway === 'home' ? ev.awayName : ev.homeName;
-          }
-          const goalData = {
-            scoringTeam,
-            home: ev.homeName,
-            away: ev.awayName,
-            homeScore: String(ev.homeScore),
-            awayScore: String(ev.awayScore),
-            scorer: g.scorer,
-            minute: g.minute,
-          };
-          if (g.assist) goalData.assist = g.assist;
-          await createJob('WC Goal', goalData);
-          prev.printedGoalKeys.push(g.key);
-        }
-      } else {
-        // Fallback: score-diff goals (no scorer/minute).
-        for (let i = 0; i < Math.max(0, homeDelta); i++) {
-          const key = `diff-home-${ev.homeScore - homeDelta + i + 1}`;
-          if (prev.printedGoalKeys.includes(key)) continue;
-          await createJob('WC Goal', {
-            scoringTeam: ev.homeName,
-            home: ev.homeName,
-            away: ev.awayName,
-            homeScore: String(ev.homeScore),
-            awayScore: String(ev.awayScore),
-            scorer: '',
-            minute: ev.displayClock || '',
-          });
-          prev.printedGoalKeys.push(key);
-        }
-        for (let i = 0; i < Math.max(0, awayDelta); i++) {
-          const key = `diff-away-${ev.awayScore - awayDelta + i + 1}`;
-          if (prev.printedGoalKeys.includes(key)) continue;
-          await createJob('WC Goal', {
-            scoringTeam: ev.awayName,
-            home: ev.homeName,
-            away: ev.awayName,
-            homeScore: String(ev.homeScore),
-            awayScore: String(ev.awayScore),
-            scorer: '',
-            minute: ev.displayClock || '',
-          });
-          prev.printedGoalKeys.push(key);
-        }
+      // Fallback for any goals not covered by the summary.
+      for (let i = 0; i < Math.max(0, homeDelta - homePrinted); i++) {
+        await createJob('WC Goal', {
+          scoringTeam: ev.homeName,
+          home: ev.homeName,
+          away: ev.awayName,
+          homeScore: String(ev.homeScore),
+          awayScore: String(ev.awayScore),
+          scorer: '',
+          minute: ev.displayClock || '',
+        });
       }
-      stateChanged = true;
-    }
+      for (let i = 0; i < Math.max(0, awayDelta - awayPrinted); i++) {
+        await createJob('WC Goal', {
+          scoringTeam: ev.awayName,
+          home: ev.homeName,
+          away: ev.awayName,
+          homeScore: String(ev.homeScore),
+          awayScore: String(ev.awayScore),
+          scorer: '',
+          minute: ev.displayClock || '',
+        });
+      }
 
-    // Score going DOWN (VAR reversal): update state, print nothing.
-    if (homeDelta < 0 || awayDelta < 0) {
+      prev.printedHome += homeDelta;
+      prev.printedAway += awayDelta;
       stateChanged = true;
     }
 
