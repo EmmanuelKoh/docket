@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Thermal receipt system for 80mm ESC/POS printers",
   "main": "render/render-core.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "dotenv": "^16.4.7",

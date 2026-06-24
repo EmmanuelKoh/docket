@@ -1,3 +1,8 @@
+<!-- ARCHIVED: Original standalone offline previewer.
+     Renders with html2canvas + custom dithering, which only APPROXIMATES the print.
+     The new hosted studio (public/index.html) is the source of truth because it
+     previews with the real render core (Liquid → Satori → resvg → Floyd-Steinberg).
+     Keep this only as an offline sketch tool. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Receipt Design Studio</title>
@@ -236,8 +241,8 @@ function floydSteinberg(img){
 }
 
 function renderThermal(){
-  if(!h2cReady){ status.textContent='thermal preview unavailable (renderer didn’t load)'; return; }
-  status.textContent='rendering thermal…';
+  if(!h2cReady){ status.textContent='thermal preview unavailable (renderer didn\u2019t load)'; return; }
+  status.textContent='rendering thermal\u2026';
   html2canvas(paper, {width, backgroundColor:'#ffffff', scale:1, logging:false})
     .then(cv=>{
       const ctx=cv.getContext('2d');
@@ -245,7 +250,7 @@ function renderThermal(){
       ctx.putImageData(floydSteinberg(img),0,0);
       thermal.innerHTML='';
       thermal.appendChild(cv);
-      status.textContent='thermal (1-bit) — what the head burns';
+      status.textContent='thermal (1-bit) \u2014 what the head burns';
     })
     .catch(()=>{ status.textContent='thermal render failed'; });
 }
@@ -268,15 +273,15 @@ document.getElementById('templates').addEventListener('click',e=>{
 });
 
 document.getElementById('export').addEventListener('click',()=>{
-  if(!h2cReady){ status.textContent='renderer didn’t load — can’t export'; return; }
-  status.textContent='building print PNG…';
+  if(!h2cReady){ status.textContent='renderer didn\u2019t load \u2014 can\u2019t export'; return; }
+  status.textContent='building print PNG\u2026';
   html2canvas(paper, {width, backgroundColor:'#ffffff', scale:1, logging:false})
     .then(cv=>{
       const ctx=cv.getContext('2d');
       ctx.putImageData(floydSteinberg(ctx.getImageData(0,0,cv.width,cv.height)),0,0);
       const a=document.createElement('a');
       a.download='ticket.png'; a.href=cv.toDataURL('image/png'); a.click();
-      status.textContent='downloaded ticket.png — drop it in the harness ./jobs folder';
+      status.textContent='downloaded ticket.png \u2014 drop it in the harness ./jobs folder';
     });
 });
 

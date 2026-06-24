@@ -9,6 +9,9 @@ out_*.png
 jobs/*
 !jobs/.gitkeep
 
+# Runtime template store (seeded from reference/starter-templates.json)
+data/
+
 # Python bytecode
 __pycache__/
 *.pyc

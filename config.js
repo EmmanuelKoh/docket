@@ -15,3 +15,10 @@ export const PRINTER_IP   = process.env.PRINTER_IP   || '192.168.1.87';
 export const PRINTER_PORT = parseInt(process.env.PRINTER_PORT, 10) || 9100;
 export const PRINT_WIDTH  = parseInt(process.env.PRINT_WIDTH, 10)  || 576;
 export const FONT_DIR     = process.env.FONT_DIR     || BUNDLED_FONT_DIR;
+export const JOB_CAP      = parseInt(process.env.JOB_CAP, 10)      || 50;
+
+// ESPN poller
+export const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL, 10) || 30;
+export const WATCH_TEAMS   = process.env.WATCH_TEAMS
+  ? process.env.WATCH_TEAMS.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+  : [];

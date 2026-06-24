@@ -53,20 +53,32 @@ function dither({ rgba, width, height }) {
          + 0.587 * (rgba[i * 4 + 1] * af + 255 * (1 - af))
          + 0.114 * (rgba[i * 4 + 2] * af + 255 * (1 - af));
   }
-  // Floyd-Steinberg
-  const bits = new Uint8Array(width * height); // 1 = black dot
+  // Floyd-Steinberg — mirrors Pillow's C tobilevel() exactly.
+  // Grayscale is inverted before dithering (as python-escpos does via
+  // ImageOps.invert) so error propagation and integer truncation behave
+  // identically. All four error contributions are accumulated before a
+  // single integer division by 16.
+  const gray = new Uint8Array(width * height);
+  for (let i = 0; i < gray.length; i++) gray[i] = 255 - Math.round(g[i]);
+  const errors = new Int32Array(width + 1);
+  const bits = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) {
+    let l = 0, l0 = 0, l1 = 0;
     for (let x = 0; x < width; x++) {
-      const i = y * width + x, old = g[i], nv = old < 128 ? 0 : 255, err = old - nv;
-      g[i] = nv;
-      bits[i] = nv === 0 ? 1 : 0;
-      if (x + 1 < width) g[i + 1] += err * 7 / 16;
-      if (y + 1 < height) {
-        if (x > 0) g[i + width - 1] += err * 3 / 16;
-        g[i + width] += err * 5 / 16;
-        if (x + 1 < width) g[i + width + 1] += err * 1 / 16;
-      }
+      l = gray[y * width + x] + (((l + errors[x + 1]) / 16) | 0);
+      if (l < 0) l = 0; else if (l > 255) l = 255;
+      const out = l > 128 ? 255 : 0;
+      bits[y * width + x] = out === 0 ? 0 : 1;  // inverted: 255 = black dot
+      l -= out;
+      const l2 = l, d2 = l + l;
+      l += d2;               // 3 * err
+      errors[x] = l + l0;
+      l += d2;               // 5 * err
+      l0 = l + l1;
+      l1 = l2;               // 1 * err
+      l += d2;               // 7 * err  (carried right)
     }
+    errors[width] = l0;
   }
   // trim trailing all-white rows so receipts aren't padded with blank paper
   let last = 0;
@@ -114,6 +126,16 @@ async function renderToEscpos(template, data) {
   return { bytes, preview, width: WIDTH, height: bw.height };
 }
 
+// Same pipeline as renderToEscpos but skip the ESC/POS byte packing.
+// Returns { preview: Buffer(PNG), width, height } — for the design studio.
+async function renderToPreview(template, data) {
+  const markup = await fill(template, data || {});
+  const pixels = await toPixels(markup);
+  const bw = dither(pixels);
+  const preview = previewPng(bw);
+  return { preview, width: WIDTH, height: bw.height };
+}
+
 // build a real PNG of the 1-bit bitmap, so you can see exactly what prints
 function previewPng({ bits, width, height }) {
   const png = new PNG({ width, height });
@@ -125,4 +147,4 @@ function previewPng({ bits, width, height }) {
   return PNG.sync.write(png);
 }
 
-export { renderToEscpos, fill, toPixels, dither, toEscpos, WIDTH };
+export { renderToEscpos, renderToPreview, fill, toPixels, dither, toEscpos, WIDTH };
