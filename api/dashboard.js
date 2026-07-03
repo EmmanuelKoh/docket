@@ -326,11 +326,14 @@ export default async function handler(req, res) {
   if (p === '/dashboard/fragments/history-detail') {
     const job = await getJob(q.job);
     if (!job) return html(res, '<div class="row-detail"><span class="status faint">record not found</span></div>');
+    // Truncate the code panes — the panel is a glance at the debug record,
+    // not an editor (Reprint uses the full stored inputs regardless).
+    const clip = (s, n) => (s.length > n ? s.slice(0, n) + '\n…' : s);
     return html(res, await renderView('history-detail', {
       job: {
         id: job.id,
-        template: job.template || '',
-        dataJson: JSON.stringify(job.data || {}, null, 2),
+        template: clip(job.template || '', 600),
+        dataJson: clip(JSON.stringify(job.data || {}, null, 2), 600),
       },
     }));
   }

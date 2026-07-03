@@ -39,7 +39,25 @@ Icons: any single icon set, outline style, 14–15px, colored --ink-faint.
 | --red          | #b3261e  | #d64541  | THE accent (see usage rules)           |
 
 Dark mode is the same ramp inverted; red is the same hue at a brighter stop
-(deep red goes muddy on near-black). Toggle: moon icon (light) / sun icon
+(deep red goes muddy on near-black).
+
+Page texture: the body carries a faint dither grain — a repeating 96x96
+tile of ~120 seeded-random dots, sized 60% 1px / 25% 1.5px / 15% 2px, in
+mixed tones. In LIGHT mode all dots sit a touch darker than --page, never
+lighter (bright specks on paper read as noise, not grain). In DARK mode
+about a third of the base grain may sit slightly lighter than --page
+(#1b1b1a/#232322) — near-black has little room below it, so a hint of
+lift keeps the texture perceptible. Plus three deeper tiers, each rarer
+as it gets heavier:
+  ~5%   rare  — one step down (#dcdcd9 light / #060606 dark), 1px only
+  ~2.5% ultra — darker still (#a5a5a1 light / #000000 dark), 1px only
+  ~1.5% mid   — the rare-tier tone at 1.5px, the rarest of all
+The governing rule: visual weight (depth × size) is budgeted — the darker
+or bigger a fleck, the rarer it must be. Nothing dark ever reaches 2px.
+Echoes thermal-paper dithering.
+Small uniform tiles read as a lattice; randomness reads as grain. Cards
+and list containers stay solid --raised so they lift off the texture.
+Keep it barely perceptible: texture, not pattern. Toggle: moon icon (light) / sun icon
 (dark) in the nav; persist the choice (cookie or localStorage — this is a
 normal hosted page, not a sandboxed artifact).
 
@@ -53,8 +71,11 @@ green anywhere.
 
 ## Spacing system
 
-- Page gutter: 26px left/right, everywhere.
-- Header: 16px vertical padding; bottom rule 1.5px solid --ink.
+- Content column: max 1120px, centered. Gutters are max(48px, half the
+  leftover viewport) — never under 48px, growing naturally on wide screens.
+  The studio (/studio) stays full-bleed; it is a workbench, not a page.
+- Header: 16px vertical padding; bottom rule 1.5px solid --ink, full-bleed,
+  with contents aligned to the content column.
 - Nav: 13px text, uniform 20px gap between all items including icons.
   Active item: --ink text + 1.5px --red underline with 3px padding-bottom.
 - Major blocks: 20px apart. Section title block: 16px/500 title,
@@ -66,12 +87,15 @@ green anywhere.
   --ink-faint underline.
 - List containers: one --raised box, radius 6px; rows inside at 12px 18px
   with 0.5px --hairline separators (no per-row cards).
-- Rows: 14px column gap; right meta column fixed 92px, right-aligned, mono
-  12px — timestamps rail-align down the page.
+- Rows: 20px column gap, 14px vertical padding; right meta column fixed 118px, right-aligned, mono
+  12px, never wraps ("canceled · 33m" is the sizing case) — timestamps
+  rail-align down the page. Rows with a thumbnail TOP-ALIGN all content to
+  the media (text centered against tall media floats in dead space); only
+  single-line rows center vertically.
 - Labels: 11px, letter-spacing 0.12em, UPPERCASE, --ink-faint.
 - Body 13px; meta/sub 12px; stat numbers 28px mono.
 - Dashed divider between major page zones: 1px dashed --dash, inside the
-  26px gutters.
+  gutters.
 
 ## Components
 
@@ -87,9 +111,14 @@ Status chip (plugins only): 11px caps, 0.06em tracking, 2px 8px, 0.5px
 Job statuses are plain mono text, not chips: "printing"/"failed" in --red,
 "queued"/"done" in --ink-muted / --ink-faint.
 
-Thumbnails (real job/template preview PNGs at build time): 30x44 in list
-rows, 38x56 in queue cards; 0.5px --border, radius 2px, --page bg,
-object-fit contain.
+Thumbnails (real job/template preview PNGs at build time): landscape to
+match the artifact — receipts are wider than tall. 130x86 in list rows,
+158x108 in queue cards; 0.5px --border, radius 2px, object-fit contain.
+Background is always #fff in BOTH themes — receipts are paper, and a theme
+background would letterbox dark bars around them in darkroom mode.
+Hovering any list thumbnail floats a 288px-wide peek of the same PNG
+(--raised, 0.5px --border, no shadow). Thumbnails identify; the peek and
+the History expand are where receipts are read.
 
 ## Pages
 
@@ -109,10 +138,17 @@ Plugins, Queue, History, then theme-toggle icon, logout icon.
    preview slice, not a separate feature.
 
 ### Templates
-Title block + "New template" button right. One list container; rows:
-thumbnail, name (mono 13px) with "used by <plugin>" or "manual only" sub,
-edited-ago in rail, Open button, trash icon. Open loads the studio editor
-with that template; New opens it blank.
+Title block + "New template" button right. Templates are visual artifacts,
+so this page is a CARD GRID, not a list: repeat(auto-fill, minmax(240px,
+1fr)), 12px gaps. Each card: the top of the real rendered receipt as the
+hero (170px tall, white, top-cropped, 1px dashed --dash bottom edge), then
+one head line — name (mono 13px) with a trash icon right, revealed on card
+hover — and a quiet sub: "used by <plugin>" or "manual only" · edited-ago.
+No Open button: the card IS the button (preview and name both load the
+studio; card border shifts to --ink-faint on hover as the cue). Buttons
+earn their border by being the exception — never repeat the default action
+of an already-clickable object. New opens the studio blank. (Lists remain
+the pattern for records — History, Queue.)
 
 ### Plugins
 Title block + "Register plugin" button. Per-plugin CARDS (not a list):
@@ -134,10 +170,10 @@ polling every 3s on the list fragment).
 Title + "N jobs · newest first"; filter control right (dotted-underline
 value). One list container; rows like Templates but with status·time in
 the rail ("failed" --red). Row click expands (chevron) an inset panel:
---page bg, indented past the thumbnail (padding-left 62px), two columns —
-TEMPLATE (name + truncated source, mono 11.5px --ink-muted) and DATA
-(the JSON) — plus a Reprint button (re-renders from stored template+data;
-never resends old bytes). Pagination centered below: "← newer  1 / N
+--page bg, indented past the thumbnail (padding-left 162px), three columns —
+PRINTED (the receipt PNG at 200px), TEMPLATE (name + truncated source,
+mono 11.5px --ink-muted) and DATA (the JSON) — plus a Reprint button
+(re-renders from stored template+data; never resends old bytes). Pagination centered below: "← newer  1 / N
 older →", 12px.
 
 ### Login

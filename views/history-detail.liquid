@@ -1,5 +1,10 @@
 <div class="row-detail">
   <div class="cols">
+    <div class="col" style="flex:0 0 200px">
+      <div class="label">Printed</div>
+      <img src="/jobs?png={{ job.id }}" alt="" loading="lazy"
+           style="display:block; width:100%; margin-top:8px; background:#fff; border:0.5px solid var(--border); border-radius:2px;">
+    </div>
     <div class="col">
       <div class="label">Template</div>
       <pre>{{ job.template }}</pre>
