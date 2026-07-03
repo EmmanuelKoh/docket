@@ -85,9 +85,9 @@ green anywhere.
 - Card detail line: separated by 1px dashed --dash, 14px padding above and
   below, fields 24px apart. Inline-editable values get 1px dotted
   --ink-faint underline.
-- List containers: one --raised box, radius 6px; rows inside at 12px 18px
+- List containers: one --raised box, radius 6px; rows inside at 16px 20px
   with 0.5px --hairline separators (no per-row cards).
-- Rows: 20px column gap, 14px vertical padding; right meta column fixed 118px, right-aligned, mono
+- Rows: 24px column gap, 16px 20px padding; right meta column fixed 118px, right-aligned, mono
   12px, never wraps ("canceled · 33m" is the sizing case) — timestamps
   rail-align down the page. Rows with a thumbnail TOP-ALIGN all content to
   the media (text centered against tall media floats in dead space); only

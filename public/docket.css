@@ -233,8 +233,8 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 .row {
   display: flex;
   align-items: flex-start;
-  gap: 20px;
-  padding: 14px 18px;
+  gap: 24px;
+  padding: 16px 20px;
 }
 .row .chevron { margin-top: 3px; }
 .row .rail, .row .status { margin-top: 1px; }
