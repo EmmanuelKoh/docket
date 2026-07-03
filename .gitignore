@@ -2,6 +2,9 @@ node_modules/
 .env
 .DS_Store
 
+# Firmware credentials (copy secrets.h.example -> secrets.h and fill in)
+firmware/docket-agent/secrets.h
+
 # Generated output from print runs
 *.bin
 out_*.png
