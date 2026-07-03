@@ -24,7 +24,7 @@ import {
 } from '../lib/plugin-registry.js';
 import { createJob } from '../lib/job-store.js';
 import { getTemplates, saveTemplate } from '../lib/store.js';
-import { getState } from '../lib/state-store.js';
+import { getState, setState } from '../lib/state-store.js';
 import { PLUGINS } from '../plugins/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,7 +86,8 @@ async function ensureRecord(module) {
 // The only surface plugins get. No stores, no HTTP routes, no files.
 function makeCtx(pluginId) {
   return {
-    createJob: ({ template, data }) => createJob({ template, data }),
+    createJob: ({ template, data, name }) =>
+      createJob({ template, data, name, source: pluginId }),
     getTemplate: async name => {
       const templates = await getTemplates();
       return templates.find(t => t.name === name) || null;
@@ -103,6 +104,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'POST only' });
   }
   if (!requireDeviceToken(req, res)) return;
+
+  // Record device contact for the dashboard's "printer online" line.
+  await setState('device', { lastSeenAt: new Date().toISOString() }).catch(() => {});
 
   const results = [];
 

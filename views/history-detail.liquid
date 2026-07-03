@@ -1,0 +1,16 @@
+<div class="row-detail">
+  <div class="cols">
+    <div class="col">
+      <div class="label">Template</div>
+      <pre>{{ job.template }}</pre>
+    </div>
+    <div class="col">
+      <div class="label">Data</div>
+      <pre>{{ job.dataJson }}</pre>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn small" hx-post="/dashboard/jobs/reprint?job={{ job.id }}"
+            hx-target="this" hx-swap="outerHTML">Reprint</button>
+  </div>
+</div>

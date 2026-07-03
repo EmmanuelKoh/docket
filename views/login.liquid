@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · DOCKET</title>
+<link rel="stylesheet" href="/docket.css">
+<script>
+  (function () {
+    if (localStorage.getItem('docket-theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login-card" method="POST" action="/login">
+    <span class="wordmark">DOCKET</span>
+    <input type="password" name="password" placeholder="password" autofocus autocomplete="current-password">
+    {% if error %}<div class="field-error">{{ error }}</div>{% endif %}
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+</div>
+</body>
+</html>

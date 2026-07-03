@@ -1,0 +1,21 @@
+<div class="list" id="template-list">
+  {% for row in rows %}
+  <div class="row">
+    <img class="thumb" src="/dashboard/templates/thumb?name={{ row.encoded }}" loading="lazy" alt="">
+    <div class="grow">
+      <div class="name">{{ row.name }}</div>
+      <div class="sub">{{ row.usedBy }}</div>
+    </div>
+    <div class="rail">{{ row.editedAgo }}</div>
+    <a class="btn small" href="/studio?template={{ row.encoded }}">Open</a>
+    <button class="icon-btn-row" title="Delete"
+            hx-delete="/dashboard/templates?name={{ row.encoded }}"
+            hx-confirm="Delete “{{ row.name }}”?"
+            hx-target="#template-list" hx-swap="outerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
+  </div>
+  {% else %}
+  <div class="empty">No templates yet — create one to get started</div>
+  {% endfor %}
+</div>
