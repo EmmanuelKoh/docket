@@ -80,6 +80,47 @@ function usedByText(templateName) {
   return ids.length ? `used by ${ids.join(', ')}` : 'manual only';
 }
 
+// Per-field config editing, derived from the config's shape: arrays edit
+// as one-item-per-line textareas, everything else as inline inputs.
+// Labels: the plugin's configLabels export wins; otherwise camelCase keys
+// are split into words ("temperatureUnit" → "temperature unit").
+const humanizeKey = k => k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+
+function configFields(config, labels = {}) {
+  return Object.entries(config || {}).map(([key, value]) => {
+    const label = labels[key] || humanizeKey(key);
+    if (Array.isArray(value)) {
+      return {
+        key,
+        label,
+        multiline: true,
+        rows: Math.max(value.length, 1),
+        value: value.join('\n'),
+      };
+    }
+    const str = value == null ? '' : String(value);
+    return { key, label, multiline: false, value: str, wide: str.length > 32 };
+  });
+}
+
+function parseConfigField(original, raw) {
+  const s = String(raw ?? '').trim();
+  if (Array.isArray(original)) {
+    return { value: s.split(/[\n,]+/).map(x => x.trim()).filter(Boolean) };
+  }
+  if (typeof original === 'number' || original === null) {
+    if (s === '') return { value: null };
+    const n = Number(s);
+    if (!Number.isFinite(n)) return { error: 'must be a number' };
+    return { value: n };
+  }
+  if (typeof original === 'boolean') {
+    if (s !== 'true' && s !== 'false') return { error: 'must be true or false' };
+    return { value: s === 'true' };
+  }
+  return { value: s };
+}
+
 async function pluginCardData(record, error) {
   const module = PLUGINS.find(m => m.id === record.id);
   return {
@@ -87,7 +128,7 @@ async function pluginCardData(record, error) {
     encoded: encodeURIComponent(record.id),
     enabled: !!record.enabled,
     intervalSeconds: record.intervalSeconds,
-    configJson: JSON.stringify(record.config || {}),
+    fields: configFields(record.config, module?.configLabels),
     templates: (module?.templates || []).join(', ') || '—',
     lastRunText: record.lastError
       ? `${record.lastError} · ${agoText(record.lastErrorAt)}`
@@ -274,21 +315,29 @@ export default async function handler(req, res) {
     if (!record) return res.status(404).send('');
     const interval = parseInt(req.body?.intervalSeconds, 10);
     let error = '';
-    let config = record.config;
+    const config = { ...(record.config || {}) };
     if (!Number.isFinite(interval) || interval < 1) {
       error = 'interval must be a positive number of seconds — not saved';
     } else {
-      try {
-        config = JSON.parse(req.body?.config || '{}');
-      } catch (e) {
-        error = `invalid config JSON — not saved`;
+      // Types come from the plugin's defaults.config (canonical), not the
+      // stored value — a previously mistyped value must not weaken parsing.
+      const defaultsCfg = PLUGINS.find(m => m.id === record.id)?.defaults?.config || {};
+      for (const key of Object.keys(config)) {
+        const raw = req.body?.[`cfg_${key}`];
+        if (raw === undefined) continue; // field not submitted — keep as is
+        const typeRef = key in defaultsCfg ? defaultsCfg[key] : config[key];
+        const parsed = parseConfigField(typeRef, raw);
+        if (parsed.error) {
+          error = `${key} ${parsed.error} — not saved`;
+          break;
+        }
+        config[key] = parsed.value;
       }
     }
     if (!error) {
-      await upsertPlugin({ ...record, intervalSeconds: interval, config });
-      return html(res, await renderView('plugin-card', {
-        p: await pluginCardData({ ...record, intervalSeconds: interval, config }),
-      }));
+      const updated = { ...record, intervalSeconds: interval, config };
+      await upsertPlugin(updated);
+      return html(res, await renderView('plugin-card', { p: await pluginCardData(updated) }));
     }
     return html(res, await renderView('plugin-card', { p: await pluginCardData(record, error) }));
   }

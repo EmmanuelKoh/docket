@@ -154,8 +154,14 @@ the pattern for records — History, Queue.)
 Title block + "Register plugin" button. Per-plugin CARDS (not a list):
 line 1 — toggle, id (mono), ENABLED/OFF chip, right-aligned last-run
 (mono, --red if it's an error like "calendar 401 · 2d ago");
-dashed rule; line 2 — interval, config JSON, template names (24px apart,
-editable values dotted-underlined). Disabled plugin: text drops one step
+dashed rule; below it, PER-FIELD config editing in a label/value grid
+(110px label column, 11px caps labels): one dotted-underline input per
+config key, derived from the config's shape — arrays edit as
+one-item-per-line textareas (also accept commas), numbers are validated
+(types come from the plugin's defaults.config), long values wrap at full
+width, never overflow the card. Interval first, template names last.
+Invalid input → red inline error spanning the grid, nothing saved.
+Never a raw-JSON blob input. Disabled plugin: text drops one step
 (--ink → --ink-muted).
 
 ### Queue

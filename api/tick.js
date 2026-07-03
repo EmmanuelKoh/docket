@@ -28,7 +28,10 @@ import { getState, setState } from '../lib/state-store.js';
 import { PLUGINS } from '../plugins/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WC_TEMPLATES_FILE = path.join(__dirname, '..', 'reference', 'wc-templates.json');
+const SEED_TEMPLATE_FILES = [
+  path.join(__dirname, '..', 'reference', 'wc-templates.json'),
+  path.join(__dirname, '..', 'reference', 'brief-templates.json'),
+];
 
 // Generous upper bound on one poll cycle; the lock expiry means a crashed
 // run can never wedge a plugin permanently (same idea as the job lease).
@@ -36,17 +39,19 @@ const RUN_LOCK_SECONDS = 60;
 
 // ---- seeding ----
 
-// Seed WC templates into the template store if they don't already exist.
-// This moved here from the old poller's boot; runs once per process.
+// Seed plugin templates into the template store if they don't already
+// exist (WC templates + Daily Brief); runs once per process.
 let templatesEnsured = false;
-async function ensureWcTemplates() {
+async function ensureSeedTemplates() {
   if (templatesEnsured) return;
-  const toSeed = JSON.parse(fs.readFileSync(WC_TEMPLATES_FILE, 'utf-8'));
   const existing = await getTemplates();
-  for (const t of toSeed) {
-    if (existing.some(e => e.name === t.name)) continue;
-    await saveTemplate(t);
-    console.log(`  seeded template "${t.name}"`);
+  for (const file of SEED_TEMPLATE_FILES) {
+    const toSeed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    for (const t of toSeed) {
+      if (existing.some(e => e.name === t.name)) continue;
+      await saveTemplate(t);
+      console.log(`  seeded template "${t.name}"`);
+    }
   }
   templatesEnsured = true;
 }
@@ -68,7 +73,8 @@ async function ensureRecord(module) {
   const record = {
     id: module.id,
     ownerId: OWNER_ID,
-    enabled: true,
+    // a plugin may declare it needs configuration before it can run
+    enabled: module.defaults.enabled !== false,
     intervalSeconds: module.defaults.intervalSeconds,
     lastRunAt: null,
     config,
@@ -113,7 +119,7 @@ export default async function handler(req, res) {
   for (const module of PLUGINS) {
     const summary = { id: module.id };
     try {
-      await ensureWcTemplates();
+      await ensureSeedTemplates();
       const record = await ensureRecord(module);
 
       if (!record.enabled) {

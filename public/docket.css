@@ -216,9 +216,35 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   border-bottom: 1px dotted var(--ink-faint);
   padding: 0 0 1px;
   outline: none;
-  margin-left: 6px;
+  max-width: 100%;
+  min-width: 0;
 }
-.card-detail .mono { margin-left: 6px; }
+
+/* per-field plugin config: label / value grid inside the dashed detail zone */
+.card-detail.cfg {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 10px 16px;
+  align-items: start;
+}
+.cfg .cfg-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  line-height: 1.6;
+  padding-top: 2px;
+}
+.cfg .cfg-value { min-width: 0; }
+.cfg .cfg-wide { width: 100%; }
+.cfg .cfg-area {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.cfg .cfg-span { grid-column: 1 / -1; }
+.cfg.dim .cfg-label, .cfg.dim .cfg-value, .cfg.dim .editable { color: var(--ink-muted); }
 
 /* ---- list containers ---- */
 
