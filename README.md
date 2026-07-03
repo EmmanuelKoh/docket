@@ -42,8 +42,9 @@ cp .env.example .env
 | `OWNER_ID` | `default` | Owner stamped on every stored record |
 | `DEVICE_TOKEN` | `dev-token` | Shared secret for the device endpoints (`/next`, `/ack`, `/nack`) |
 | `LEASE_SECONDS` | `120` | Redis driver: seconds before an unacked inflight job is requeued |
-| `POLL_INTERVAL` | `30` | ESPN poller: seconds between polls |
-| `WATCH_TEAMS` | *(empty = all)* | ESPN poller: comma-separated team abbreviations (e.g. `USA,POR`) |
+| `HEARTBEAT_SECONDS` | `30` | Seconds between `/tick` POSTs from `agent/heartbeat.js` |
+| `POLL_INTERVAL` | `30` | Printer agent: ms between `/next` polls (legacy name) |
+| `WATCH_TEAMS` | *(empty = all)* | Seeds the espn-worldcup plugin's `watchTeams` config on first registration |
 
 All settings live in `config.js` and fall back to the defaults above when the
 env var is unset. The redis driver additionally needs `UPSTASH_REDIS_REST_URL`,
@@ -182,8 +183,9 @@ requeued. The studio's recent-jobs panel shows live status updates.
 | `GET` | `/next` | Oldest queued job as ESC/POS bytes + `X-Job-Id`, or 204 |
 | `POST` | `/ack?job=ID` | Mark job done |
 | `POST` | `/nack?job=ID` | Requeue job for retry |
+| `POST` | `/tick` | Run registered plugins that are enabled and due |
 
-All three require `Authorization: Bearer <DEVICE_TOKEN>` (the agent sends it
+All four require `Authorization: Bearer <DEVICE_TOKEN>` (the agents send it
 automatically).
 
 **Storage**: jobs are full debug records (inputs + rendered outputs), capped
@@ -191,10 +193,56 @@ at 50 by default (`JOB_CAP` env var), stored through `lib/job-store.js` —
 see the Storage section for the json/redis drivers and lease semantics. With
 the redis driver the hosted job queue works on Vercel.
 
-### World Cup Poller
+### Plugins & /tick
 
-A local long-running script that watches live FIFA World Cup matches via the
-ESPN API and automatically prints receipts for three events:
+Nothing in the system polls on its own timer. Plugins do one unit of work when
+asked; a heartbeat (your Mac now, an ESP32 later) POSTs `/tick`, and the
+server runs whichever registered plugins are enabled and due.
+
+**What a plugin is** — a module in `plugins/` exporting three things:
+
+```js
+export const id = 'my-plugin';
+export const defaults = { intervalSeconds: 60, config: {} };
+export async function run({ config, state, ctx }) {
+  // one unit of work; return the new state
+  return { state };
+}
+```
+
+Plugins never touch Redis, files, or HTTP routes directly — only `ctx`:
+
+- `ctx.createJob({ template, data })` — queue a print job (renders via the
+  job store / render-core)
+- `ctx.getTemplate(name)` — fetch a template record from the template store
+- `ctx.log(msg)` — prefixed console logging
+
+Installed plugins are listed explicitly in `plugins/index.js`.
+
+**How /tick decides what runs** — for each plugin, sequentially:
+
+1. Ensure a registry record exists (`{ id, ownerId, enabled, intervalSeconds,
+   lastRunAt, config, state }`, stored via `lib/plugin-registry.js` in
+   `data/plugins.json` or Redis per `STORE_DRIVER`).
+2. Skip if `enabled` is false, or if `now - lastRunAt < intervalSeconds`
+   (not due). The heartbeat can tick every 30s while a plugin runs every 60s.
+3. Take a short expiring run lock (same lease pattern as the job queue) — if
+   a previous run is still going, skip instead of running twice concurrently.
+4. Call `run()`, persist the returned `state` and `lastRunAt`. An error is
+   recorded on the record (`lastError`, `lastErrorAt`) and the remaining
+   plugins still run; `lastRunAt` advances either way, so a broken plugin
+   retries at its own interval, not at heartbeat rate.
+
+**Toggling a plugin today** — flip `enabled` on its registry record: edit
+`data/plugins.json` (json driver) or the `rp:{owner}:plugin:{id}` key in the
+Upstash console (redis driver). No UI yet.
+
+### World Cup plugin (`espn-worldcup`)
+
+The first registry entry — it watches live FIFA World Cup matches via the
+ESPN API and prints receipts for three events. One `run()` = one poll cycle
+(default every 60s). It replaces the retired `agent/espn-poller.js`; the
+detection logic was ported as-is.
 
 | Event | Template | Trigger |
 |-------|----------|---------|
@@ -202,15 +250,20 @@ ESPN API and automatically prints receipts for three events:
 | **Goal** | `WC Goal` | A competitor's score increases |
 | **Full-time** | `WC Full Time` | Match state changes from `in` to `post` |
 
-**Run during a match** (three terminals):
+**Run during a match** (three terminals — the heartbeat replaces the old
+poller process):
 
 ```
 npm start                       # server
 node agent/printer-agent.js     # printer agent
-node agent/espn-poller.js       # ESPN poller
+node agent/heartbeat.js         # heartbeat -> POST /tick
 ```
 
-Optionally filter to specific teams: `WATCH_TEAMS=USA,POR node agent/espn-poller.js`
+On the first tick the plugin registers itself (importing any existing poller
+state so nothing reprints, and `WATCH_TEAMS` from the env as its `watchTeams`
+config) and the three WC templates are seeded into the template store if
+missing. After that, team filtering is controlled by `config.watchTeams` on
+the registry record.
 
 **How goal detail works:** when a score increase is detected, the poller fetches
 the ESPN summary endpoint to get the scorer and minute. Goals are extracted from
@@ -223,19 +276,19 @@ call fails or returns no new goal entries, the poller falls back to a score-diff
 goal (scoreline only, no scorer/minute). A print is never blocked on the
 summary enhancement.
 
-**Dedup:** state is persisted through `lib/state-store.js` (key `espn` —
-`data/espn-state.json` with the json driver, Redis with the redis driver).
+**Dedup:** match state lives on the plugin's registry record (`state` field).
 Each match tracks its API state, scores, printed flags, and per-team printed
-goal counts. Nothing is reprinted across polls or restarts. Score going down
+goal counts. Nothing is reprinted across ticks or restarts. Score going down
 (VAR reversal) updates stored state but prints nothing.
 
 **Templates:** the three WC templates are seeded into the template store on
-first run from `reference/wc-templates.json`. They're editable in the studio
-like any other template.
+the first tick from `reference/wc-templates.json` if missing. They're editable
+in the studio like any other template.
 
-**Why local:** live goals need 20-30s polling. Vercel cron runs at most once per
-minute and is limited on the Hobby plan, so the poller runs as a local
-long-running process, like the printer agent.
+**Why a local heartbeat:** live goals need sub-minute cadence. Vercel cron
+runs at most once per minute and is limited on the Hobby plan, so the pulse
+comes from a local process (later the ESP32 itself) — but the decision of
+what to run lives server-side in `/tick`, so the heartbeat stays dumb.
 
 ### Design templates (offline)
 
@@ -258,11 +311,16 @@ api/
   next.js                  GET /next — device endpoint, fetch queued job
   ack.js                   POST /ack — device endpoint, mark job done
   nack.js                  POST /nack — device endpoint, requeue job
+  tick.js                  POST /tick — run enabled + due plugins
   templates.js             GET/POST/DELETE /templates — template CRUD
+plugins/
+  index.js                 Explicit list of installed plugin modules
+  espn-worldcup.js         World Cup plugin (kickoff/goal/full-time)
 lib/
   store.js                 Template storage facade (json/redis driver)
   job-store.js             Job queue storage facade (json/redis driver)
-  state-store.js           Poller/plugin state facade (json/redis driver)
+  plugin-registry.js       Plugin registry facade (json/redis driver)
+  state-store.js           Legacy poller state facade (json/redis driver)
   auth.js                  Device token check for /next, /ack, /nack
   redis.js                 Upstash Redis client + owner-namespaced keys
   blob.js                  Vercel Blob helpers (job png + bytes)
@@ -271,13 +329,15 @@ lib/
     templates-redis.js     Templates: Upstash Redis
     jobs-json.js           Jobs: data/jobs.json (no lease semantics)
     jobs-redis.js          Jobs: Redis queue (atomic claim + lease) + Blob
+    plugins-json.js        Plugin registry: data/plugins.json
+    plugins-redis.js       Plugin registry: Upstash Redis (+ run lock)
     state-json.js          State: data/{name}-state.json
     state-redis.js         State: Upstash Redis
 scripts/
   migrate-json-to-redis.js One-time import of local JSON state into Redis/Blob
 agent/
   printer-agent.js         Local printer agent (polls /next, prints, acks)
-  espn-poller.js           ESPN World Cup poller (kickoff/goal/full-time)
+  heartbeat.js             Local heartbeat (POSTs /tick, drives plugins)
 public/
   index.html               Design studio frontend (preview + print + jobs panel)
 transport/
@@ -291,6 +351,7 @@ reference/
   starter-templates.json   Starter templates (seeds the local store)
   wc-templates.json        World Cup templates (kickoff, goal, full-time)
   receipt-design-studio.html  Archived offline previewer (html2canvas-based)
+  espn-poller.js           Retired standalone poller (superseded by plugins/espn-worldcup.js + /tick)
   server.py                Python job-queue server (reference, superseded by api/)
   render.py                Python renderer (reference, superseded by render-core.js)
   mock_board.py            Fake ESP32 (reference, superseded by printer-agent.js)

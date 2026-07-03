@@ -40,6 +40,7 @@ async function loadHandlers() {
       next:      (await import('./api/next.js')).default,
       ack:       (await import('./api/ack.js')).default,
       nack:      (await import('./api/nack.js')).default,
+      tick:      (await import('./api/tick.js')).default,
     };
   }
 }
@@ -129,6 +130,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/next')      return route(handlers.next, req, res);
     if (url === '/ack')       return route(handlers.ack, req, res);
     if (url === '/nack')      return route(handlers.nack, req, res);
+    if (url === '/tick')      return route(handlers.tick, req, res);
     if (url === '/templates') return route(handlers.templates, req, res, { body: req.method === 'POST' });
 
     serveStatic(url, res);

@@ -1,3 +1,8 @@
+// RETIRED — superseded by plugins/espn-worldcup.js + /tick.
+// The detection logic moved verbatim into the plugin; the polling loop is
+// replaced by agent/heartbeat.js POSTing /tick. Kept for reference only —
+// do not run or expand.
+//
 // espn-poller.js — watches live FIFA World Cup matches via ESPN and creates
 // print jobs for kickoff, goals, and full-time.
 //

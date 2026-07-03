@@ -31,7 +31,12 @@ export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
 // the server is reachable from outside your machine.
 export const DEVICE_TOKEN = process.env.DEVICE_TOKEN || 'dev-token';
 
-// ESPN poller
+// Heartbeat — seconds between /tick POSTs from agent/heartbeat.js. Each tick
+// runs whichever registered plugins are enabled and due.
+export const HEARTBEAT_SECONDS = parseInt(process.env.HEARTBEAT_SECONDS, 10) || 30;
+
+// ESPN poller (WATCH_TEAMS also seeds the espn-worldcup plugin's config on
+// first registration)
 export const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL, 10) || 30;
 export const WATCH_TEAMS   = process.env.WATCH_TEAMS
   ? process.env.WATCH_TEAMS.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)

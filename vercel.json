@@ -5,6 +5,7 @@
     { "source": "/jobs", "destination": "/api/jobs" },
     { "source": "/next", "destination": "/api/next" },
     { "source": "/ack", "destination": "/api/ack" },
-    { "source": "/nack", "destination": "/api/nack" }
+    { "source": "/nack", "destination": "/api/nack" },
+    { "source": "/tick", "destination": "/api/tick" }
   ]
 }
