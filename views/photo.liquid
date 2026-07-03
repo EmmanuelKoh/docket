@@ -1,0 +1,139 @@
+<div class="title-row">
+  <div>
+    <h1>Photo</h1>
+    <div class="subtitle">print a picture — dithered like everything else</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="photo-tool">
+    <div class="photo-controls">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <span id="dropHint">Choose a photo<br><span class="sub">or drop one here</span></span>
+      </label>
+      <div class="photo-field">
+        <span class="label">Caption</span>
+        <input class="editable" id="captionInput" placeholder="optional" spellcheck="false" maxlength="120">
+      </div>
+      <button class="btn" id="printBtn" disabled>Print</button>
+      <span class="status" id="photoStatus"></span>
+    </div>
+    <div class="photo-stage">
+      <div class="photo-roll" id="photoRoll">
+        <div class="empty" id="photoEmpty">The dithered preview appears here — exactly what will print</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var TPL = null;
+  var photoData = null;    // downscaled JPEG data URI
+  var photoHeight = 0;
+  var debounceTimer = null;
+
+  var input = document.getElementById('photoInput');
+  var dropzone = document.getElementById('dropzone');
+  var caption = document.getElementById('captionInput');
+  var printBtn = document.getElementById('printBtn');
+  var statusEl = document.getElementById('photoStatus');
+  var roll = document.getElementById('photoRoll');
+  var empty = document.getElementById('photoEmpty');
+
+  // fetch the Photo Print template from the store (it's seeded on first tick)
+  fetch('/templates').then(function (r) { return r.json(); }).then(function (list) {
+    var t = list.find(function (x) { return x.name === 'Photo Print'; });
+    if (t) TPL = t.template;
+    else statusEl.textContent = 'Photo Print template missing — run a tick to seed it';
+  });
+
+  // Downscale to the template's inner width (490px), cap height for tall
+  // shots, re-encode as JPEG — phone photos shrink ~100x before upload.
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    var img = new Image();
+    img.onload = function () {
+      var scale = Math.min(490 / img.width, 700 / img.height, 1);
+      var w = Math.round(img.width * scale);
+      var h = Math.round(img.height * scale);
+      var canvas = document.createElement('canvas');
+      // render at the template's fixed 490px inner width; keep aspect
+      canvas.width = 490;
+      canvas.height = Math.round(h * (490 / w));
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      photoData = canvas.toDataURL('image/jpeg', 0.85);
+      photoHeight = canvas.height;
+      URL.revokeObjectURL(img.src);
+      document.getElementById('dropHint').innerHTML =
+        file.name.replace(/</g, '&lt;') + '<br><span class="sub">choose another to replace</span>';
+      schedule();
+    };
+    img.src = URL.createObjectURL(file);
+  }
+
+  function schedule() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(preview, 350);
+  }
+
+  function preview() {
+    if (!photoData || !TPL) return;
+    statusEl.textContent = 'rendering…';
+    fetch('/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: TPL,
+        data: { photo: photoData, photoHeight: photoHeight, caption: caption.value.trim() },
+      }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error('render failed');
+      return r.blob();
+    }).then(function (blob) {
+      empty.style.display = 'none';
+      var old = roll.querySelector('img');
+      if (old) { URL.revokeObjectURL(old.src); old.remove(); }
+      var im = document.createElement('img');
+      im.src = URL.createObjectURL(blob);
+      roll.appendChild(im);
+      printBtn.disabled = false;
+      statusEl.textContent = '';
+    }).catch(function (e) {
+      statusEl.textContent = e.message;
+    });
+  }
+
+  input.addEventListener('change', function () { loadFile(input.files[0]); });
+  dropzone.addEventListener('dragover', function (e) { e.preventDefault(); });
+  dropzone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    loadFile(e.dataTransfer.files[0]);
+  });
+  caption.addEventListener('input', function () { if (photoData) schedule(); });
+
+  printBtn.addEventListener('click', function () {
+    printBtn.disabled = true;
+    printBtn.textContent = 'Queuing…';
+    fetch('/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: TPL,
+        data: { photo: photoData, photoHeight: photoHeight, caption: caption.value.trim() },
+        name: 'Photo Print',
+        source: 'photo',
+      }),
+    }).then(function (r) { return r.json(); }).then(function (body) {
+      statusEl.textContent = body.id ? 'queued ' + body.id : (body.error || 'failed');
+    }).catch(function (e) {
+      statusEl.textContent = e.message;
+    }).finally(function () {
+      printBtn.disabled = false;
+      printBtn.textContent = 'Print';
+    });
+  });
+})();
+</script>

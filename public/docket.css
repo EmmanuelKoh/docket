@@ -462,12 +462,99 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 }
 #peek img { display: block; width: 100%; background: #fff; }
 
+/* ---- photo tool ---- */
+
+.photo-tool { display: flex; gap: 24px; align-items: flex-start; }
+@media (max-width: 720px) { .photo-tool { flex-direction: column; } }
+
+.photo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 240px;
+  flex-shrink: 0;
+}
+.dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 110px;
+  border: 1px dashed var(--dash);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 12px;
+}
+.dropzone:hover { border-color: var(--ink-faint); }
+.dropzone .sub { font-size: 12px; color: var(--ink-faint); }
+
+.photo-field { display: flex; flex-direction: column; gap: 6px; }
+.photo-field .editable { width: 100%; }
+
+.photo-stage { flex: 1; min-width: 0; }
+.photo-roll {
+  background: #ffffff;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  max-width: 400px;
+}
+.photo-roll img { display: block; width: 100%; }
+.photo-roll .empty { color: var(--ink-faint); }
+
 /* ---- inline field errors ---- */
 
 .field-error {
   width: 100%;
   font-size: 12px;
   color: var(--red);
+}
+
+/* ---- phones ---- */
+
+@media (max-width: 640px) {
+  .header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .nav { gap: 14px; flex-wrap: wrap; }
+
+  .page { padding: 16px 16px 48px; }
+
+  /* stat strip: 2x2 grid instead of 4 shrinking cells */
+  .stat-strip { flex-wrap: wrap; }
+  .stat-cell { flex: 1 1 50%; min-width: 50%; }
+  .stat-cell + .stat-cell { border-left: 0; }
+  .stat-cell:nth-child(even) { border-left: 0.5px solid var(--hairline); }
+  .stat-cell:nth-child(n+3) { border-top: 0.5px solid var(--hairline); }
+
+  .system-line { flex-wrap: wrap; gap: 10px 16px; }
+  .system-line .right { margin-left: 0; width: 100%; }
+
+  /* rows: smaller media, tighter gaps, rail stays aligned */
+  .row { gap: 14px; padding: 12px 14px; }
+  .thumb { width: 96px; height: 64px; }
+  .thumb.queue { width: 110px; height: 74px; }
+  .rail { width: 96px; font-size: 11px; }
+
+  /* history expand: stack the three columns, drop the deep indent */
+  .row-detail { padding: 14px 16px; }
+  .row-detail .cols { flex-direction: column; gap: 16px; }
+  .row-detail .col { flex: 1 1 auto !important; }
+
+  /* plugin config grid: labels above values */
+  .card-detail.cfg { grid-template-columns: 1fr; gap: 4px; }
+  .cfg .cfg-label { margin-top: 8px; }
+
+  /* photo tool: full-width controls, big tap target */
+  .photo-tool { flex-direction: column; }
+  .photo-controls { width: 100%; }
+  .dropzone { min-height: 140px; }
+  .photo-roll { max-width: 100%; }
+
+  .title-row { flex-wrap: wrap; gap: 10px; }
 }
 
 /* ---- login ---- */

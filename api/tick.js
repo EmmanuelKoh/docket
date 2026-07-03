@@ -31,6 +31,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_TEMPLATE_FILES = [
   path.join(__dirname, '..', 'reference', 'wc-templates.json'),
   path.join(__dirname, '..', 'reference', 'brief-templates.json'),
+  path.join(__dirname, '..', 'reference', 'photo-templates.json'),
 ];
 
 // Generous upper bound on one poll cycle; the lock expiry means a crashed

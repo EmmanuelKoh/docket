@@ -298,6 +298,11 @@ export default async function handler(req, res) {
     }
   }
 
+  // -- photo tool --
+  if (p === '/dashboard/photo' && req.method === 'GET') {
+    return html(res, await renderPage('photo', { title: 'Photo', active: 'photo' }));
+  }
+
   // -- plugins --
   if (p === '/dashboard/plugins' && req.method === 'GET') {
     const records = await listPlugins(OWNER_ID);
