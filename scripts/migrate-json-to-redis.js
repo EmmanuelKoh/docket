@@ -1,6 +1,6 @@
 // scripts/migrate-json-to-redis.js — one-time import of the local JSON state
-// (data/templates.json, data/jobs.json, data/espn-state.json) into hosted
-// storage (Upstash Redis + Vercel Blob).
+// (data/templates.json, data/jobs.json, data/plugins.json,
+// data/espn-state.json) into hosted storage (Upstash Redis + Vercel Blob).
 //
 // Idempotent — safe to re-run: existing Redis data is never overwritten.
 // Templates and poller state are written only if their keys are absent; job
@@ -15,6 +15,12 @@ import { fileURLToPath } from 'url';
 import { OWNER_ID } from '../config.js';
 import { getRedis, rkey } from '../lib/redis.js';
 import { putBlob } from '../lib/blob.js';
+// Redis driver imported directly (not the facade): this script always writes
+// to Redis no matter what STORE_DRIVER is set to locally.
+import {
+  getPlugin as getPluginRedis,
+  upsertPlugin as upsertPluginRedis,
+} from '../lib/stores/plugins-redis.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -90,6 +96,25 @@ if (jobs) {
   console.log(`jobs: imported ${imported}, skipped ${skipped} (seq=${Math.max(seq, maxId)})`);
 } else {
   console.log('jobs: no data/jobs.json, skipped');
+}
+
+// ---- plugin registry ----
+const plugins = readJson('plugins.json');
+if (plugins) {
+  let imported = 0;
+  let skipped = 0;
+  for (const rec of plugins) {
+    const ownerId = rec.ownerId || OWNER_ID;
+    if (await getPluginRedis(ownerId, rec.id)) {
+      skipped++;
+      continue;
+    }
+    await upsertPluginRedis({ ...rec, ownerId });
+    imported++;
+  }
+  console.log(`plugins: imported ${imported}, skipped ${skipped}`);
+} else {
+  console.log('plugins: no data/plugins.json, skipped');
 }
 
 // ---- espn poller state ----
