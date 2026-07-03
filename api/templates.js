@@ -2,8 +2,10 @@
 // CRUD for saved templates, backed by lib/store.js.
 
 import { getTemplates, saveTemplate, deleteTemplate, isReadOnly } from '../lib/store.js';
+import { requireSessionApi } from '../lib/session.js';
 
 export default async function handler(req, res) {
+  if (!requireSessionApi(req, res)) return;
   try {
     if (req.method === 'GET') {
       return res.status(200).json(await getTemplates());

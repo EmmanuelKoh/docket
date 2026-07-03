@@ -5,6 +5,7 @@
 
 import { nextJob } from '../lib/job-store.js';
 import { requireDeviceToken } from '../lib/auth.js';
+import { setState } from '../lib/state-store.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -12,6 +13,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'GET only' });
   }
   if (!requireDeviceToken(req, res)) return;
+
+  // Record device contact for the dashboard's "printer online" line.
+  await setState('device', { lastSeenAt: new Date().toISOString() }).catch(() => {});
 
   const job = await nextJob();
   if (!job) {

@@ -1,0 +1,23 @@
+<div id="queue-list" hx-get="/dashboard/fragments/queue" hx-trigger="every 3s" hx-swap="outerHTML">
+  {% if oob %}<span id="queue-count" hx-swap-oob="true">{{ count }} job{% unless count == 1 %}s{% endunless %}</span>{% endif %}
+  {% for job in jobs %}
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <img class="thumb queue" src="/jobs?png={{ job.id }}" loading="lazy" alt="">
+      <div class="grow">
+        <div class="name">{{ job.name }}</div>
+        <div class="sub">{{ job.source }} · created {{ job.createdTime }}</div>
+      </div>
+      <span class="status{% if job.inflight %} red{% endif %}">{{ job.statusText }}</span>
+      <div class="rail">
+        {% if job.inflight %}claimed {{ job.claimedAgo }}{% else %}
+        <button class="btn small" hx-post="/dashboard/jobs/cancel?job={{ job.id }}"
+                hx-target="#queue-list" hx-swap="outerHTML">Cancel</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="list"><div class="empty">No jobs waiting — print something from Templates</div></div>
+  {% endfor %}
+</div>

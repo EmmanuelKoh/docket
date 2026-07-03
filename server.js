@@ -41,18 +41,27 @@ async function loadHandlers() {
       ack:       (await import('./api/ack.js')).default,
       nack:      (await import('./api/nack.js')).default,
       tick:      (await import('./api/tick.js')).default,
+      dashboard: (await import('./api/dashboard.js')).default,
     };
   }
 }
 
-// Read request body as JSON.
+// Read request body — JSON or urlencoded form, by content type (mirrors
+// Vercel's automatic body parsing so handlers work identically in both).
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString();
-      try { resolve(raw ? JSON.parse(raw) : {}); }
+      if (!raw) return resolve({});
+      const type = req.headers['content-type'] || '';
+      if (type.includes('application/x-www-form-urlencoded')) {
+        const body = {};
+        new URLSearchParams(raw).forEach((v, k) => { body[k] = v; });
+        return resolve(body);
+      }
+      try { resolve(JSON.parse(raw)); }
       catch (e) { reject(new Error('Invalid JSON body')); }
     });
     req.on('error', reject);
@@ -132,6 +141,12 @@ const server = http.createServer(async (req, res) => {
     if (url === '/nack')      return route(handlers.nack, req, res);
     if (url === '/tick')      return route(handlers.tick, req, res);
     if (url === '/templates') return route(handlers.templates, req, res, { body: req.method === 'POST' });
+
+    // Dashboard, studio, and the login door — one handler, path-routed.
+    if (url === '/login' || url === '/logout' || url === '/studio' ||
+        url === '/dashboard' || url.startsWith('/dashboard/')) {
+      return route(handlers.dashboard, req, res, { body: req.method === 'POST' });
+    }
 
     serveStatic(url, res);
   } catch (err) {

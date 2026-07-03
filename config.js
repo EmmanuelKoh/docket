@@ -31,6 +31,12 @@ export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
 // the server is reachable from outside your machine.
 export const DEVICE_TOKEN = process.env.DEVICE_TOKEN || 'dev-token';
 
+// Dashboard door. DASHBOARD_PASSWORD is what you type at /login;
+// SESSION_SECRET signs the stateless session cookie. No defaults — both must
+// be set (locally in .env, hosted in the Vercel env vars) for login to work.
+export const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
+export const SESSION_SECRET = process.env.SESSION_SECRET || '';
+
 // Heartbeat — seconds between /tick POSTs from agent/heartbeat.js. Each tick
 // runs whichever registered plugins are enabled and due.
 export const HEARTBEAT_SECONDS = parseInt(process.env.HEARTBEAT_SECONDS, 10) || 30;

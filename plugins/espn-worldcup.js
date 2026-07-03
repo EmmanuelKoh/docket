@@ -19,6 +19,9 @@ export const defaults = {
   config: { watchTeams: [] }, // team abbreviations to filter; empty = all
 };
 
+// Template-store templates this plugin prints with (shown in the dashboard).
+export const templates = ['WC Kickoff', 'WC Goal', 'WC Full Time'];
+
 const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary';
 
@@ -31,7 +34,7 @@ async function createJob(ctx, templateName, data) {
     return;
   }
   try {
-    const result = await ctx.createJob({ template: tpl.template, data });
+    const result = await ctx.createJob({ template: tpl.template, data, name: templateName });
     ctx.log(`>> ${templateName}: ${result.id} (${JSON.stringify(data).slice(0, 80)})`);
   } catch (err) {
     ctx.log(`! job failed: ${err.message}`);

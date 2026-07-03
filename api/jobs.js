@@ -1,9 +1,12 @@
 // api/jobs.js — POST /jobs to create a print job, GET /jobs to list recent jobs.
 // GET /jobs?png=job-1 serves the stored preview PNG for thumbnails.
+// Cookie-protected: used by the studio and dashboard, never by devices.
 
 import { createJob, listJobs, getJobPng } from '../lib/job-store.js';
+import { requireSessionApi } from '../lib/session.js';
 
 export default async function handler(req, res) {
+  if (!requireSessionApi(req, res)) return;
   if (req.method === 'GET') {
     if (req.query && req.query.png) {
       const png = await getJobPng(req.query.png);
@@ -17,12 +20,12 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { template, data } = req.body || {};
+    const { template, data, name, source } = req.body || {};
     if (!template) {
       return res.status(400).json({ error: 'template is required' });
     }
     try {
-      const result = await createJob({ template, data });
+      const result = await createJob({ template, data, name, source: source || 'studio' });
       return res.status(201).json(result);
     } catch (err) {
       return res.status(500).json({ error: err.message });
