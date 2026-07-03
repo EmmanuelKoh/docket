@@ -12,9 +12,11 @@
   <form class="card-detail" hx-post="/dashboard/plugins/config?id={{ p.encoded }}"
         hx-trigger="change" hx-target="closest .card" hx-swap="outerHTML">
     <span{% unless p.enabled %} style="color:var(--ink-faint)"{% endunless %}>interval
-      <input class="editable" name="intervalSeconds" value="{{ p.intervalSeconds }}" size="4">s</span>
+      <input class="editable" name="intervalSeconds" value="{{ p.intervalSeconds }}"
+             style="width:{{ p.intervalSeconds | append: '' | size | plus: 1 }}ch">s</span>
     <span{% unless p.enabled %} style="color:var(--ink-faint)"{% endunless %}>config
-      <input class="editable" name="config" value="{{ p.configJson }}" size="34" spellcheck="false"></span>
+      <input class="editable" name="config" value="{{ p.configJson }}" spellcheck="false"
+             style="width:{{ p.configJson | size | plus: 1 }}ch"></span>
     <span{% unless p.enabled %} style="color:var(--ink-faint)"{% endunless %}>templates
       <span class="mono" style="font-size:12px">{{ p.templates }}</span></span>
     {% if p.error %}<div class="field-error">{{ p.error }}</div>{% endif %}
