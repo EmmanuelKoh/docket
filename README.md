@@ -114,6 +114,7 @@ can't log in.
 |---------|-----------|
 | Home | counts from all three stores + device last-contact (state store) |
 | Templates | template store (`lib/store.js`); Open/New load the studio at `/studio` |
+| Photo | print tool: upload a picture, live dithered preview via `/preview`, prints the seeded "Photo Print" template with an optional mono caption |
 | Plugins | plugin registry (`lib/plugin-registry.js`): toggle, interval, config JSON |
 | Queue | job store queued/inflight; Cancel only while still queued (atomic) |
 | History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |

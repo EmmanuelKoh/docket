@@ -462,6 +462,47 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 }
 #peek img { display: block; width: 100%; background: #fff; }
 
+/* ---- photo tool ---- */
+
+.photo-tool { display: flex; gap: 24px; align-items: flex-start; }
+@media (max-width: 720px) { .photo-tool { flex-direction: column; } }
+
+.photo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 240px;
+  flex-shrink: 0;
+}
+.dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 110px;
+  border: 1px dashed var(--dash);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 12px;
+}
+.dropzone:hover { border-color: var(--ink-faint); }
+.dropzone .sub { font-size: 12px; color: var(--ink-faint); }
+
+.photo-field { display: flex; flex-direction: column; gap: 6px; }
+.photo-field .editable { width: 100%; }
+
+.photo-stage { flex: 1; min-width: 0; }
+.photo-roll {
+  background: #ffffff;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  max-width: 400px;
+}
+.photo-roll img { display: block; width: 100%; }
+.photo-roll .empty { color: var(--ink-faint); }
+
 /* ---- inline field errors ---- */
 
 .field-error {

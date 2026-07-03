@@ -123,7 +123,7 @@ the History expand are where receipts are read.
 ## Pages
 
 Header (all pages): DOCKET wordmark left; nav right: Home, Templates,
-Plugins, Queue, History, then theme-toggle icon, logout icon.
+Photo, Plugins, Queue, History, then theme-toggle icon, logout icon.
 
 ### Home
 1. Stat strip: ONE bordered container split into 4 cells by 0.5px --hairline
@@ -149,6 +149,18 @@ studio; card border shifts to --ink-faint on hover as the cue). Buttons
 earn their border by being the exception — never repeat the default action
 of an already-clickable object. New opens the studio blank. (Lists remain
 the pattern for records — History, Queue.)
+
+### Photo
+A print tool, not a registry plugin (no run()/toggle — user-initiated).
+Title block ("print a picture — dithered like everything else"), one card:
+left column (240px) — dashed dropzone (1px dashed --dash, choose-or-drop),
+CAPTION label + dotted editable input (mono output), outline Print button,
+mono status text; right — the live preview on white paper (the real
+/preview render of the "Photo Print" template: bordered photo, optional
+mono 16px caption, no title). Photos downscale client-side to the
+template's 490px inner width before upload. What you see is the dithered
+print, not an approximation. Stacks vertically under 720px (phone use is
+the point).
 
 ### Plugins
 Title block + "Register plugin" button. Per-plugin CARDS (not a list):

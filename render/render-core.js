@@ -87,7 +87,7 @@ function dither({ rgba, width, height }) {
     for (let x = 0; x < width; x++) if (bits[y * width + x]) { any = true; break; }
     if (any) last = y;
   }
-  const trimmed = Math.min(height, last + 16); // small bottom margin
+  const trimmed = Math.min(height, last + 32); // bottom margin below last ink
   return { bits, width, height: trimmed };
 }
 
