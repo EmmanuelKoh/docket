@@ -17,7 +17,26 @@ export const PRINT_WIDTH  = parseInt(process.env.PRINT_WIDTH, 10)  || 576;
 export const FONT_DIR     = process.env.FONT_DIR     || BUNDLED_FONT_DIR;
 export const JOB_CAP      = parseInt(process.env.JOB_CAP, 10)      || 50;
 
-// ESPN poller
+// Storage
+// STORE_DRIVER selects the backing store for templates, jobs, and poller
+// state: 'json' (local files in data/) or 'redis' (Upstash Redis + Vercel
+// Blob). Connection vars for the redis driver are read directly by
+// lib/redis.js and the @vercel/blob SDK — see .env.example.
+export const STORE_DRIVER  = (process.env.STORE_DRIVER || 'json').toLowerCase();
+export const OWNER_ID      = process.env.OWNER_ID || 'default';
+export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
+
+// Shared secret for device-facing endpoints (/next, /ack, /nack). The default
+// keeps local dev working out of the box; set a long random value anywhere
+// the server is reachable from outside your machine.
+export const DEVICE_TOKEN = process.env.DEVICE_TOKEN || 'dev-token';
+
+// Heartbeat — seconds between /tick POSTs from agent/heartbeat.js. Each tick
+// runs whichever registered plugins are enabled and due.
+export const HEARTBEAT_SECONDS = parseInt(process.env.HEARTBEAT_SECONDS, 10) || 30;
+
+// ESPN poller (WATCH_TEAMS also seeds the espn-worldcup plugin's config on
+// first registration)
 export const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL, 10) || 30;
 export const WATCH_TEAMS   = process.env.WATCH_TEAMS
   ? process.env.WATCH_TEAMS.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)

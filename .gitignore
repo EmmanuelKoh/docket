@@ -1,5 +1,6 @@
 node_modules/
 .env
+.DS_Store
 
 # Generated output from print runs
 *.bin

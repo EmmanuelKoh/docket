@@ -1,3 +1,8 @@
+// RETIRED — superseded by plugins/espn-worldcup.js + /tick.
+// The detection logic moved verbatim into the plugin; the polling loop is
+// replaced by agent/heartbeat.js POSTing /tick. Kept for reference only —
+// do not run or expand.
+//
 // espn-poller.js — watches live FIFA World Cup matches via ESPN and creates
 // print jobs for kickoff, goals, and full-time.
 //
@@ -9,18 +14,21 @@
 //   WATCH_TEAMS     comma-separated team abbreviations to filter (default: all)
 //   PORT            server port             (default 3000)
 //
-// State is persisted to data/espn-state.json so nothing is reprinted across
-// polls or restarts.
+// State is persisted through lib/state-store.js (data/espn-state.json with
+// the json driver, Redis with the redis driver) so nothing is reprinted
+// across polls or restarts.
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { POLL_INTERVAL, WATCH_TEAMS } from '../config.js';
+import { POLL_INTERVAL, WATCH_TEAMS, STORE_DRIVER } from '../config.js';
+import { getState, setState } from '../lib/state-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const STATE_FILE = path.join(ROOT, 'data', 'espn-state.json');
 const WC_TEMPLATES_FILE = path.join(ROOT, 'reference', 'wc-templates.json');
+
+const STATE_KEY = 'espn';
 
 const SERVER = process.env.PRINT_SERVER || `http://localhost:${process.env.PORT || 3000}`;
 const POLL_MS = POLL_INTERVAL * 1000;
@@ -61,17 +69,12 @@ async function seedTemplates() {
 
 // ---- state persistence ----
 
-function readState() {
-  try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-  } catch {
-    return {};
-  }
+async function readState() {
+  return (await getState(STATE_KEY)) || {};
 }
 
-function writeState(state) {
-  fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+async function writeState(state) {
+  await setState(STATE_KEY, state);
 }
 
 // ---- job creation ----
@@ -231,7 +234,7 @@ async function poll() {
   }
 
   const events = (scoreboard.events || []).map(parseEvent).filter(Boolean);
-  const state = readState();
+  const state = await readState();
   let stateChanged = false;
 
   for (const ev of events) {
@@ -401,7 +404,7 @@ async function poll() {
     state[ev.id] = prev;
   }
 
-  if (stateChanged) writeState(state);
+  if (stateChanged) await writeState(state);
 }
 
 // ---- boot ----
@@ -413,7 +416,7 @@ async function main() {
   console.log(`  server:   ${SERVER}`);
   console.log(`  interval: ${POLL_INTERVAL}s`);
   console.log(`  teams:    ${WATCH_TEAMS.length ? WATCH_TEAMS.join(', ') : 'all'}`);
-  console.log(`  state:    ${STATE_FILE}`);
+  console.log(`  state:    ${STORE_DRIVER} store (key: ${STATE_KEY})`);
   console.log('');
 
   await seedTemplates();
