@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/preview", "destination": "/api/preview" },
+    { "source": "/templates", "destination": "/api/templates" },
+    { "source": "/jobs", "destination": "/api/jobs" },
+    { "source": "/next", "destination": "/api/next" },
+    { "source": "/ack", "destination": "/api/ack" },
+    { "source": "/nack", "destination": "/api/nack" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "receipt-printer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Thermal receipt system for 80mm ESC/POS printers",
+  "main": "render/render-core.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "dotenv": "^16.4.7",
+    "liquidjs": "^10.21.0",
+    "pngjs": "^7.0.0",
+    "satori": "^0.12.1",
+    "satori-html": "^0.3.2"
+  }
+}
