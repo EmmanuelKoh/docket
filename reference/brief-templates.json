@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Daily Brief",
+    "template": "<div style=\"display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:24px\">\n  <div style=\"display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #000;padding-bottom:8px\">\n    <div style=\"display:flex;font-size:46px;font-weight:700\">{{ day }}</div>\n    <div style=\"display:flex;flex-direction:column;align-items:flex-end;font-family:Mono;font-size:18px\">\n      <div style=\"display:flex\">{{ date }}</div>\n      <div style=\"display:flex\">{{ time }}</div>\n    </div>\n  </div>\n  <div style=\"display:flex;justify-content:space-between;margin-top:16px\">\n    {% for s in stats %}\n    <div style=\"display:flex;flex-direction:column;align-items:center;flex:1\">\n      <div style=\"display:flex;font-size:40px;font-weight:700\">{{ s.value }}</div>\n      <div style=\"display:flex;font-size:15px\">{{ s.label }}</div>\n    </div>\n    {% endfor %}\n  </div>\n  <div style=\"display:flex;background:#000;color:#fff;font-size:18px;font-weight:700;padding:4px 10px;margin-top:18px\">SCHEDULE</div>\n  {% for e in schedule %}\n  <div style=\"display:flex;justify-content:space-between;font-family:Mono;font-size:20px;margin-top:6px\">\n    <div style=\"display:flex;width:90px\">{{ e.at }}</div>\n    <div style=\"display:flex;flex:1\">{{ e.title }}</div>\n    <div style=\"display:flex\">{{ e.tag }}</div>\n  </div>\n  {% endfor %}\n  {% if schedule.size == 0 %}\n  <div style=\"display:flex;font-family:Mono;font-size:20px;margin-top:6px\">No meetings today</div>\n  {% endif %}\n  {% if focus != \"\" %}\n  <div style=\"display:flex;background:#888;padding:12px;margin-top:16px;font-size:22px;font-weight:700\">FOCUS: {{ focus }}</div>\n  {% endif %}\n</div>",
+    "data": {
+      "day": "FRIDAY",
+      "date": "Jul 3 2026",
+      "time": "06:30",
+      "stats": [
+        { "value": "3", "label": "MEETINGS" },
+        { "value": "72°", "label": "RAIN 20%" }
+      ],
+      "schedule": [
+        { "at": "10:00", "title": "Standup", "tag": "15m" },
+        { "at": "12:30", "title": "Lunch with Sam", "tag": "1h" },
+        { "at": "16:00", "title": "Design review", "tag": "45m" }
+      ],
+      "focus": "ship the brief plugin"
+    }
+  }
+]

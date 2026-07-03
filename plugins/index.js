@@ -4,5 +4,6 @@
 // async run({ config, state, ctx }) -> { state }.
 
 import * as espnWorldcup from './espn-worldcup.js';
+import * as morningBrief from './morning-brief.js';
 
-export const PLUGINS = [espnWorldcup];
+export const PLUGINS = [espnWorldcup, morningBrief];

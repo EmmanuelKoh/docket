@@ -278,6 +278,30 @@ Installed plugins are listed explicitly in `plugins/index.js`.
 `data/plugins.json` (json driver) or the `rp:{owner}:plugin:{id}` key in the
 Upstash console (redis driver). No UI yet.
 
+### Morning brief plugin (`morning-brief`)
+
+Prints the `Daily Brief` template once each morning: today's meetings
+merged from one or more calendar iCal feeds, the day's weather
+(Open-Meteo, no API key), and a focus line. Registers **disabled** —
+configure it from the Plugins page, then flip the toggle.
+
+| Config | Meaning |
+|--------|---------|
+| `icsUrls` | Array of secret iCal addresses — Google Calendar: Settings → [calendar] → "Secret address in iCal format". One per calendar; treat them as secrets. |
+| `latitude` / `longitude` | Coordinates for the forecast |
+| `timezone` | IANA zone defining "today" and `printAt` (e.g. `America/Los_Angeles`) |
+| `printAt` | `"HH:MM"` local time after which the brief prints (default `06:30`) |
+| `temperatureUnit` | `fahrenheit` (default) or `celsius` |
+| `focus` | Focus-bar text; empty hides the bar |
+
+Behavior: runs every 5 minutes but prints once per local day, on the
+first tick at/after `printAt` (a late heartbeat prints late, same day —
+never twice, never yesterday's). Recurring events are expanded; all-day
+items are ignored; the same event on two calendars is deduped. If any
+calendar feed fails the run errors visibly on the plugin card and
+retries next interval rather than printing an incomplete brief; a
+weather failure just degrades that stat to "—".
+
 ### World Cup plugin (`espn-worldcup`)
 
 The first registry entry — it watches live FIFA World Cup matches via the
