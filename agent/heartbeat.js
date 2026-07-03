@@ -15,8 +15,8 @@
 
 import { HEARTBEAT_SECONDS, DEVICE_TOKEN } from "../config.js";
 
-// const SERVER = process.env.PRINT_SERVER || `http://localhost:${process.env.PORT || 3000}`;
-const SERVER = `http://localhost:${process.env.PORT || 3000}`;
+const SERVER =
+  process.env.PRINT_SERVER || `http://localhost:${process.env.PORT || 3000}`;
 const AUTH = { Authorization: `Bearer ${DEVICE_TOKEN}` };
 
 async function tick() {
