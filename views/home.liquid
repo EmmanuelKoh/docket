@@ -1,0 +1,52 @@
+<div class="block stat-strip">
+  <div class="stat-cell">
+    <div class="label">Templates</div>
+    <div class="num">{{ stats.templates }}</div>
+    <div class="sub">{{ stats.templatesSub }}</div>
+  </div>
+  <div class="stat-cell">
+    <div class="label">Plugins</div>
+    <div class="num">{{ stats.pluginsEnabled }}/{{ stats.pluginsTotal }}</div>
+    <div class="sub">enabled</div>
+  </div>
+  <div class="stat-cell">
+    <div class="label">Queue</div>
+    <div class="num{% if stats.queue > 0 %} red{% endif %}">{{ stats.queue }}</div>
+    <div class="sub">{{ stats.queueSub }}</div>
+  </div>
+  <div class="stat-cell">
+    <div class="label">Last print</div>
+    <div class="num">{{ stats.lastPrintAge }}</div>
+    <div class="sub">{{ stats.lastPrintSub }}</div>
+  </div>
+</div>
+
+<div class="system-line">
+  <span><span class="dot"{% if system.stale %} style="background:var(--ink-faint)"{% endif %}></span>{{ system.deviceText }}</span>
+  <span>store {{ system.driver }}</span>
+  <span>tick every {{ system.tick }}s</span>
+  <span class="right">v{{ system.version }}</span>
+</div>
+
+<hr class="divider">
+
+<div class="recent-head">
+  <span class="label">Recent</span>
+  <a href="/dashboard/history">view all →</a>
+</div>
+{% if recent.size > 0 %}
+<div class="list">
+  {% for row in recent %}
+  <div class="row">
+    <img class="thumb" src="{{ row.thumbUrl }}" loading="lazy" alt="">
+    <div class="grow">
+      <div class="name">{{ row.name }}</div>
+      <div class="sub">{{ row.sub }}</div>
+    </div>
+    <div class="rail"><span class="status {{ row.statusClass }}">{{ row.statusText }}</span> · {{ row.railTime }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="list"><div class="empty">Nothing printed yet — print something from Templates</div></div>
+{% endif %}

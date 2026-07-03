@@ -3,12 +3,14 @@
 // the 1-bit dithered PNG (exactly what the printer would produce).
 
 import { renderToPreview } from '../render/render-core.js';
+import { requireSessionApi } from '../lib/session.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'POST only' });
   }
+  if (!requireSessionApi(req, res)) return;
 
   const { template, data } = req.body || {};
   if (!template) {

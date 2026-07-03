@@ -1,0 +1,9 @@
+<div class="title-row">
+  <div>
+    <h1>Templates</h1>
+    <div class="subtitle">{{ rows.size }} in the store</div>
+  </div>
+  <a class="btn" href="/studio?new=1">New template</a>
+</div>
+
+{% render 'template-list', rows: rows %}

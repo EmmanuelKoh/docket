@@ -91,6 +91,45 @@ records are never overwritten, safe to re-run):
 npm run migrate
 ```
 
+## Dashboard
+
+`/dashboard` is the DOCKET management UI — server-rendered LiquidJS pages
+with [htmx](https://htmx.org) for in-place updates, styled per
+`docs/design-spec.md` (monochrome + register red, light "paper" and dark
+"darkroom" themes; the moon/sun toggle in the nav persists via localStorage).
+
+**The password door.** Set two env vars (see `.env.example`):
+`DASHBOARD_PASSWORD` (what you type at `/login`) and `SESSION_SECRET`
+(signs the session cookie). The cookie is stateless — an HMAC-signed,
+httpOnly cookie valid for 30 days — so it works across serverless
+invocations with no session storage. `/logout` clears it. The dashboard
+pages, the studio, and the JSON APIs (`/templates`, `/jobs`, `/preview`)
+all require it. The device endpoints (`/next`, `/ack`, `/nack`, `/tick`)
+do NOT — they keep Bearer `DEVICE_TOKEN` auth only, because the ESP32
+can't log in.
+
+**Sections → stores:**
+
+| Section | Backed by |
+|---------|-----------|
+| Home | counts from all three stores + device last-contact (state store) |
+| Templates | template store (`lib/store.js`); Open/New load the studio at `/studio` |
+| Plugins | plugin registry (`lib/plugin-registry.js`): toggle, interval, config JSON |
+| Queue | job store queued/inflight; Cancel only while still queued (atomic) |
+| History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |
+
+**htmx polling.** The Queue list fragment re-fetches itself every 3 seconds
+(`hx-trigger="every 3s"` swapping `/dashboard/fragments/queue`), which is
+how status changes from the printer agent appear without websockets. The
+job count in the title updates out-of-band in the same response. Everything
+else swaps on demand: plugin toggles and config edits swap the card,
+template deletes swap the list, history rows fetch their detail panel on
+first click.
+
+The old studio at `/` now redirects to `/dashboard`; the studio itself
+lives at `/studio` (same editor, restyled to the DOCKET system) and is the
+Templates section's editor.
+
 ## Usage
 
 ### Render a receipt
@@ -132,8 +171,10 @@ print bytes. What you see is what prints.
 npm start
 ```
 
-Opens at `http://localhost:3000`. Select a starter template, edit the
-HTML/Liquid and the JSON data, and see the 1-bit dithered preview update live.
+Opens at `http://localhost:3000` — sign in and open `/studio` (or any
+template's Open button in the dashboard's Templates section). Select a
+starter template, edit the HTML/Liquid and the JSON data, and see the 1-bit
+dithered preview update live.
 
 - **Preview**: `POST /preview` runs the render core and returns the 1-bit PNG.
 - **Print**: hit the Print button (or `Cmd+P`) to queue a job. The printer
