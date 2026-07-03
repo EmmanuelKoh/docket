@@ -74,6 +74,12 @@ green anywhere.
 - Content column: max 1120px, centered. Gutters are max(48px, half the
   leftover viewport) — never under 48px, growing naturally on wide screens.
   The studio (/studio) stays full-bleed; it is a workbench, not a page.
+- Phones (≤640px): gutters drop to 16px, header and nav wrap, the stat
+  strip becomes a 2×2 grid, history expand stacks its columns without the
+  indent, plugin config labels sit above their values, thumbnails shrink
+  one step (96x64 rows / 110x74 queue), and the Photo tool goes single
+  column with a taller tap target. Same components, denser wrapping — no
+  separate mobile design.
 - Header: 16px vertical padding; bottom rule 1.5px solid --ink, full-bleed,
   with contents aligned to the content column.
 - Nav: 13px text, uniform 20px gap between all items including icons.
