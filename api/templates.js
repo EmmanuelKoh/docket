@@ -6,7 +6,7 @@ import { getTemplates, saveTemplate, deleteTemplate, isReadOnly } from '../lib/s
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      return res.status(200).json(getTemplates());
+      return res.status(200).json(await getTemplates());
     }
 
     if (req.method === 'POST') {
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'name and template are required' });
       }
       try {
-        const templates = saveTemplate({ name, template, data });
+        const templates = await saveTemplate({ name, template, data });
         return res.status(200).json(templates);
       } catch (err) {
         if (isReadOnly()) {
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'name query parameter is required' });
       }
       try {
-        const templates = deleteTemplate(name);
+        const templates = await deleteTemplate(name);
         return res.status(200).json(templates);
       } catch (err) {
         if (isReadOnly()) {

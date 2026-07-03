@@ -38,11 +38,57 @@ cp .env.example .env
 | `PRINT_WIDTH` | `576` | Pixel width (576 for 80mm, 384 for 58mm) |
 | `FONT_DIR` | `/usr/share/fonts/truetype/dejavu` | Path to directory with DejaVu TTFs |
 | `JOB_CAP` | `50` | Max stored jobs before oldest done jobs are trimmed |
+| `STORE_DRIVER` | `json` | Storage backend: `json` (local files) or `redis` (Upstash + Blob) |
+| `OWNER_ID` | `default` | Owner stamped on every stored record |
+| `DEVICE_TOKEN` | `dev-token` | Shared secret for the device endpoints (`/next`, `/ack`, `/nack`) |
+| `LEASE_SECONDS` | `120` | Redis driver: seconds before an unacked inflight job is requeued |
 | `POLL_INTERVAL` | `30` | ESPN poller: seconds between polls |
 | `WATCH_TEAMS` | *(empty = all)* | ESPN poller: comma-separated team abbreviations (e.g. `USA,POR`) |
 
 All settings live in `config.js` and fall back to the defaults above when the
-env var is unset.
+env var is unset. The redis driver additionally needs `UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` names the Vercel Marketplace
+integration sets), and `BLOB_READ_WRITE_TOKEN` — see `.env.example`.
+
+## Storage
+
+All state lives behind three store interfaces — `lib/store.js` (templates),
+`lib/job-store.js` (job queue), `lib/state-store.js` (poller state). Nothing
+outside `lib/` touches files, Redis, or Blob directly. `STORE_DRIVER` selects
+one of two interchangeable implementations:
+
+- **`json`** (default) — everything in local files under `data/`. Zero setup,
+  works offline; this is the dev fallback. No lease handling: an inflight job
+  stays inflight until acked or nacked.
+- **`redis`** — small live state (job queue, job records, templates, poller
+  state) in Upstash Redis; heavy artifacts (each job's preview PNG and ESC/POS
+  bytes) in Vercel Blob, referenced by URL from the job record. This is what
+  lets the server half deploy to Vercel while the local printer agent and
+  poller reach the same state.
+
+**Queue semantics (redis driver):** claiming a job (`GET /next`) is a single
+atomic Lua script, so two concurrent polls can never receive the same job. A
+claimed job holds a lease for `LEASE_SECONDS` (default 120); if the printer
+dies silently without acking, the lease expires and the job returns to the
+front of the queue on the next claim — no print is ever lost. `/nack` requeues
+immediately without waiting for the lease.
+
+**Device token:** `/next`, `/ack`, and `/nack` require
+`Authorization: Bearer <DEVICE_TOKEN>` and return 401 without it. The printer
+agent sends it automatically; both sides read the same `.env` locally (default
+`dev-token`). Set a long random value on any deployment reachable from outside.
+
+**Multi-user-ready, not multi-user:** every record carries an `ownerId`
+(hardcoded to `OWNER_ID`) and all Redis keys are namespaced by owner
+(`rp:{owner}:...`). There are no accounts or logins yet — the fields and the
+token mechanism exist so they can be added without a storage rewrite.
+
+**Migrating existing local data** into Redis/Blob (idempotent — existing
+records are never overwritten, safe to re-run):
+
+```
+npm run migrate
+```
 
 ## Usage
 
@@ -91,10 +137,12 @@ HTML/Liquid and the JSON data, and see the 1-bit dithered preview update live.
 - **Preview**: `POST /preview` runs the render core and returns the 1-bit PNG.
 - **Print**: hit the Print button (or `Cmd+P`) to queue a job. The printer
   agent picks it up and sends it to the printer.
-- **Storage**: templates are saved to `data/templates.json` locally, seeded from
-  `reference/starter-templates.json` on first run.
-- **Deploy to Vercel** (optional): `vercel`. The studio is read-only on hosted
-  until a persistent store (Vercel KV/Blob) is added.
+- **Storage**: templates are saved through `lib/store.js` — `data/templates.json`
+  with the json driver, Upstash Redis with the redis driver; seeded from
+  `reference/starter-templates.json` on first run either way.
+- **Deploy to Vercel** (optional): `vercel` with `STORE_DRIVER=redis` and the
+  Upstash/Blob env vars for a fully writable hosted studio. With the json
+  driver the hosted studio is read-only (serverless filesystems don't persist).
 - The old offline approximation tool is archived at
   `reference/receipt-design-studio.html`.
 
@@ -135,10 +183,13 @@ requeued. The studio's recent-jobs panel shows live status updates.
 | `POST` | `/ack?job=ID` | Mark job done |
 | `POST` | `/nack?job=ID` | Requeue job for retry |
 
-**Storage**: jobs are stored in `data/jobs.json` with full debug records
-(inputs + rendered outputs). Capped at 50 by default (`JOB_CAP` env var).
-The hosted job queue requires Vercel KV/Blob — until that swap is built, the
-job endpoints work only when running locally.
+All three require `Authorization: Bearer <DEVICE_TOKEN>` (the agent sends it
+automatically).
+
+**Storage**: jobs are full debug records (inputs + rendered outputs), capped
+at 50 by default (`JOB_CAP` env var), stored through `lib/job-store.js` —
+see the Storage section for the json/redis drivers and lease semantics. With
+the redis driver the hosted job queue works on Vercel.
 
 ### World Cup Poller
 
@@ -172,10 +223,11 @@ call fails or returns no new goal entries, the poller falls back to a score-diff
 goal (scoreline only, no scorer/minute). A print is never blocked on the
 summary enhancement.
 
-**Dedup:** state is persisted to `data/espn-state.json` — each match tracks its
-API state, scores, printed flags, and a list of printed goal keys (composed from
-athlete ID + minute). Nothing is reprinted across polls or restarts. Score going
-down (VAR reversal) updates stored state but prints nothing.
+**Dedup:** state is persisted through `lib/state-store.js` (key `espn` —
+`data/espn-state.json` with the json driver, Redis with the redis driver).
+Each match tracks its API state, scores, printed flags, and per-team printed
+goal counts. Nothing is reprinted across polls or restarts. Score going down
+(VAR reversal) updates stored state but prints nothing.
 
 **Templates:** the three WC templates are seeded into the template store on
 first run from `reference/wc-templates.json`. They're editable in the studio
@@ -208,8 +260,21 @@ api/
   nack.js                  POST /nack — device endpoint, requeue job
   templates.js             GET/POST/DELETE /templates — template CRUD
 lib/
-  store.js                 Template storage (local JSON file / read-only on Vercel)
-  job-store.js             Job queue storage (local JSON file)
+  store.js                 Template storage facade (json/redis driver)
+  job-store.js             Job queue storage facade (json/redis driver)
+  state-store.js           Poller/plugin state facade (json/redis driver)
+  auth.js                  Device token check for /next, /ack, /nack
+  redis.js                 Upstash Redis client + owner-namespaced keys
+  blob.js                  Vercel Blob helpers (job png + bytes)
+  stores/
+    templates-json.js      Templates: data/templates.json
+    templates-redis.js     Templates: Upstash Redis
+    jobs-json.js           Jobs: data/jobs.json (no lease semantics)
+    jobs-redis.js          Jobs: Redis queue (atomic claim + lease) + Blob
+    state-json.js          State: data/{name}-state.json
+    state-redis.js         State: Upstash Redis
+scripts/
+  migrate-json-to-redis.js One-time import of local JSON state into Redis/Blob
 agent/
   printer-agent.js         Local printer agent (polls /next, prints, acks)
   espn-poller.js           ESPN World Cup poller (kickoff/goal/full-time)

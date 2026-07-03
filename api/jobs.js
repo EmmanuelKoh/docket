@@ -6,14 +6,14 @@ import { createJob, listJobs, getJobPng } from '../lib/job-store.js';
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (req.query && req.query.png) {
-      const png = getJobPng(req.query.png);
+      const png = await getJobPng(req.query.png);
       if (!png) return res.status(404).json({ error: 'job not found' });
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=86400');
       return res.status(200).send(png);
     }
     const limit = parseInt(req.query?.limit, 10) || 20;
-    return res.status(200).json(listJobs(limit));
+    return res.status(200).json(await listJobs(limit));
   }
 
   if (req.method === 'POST') {

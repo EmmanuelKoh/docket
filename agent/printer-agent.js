@@ -19,19 +19,25 @@
 //   PRINTER_IP / PRINTER_PORT          read by printToNetwork via config.js
 
 import { printToNetwork } from '../transport/print-net.js';
+import { DEVICE_TOKEN } from '../config.js';
 
 const SERVER = process.env.PRINT_SERVER || `http://localhost:${process.env.PORT || 3000}`;
 const POLL_MS = parseInt(process.env.POLL_INTERVAL, 10) || 3000;
+const AUTH = { Authorization: `Bearer ${DEVICE_TOKEN}` };
 
 async function poll() {
   let resp;
   try {
-    resp = await fetch(`${SERVER}/next`);
+    resp = await fetch(`${SERVER}/next`, { headers: AUTH });
   } catch (err) {
     console.log(`  server unreachable (${err.message})`);
     return;
   }
 
+  if (resp.status === 401) {
+    console.log('  server rejected device token (check DEVICE_TOKEN on both ends)');
+    return;
+  }
   if (resp.status === 204) return; // nothing queued
 
   const jobId = resp.headers.get('X-Job-Id');
@@ -41,10 +47,10 @@ async function poll() {
   try {
     await printToNetwork(bytes);
     console.log(`  ${jobId}: printed -> ack`);
-    await fetch(`${SERVER}/ack?job=${encodeURIComponent(jobId)}`, { method: 'POST' });
+    await fetch(`${SERVER}/ack?job=${encodeURIComponent(jobId)}`, { method: 'POST', headers: AUTH });
   } catch (err) {
     console.log(`  ${jobId}: send failed (${err.message}) -> nack`);
-    await fetch(`${SERVER}/nack?job=${encodeURIComponent(jobId)}`, { method: 'POST' });
+    await fetch(`${SERVER}/nack?job=${encodeURIComponent(jobId)}`, { method: 'POST', headers: AUTH });
   }
 }
 
