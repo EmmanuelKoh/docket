@@ -52,13 +52,42 @@
   }
   .tabs button.active { color: var(--ink); border-bottom-color: var(--red); }
   .editor-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-  textarea {
-    flex: 1; resize: none; border: 0; outline: 0; padding: 14px;
-    background: var(--raised); color: var(--ink); font-family: var(--font-mono);
+
+  /* Syntax highlighting: a transparent textarea over a highlighted <pre>
+     with identical font metrics. The textarea owns editing, selection, and
+     scrolling; the pre mirrors its content with color and follows its
+     scroll position. wrap="off" on the textarea keeps line geometry
+     identical between the two layers. */
+  .code-wrap { flex: 1; position: relative; min-height: 0; display: flex; }
+  .code-wrap.hidden { display: none; }
+  textarea, .code-hl {
+    padding: 14px; font-family: var(--font-mono);
     font-size: 12.5px; line-height: 1.55; tab-size: 2;
-    display: block; width: 100%;
   }
-  textarea.hidden { display: none; }
+  textarea {
+    flex: 1; resize: none; border: 0; outline: 0;
+    background: transparent; color: transparent; caret-color: var(--ink);
+    display: block; width: 100%; position: relative; z-index: 1;
+    white-space: pre; overflow: auto;
+  }
+  textarea::placeholder { color: var(--ink-faint); }
+  textarea::selection { background: rgba(127, 127, 127, 0.25); }
+  .code-hl {
+    position: absolute; inset: 0; z-index: 0; margin: 0;
+    overflow: hidden; pointer-events: none;
+    background: var(--raised); color: var(--ink-muted);
+    white-space: pre;
+  }
+  .tok-tag { color: var(--ink); }
+  .tok-liquid { color: var(--red); }
+  .tok-comment { color: var(--ink-faint); font-style: italic; }
+  .tok-string { color: #9c6b30; }
+  html[data-theme="dark"] .tok-string { color: #c9975c; }
+  .tok-num { color: #3f6e8e; }
+  html[data-theme="dark"] .tok-num { color: #7aa7c7; }
+  .tok-key { color: var(--ink); }
+  .tok-lit { color: #3f6e8e; }
+  html[data-theme="dark"] .tok-lit { color: #7aa7c7; }
   .error-bar {
     color: var(--red); font-size: 12px; padding: 4px 14px; display: none;
     border-top: 0.5px solid var(--hairline);
@@ -173,8 +202,14 @@
       <button data-tab="data">Data (JSON)</button>
     </div>
     <div class="editor-wrap">
-      <textarea id="editorTemplate" spellcheck="false" placeholder="Liquid + HTML template..."></textarea>
-      <textarea id="editorData" class="hidden" spellcheck="false" placeholder='{"key": "value"}'></textarea>
+      <div class="code-wrap" id="wrapTemplate">
+        <pre class="code-hl" id="hlTemplate" aria-hidden="true"></pre>
+        <textarea id="editorTemplate" wrap="off" spellcheck="false" placeholder="Liquid + HTML template..."></textarea>
+      </div>
+      <div class="code-wrap hidden" id="wrapData">
+        <pre class="code-hl" id="hlData" aria-hidden="true"></pre>
+        <textarea id="editorData" wrap="off" spellcheck="false" placeholder='{"key": "value"}'></textarea>
+      </div>
       <div class="error-bar" id="errorBar"></div>
     </div>
   </div>
@@ -239,15 +274,72 @@ const statusEl = document.getElementById('status');
 const toast = document.getElementById('toast');
 const jobsList = document.getElementById('jobsList');
 
+// ---- syntax highlighting (transparent textarea over a colored <pre>) ----
+const hlTemplate = document.getElementById('hlTemplate');
+const hlData = document.getElementById('hlData');
+
+const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// HTML + Liquid: liquid tags/outputs, comments, quoted strings, tag
+// names/brackets, numbers. One linear pass — first alternative to match at
+// a position wins.
+function highlightTemplateSrc(src) {
+  const re = /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\})|(<!--[\s\S]*?-->)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(<\/?[a-zA-Z][a-zA-Z0-9-]*|\/?>)|(\b\d+(?:\.\d+)?\b)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(src))) {
+    out += escHtml(src.slice(last, m.index));
+    const cls = m[1] ? 'tok-liquid' : m[2] ? 'tok-comment' : m[3] ? 'tok-string' : m[4] ? 'tok-tag' : 'tok-num';
+    out += '<span class="' + cls + '">' + escHtml(m[0]) + '</span>';
+    last = re.lastIndex;
+  }
+  return out + escHtml(src.slice(last));
+}
+
+// JSON: keys (string before a colon), strings, literals, numbers.
+function highlightJsonSrc(src) {
+  const re = /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(src))) {
+    out += escHtml(src.slice(last, m.index));
+    if (m[1] !== undefined) {
+      out += '<span class="tok-key">' + escHtml(m[1]) + '</span>' + escHtml(m[2]);
+    } else if (m[3] !== undefined) {
+      out += '<span class="tok-string">' + escHtml(m[3]) + '</span>';
+    } else if (m[4] !== undefined) {
+      out += '<span class="tok-lit">' + escHtml(m[4]) + '</span>';
+    } else {
+      out += '<span class="tok-num">' + escHtml(m[5]) + '</span>';
+    }
+    last = re.lastIndex;
+  }
+  return out + escHtml(src.slice(last));
+}
+
+function refreshHl(ta) {
+  const pre = ta === editorTemplate ? hlTemplate : hlData;
+  const fn = ta === editorTemplate ? highlightTemplateSrc : highlightJsonSrc;
+  // trailing newline keeps the last line aligned when scrolled to bottom
+  pre.innerHTML = fn(ta.value) + '\n';
+  pre.scrollTop = ta.scrollTop;
+  pre.scrollLeft = ta.scrollLeft;
+}
+
 // ---- tabs ----
+const wrapTemplate = document.getElementById('wrapTemplate');
+const wrapData = document.getElementById('wrapData');
+
 document.querySelector('.tabs').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const tab = btn.dataset.tab;
-  editorTemplate.classList.toggle('hidden', tab !== 'template');
-  editorData.classList.toggle('hidden', tab !== 'data');
+  wrapTemplate.classList.toggle('hidden', tab !== 'template');
+  wrapData.classList.toggle('hidden', tab !== 'data');
 });
 
 // ---- tab key in textareas ----
@@ -295,6 +387,8 @@ function loadTemplate(name) {
   currentName = name;
   editorTemplate.value = t.template || '';
   editorData.value = typeof t.data === 'string' ? t.data : JSON.stringify(t.data, null, 2);
+  refreshHl(editorTemplate);
+  refreshHl(editorData);
   errorBar.classList.remove('show');
   schedulePreview();
 }
@@ -379,8 +473,14 @@ async function renderPreview() {
   }
 }
 
-editorTemplate.addEventListener('input', schedulePreview);
-editorData.addEventListener('input', schedulePreview);
+[editorTemplate, editorData].forEach(ta => {
+  ta.addEventListener('input', () => { refreshHl(ta); schedulePreview(); });
+  ta.addEventListener('scroll', () => {
+    const pre = ta === editorTemplate ? hlTemplate : hlData;
+    pre.scrollTop = ta.scrollTop;
+    pre.scrollLeft = ta.scrollLeft;
+  });
+});
 
 // ---- scale the roll to fit ----
 function scaleRoll() {

@@ -2,7 +2,7 @@
   {% if oob %}<span id="queue-count" hx-swap-oob="true">{{ count }} job{% unless count == 1 %}s{% endunless %}</span>{% endif %}
   {% for job in jobs %}
   <div class="card">
-    <div style="display:flex; align-items:flex-start; gap:20px;">
+    <div style="display:flex; align-items:flex-start; gap:24px; padding:2px 2px 2px 0;">
       <img class="thumb queue" src="/jobs?png={{ job.id }}" loading="lazy" alt="">
       <div class="grow">
         <div class="name">{{ job.name }}</div>
