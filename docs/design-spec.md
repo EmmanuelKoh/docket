@@ -158,8 +158,13 @@ the pattern for records — History, Queue.)
 
 ### Photo
 A print tool, not a registry plugin (no run()/toggle — user-initiated).
-Title block ("print a picture — dithered like everything else"), one card:
-left column (320px) — dashed dropzone (1px dashed --dash, choose-or-drop),
+Title block ("print a picture — dithered like everything else"), one card
+split make/result: the left column shapes the print, the right column IS
+the print (slip preview with the Print button and mono status centered
+directly beneath it — the commit action lives with the result). Left
+column (400px) — dashed dropzone (1px dashed --dash, choose-or-drop;
+slims to a one-line row once a photo exists so the editor becomes the
+hero),
 a full-width "Take a photo" button (phones open the native camera via the
 file input's capture hint; desktops open an in-page webcam viewfinder that
 shares the editor's stage — mirrored video on black swaps in where the
@@ -192,7 +197,19 @@ live preview on white paper (the real /preview render of the full-bleed
 "Photo Print" template: borderless 576px photo, optional mono caption
 below). Photos downscale client-side before upload; every edit re-derives
 the print image, so what you see is the dithered print, not an
-approximation. Stacks vertically under 720px (phone use is the point).
+approximation. Under 720px (phone use is the point) the loaded state
+becomes an iPhone-style editor, nothing sticky, 20px air between zones,
+top to bottom: the slip preview (roll 240px centered, capped 44vh, taller
+slips scroll inside), one tool panel in a fixed-height (~96px, centered)
+zone so nothing jumps when switching, a horizontally scrollable tool row —
+Photo · Crop · Levels · Midtone · Shadows · Brightness · Contrast ·
+Sharpen — styled like the header nav (quiet --ink-muted text, active tool
+--ink with the 1.5px --red underline; it IS nav, between tools; replaces
+the desktop-only ADJUSTMENTS collapse), then the CAPTION field (always
+visible — it's content, not a tool), and a full-width Print at the bottom
+with mono status above it. The Crop tool hides the roll so the crop canvas
+takes the stage; every other tool shows the preview. The empty state stays
+a simple stack: dropzone, Take a photo, empty preview.
 
 Segmented control (.seg): a bordered pill of flush buttons; the active
 option is inverse mono (--ink background, --page text) — same idiom as a

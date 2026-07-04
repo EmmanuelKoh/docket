@@ -464,14 +464,13 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 
 /* ---- photo tool ---- */
 
-.photo-tool { display: flex; gap: 24px; align-items: flex-start; }
-@media (max-width: 720px) { .photo-tool { flex-direction: column; } }
+.photo-tool { display: flex; gap: 32px; align-items: flex-start; }
 
 .photo-controls {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 320px;
+  width: 400px;
   flex-shrink: 0;
 }
 .dropzone {
@@ -489,6 +488,8 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 }
 .dropzone:hover { border-color: var(--ink-faint); }
 .dropzone .sub { font-size: 12px; color: var(--ink-faint); }
+/* once a photo exists the editor is the hero — the dropzone slims down */
+.photo-tool.has-photo .dropzone { min-height: 0; padding: 8px 12px; }
 
 .photo-take { text-align: center; }
 .photo-take input { display: none; }
@@ -620,7 +621,7 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 .auto-toggle:hover { border-color: var(--ink-faint); }
 .auto-toggle.on { background: var(--ink); color: var(--page); border-color: var(--ink); }
 
-#histCanvas {
+.hist-canvas {
   display: block;
   width: 100%;
   height: 40px;
@@ -702,6 +703,94 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   margin: 3.75% auto 0;
 }
 .photo-roll .empty { color: var(--ink-faint); }
+/* the commit action lives with the result it commits */
+.photo-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: 400px;   /* centers under the roll */
+  margin-top: 14px;
+}
+
+/* phone tool dock: a row of tool names styled like the header nav —
+   quiet text, the active tool inked with the red underline */
+.tool-dock { display: none; }
+.tool-dock button {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+  background: none;
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  color: var(--ink-muted);
+  padding: 4px 0 3px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tool-dock button.on { color: var(--ink); border-bottom-color: var(--red); }
+
+/* iPhone-editor layout on phones once a photo exists: the preview on top
+   (Print like iOS Done above it), a chip dock of tools at the bottom
+   showing one control at a time. Empty state stays a simple stack. */
+@media (max-width: 720px) {
+  /* stretch, not flex-start: in column direction flex-start would
+     shrink-wrap the stage to its content and pin it left */
+  .photo-tool { flex-direction: column; align-items: stretch; gap: 20px; }
+  .photo-controls { width: 100%; gap: 20px; }
+
+  /* dissolve the stage box so the preview and the actions can order
+     independently: preview on top, Print at the very bottom */
+  .photo-tool.has-photo .photo-stage { display: contents; }
+  .photo-tool.has-photo .photo-roll {
+    order: -1;
+    width: 240px;
+    margin: 0 auto;
+    max-height: 44vh;
+    overflow-y: auto;              /* very tall slips scroll inside */
+  }
+  .photo-tool.has-photo .photo-actions {
+    order: 9;
+    flex-direction: column;        /* status above a full-width Print */
+    gap: 10px;
+    margin: 0;
+    max-width: none;
+  }
+  .photo-tool.has-photo .photo-actions .btn { width: 100%; }
+  /* crop takes the stage: hide the roll so the canvas can go big */
+  .photo-tool.has-photo.crop-mode .photo-roll { display: none; }
+
+  /* the dock shows exactly one panel; the caption field stays out of the
+     dock — always visible between the chips and Print */
+  .photo-tool.has-photo .pnl { display: none; }
+  .photo-tool.has-photo .pnl.pnl-on { display: flex; }
+  .photo-tool.has-photo canvas.pnl.pnl-on { display: block; }
+  .photo-tool.has-photo .level-track.pnl-on { display: block; }
+  .photo-tool.has-photo .photo-take.pnl-on { display: block; }
+  .photo-tool.has-photo .tone-toggle { display: none; }   /* chips replace the collapse */
+  .photo-tool.has-photo .tone-body[hidden] { display: flex; }
+  .photo-tool.has-photo .photo-field { order: 5; }        /* after the chip row */
+
+  /* keep the dock from jumping between tools: the tone zone gets one
+     fixed height whatever it holds, and containers left with no visible
+     panel are removed so their flex gaps don't add offsets */
+  .photo-tool.has-photo .tone-body {
+    min-height: 96px;
+    justify-content: center;
+  }
+  .photo-tool.has-photo .photo-editor:not(:has(.pnl-on)),
+  .photo-tool.has-photo .tone-group:not(:has(.pnl-on)) { display: none; }
+
+  .photo-tool.has-photo .tool-dock {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 0 6px;
+  }
+}
 
 /* ---- inline field errors ---- */
 
@@ -748,11 +837,9 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   .card-detail.cfg { grid-template-columns: 1fr; gap: 4px; }
   .cfg .cfg-label { margin-top: 8px; }
 
-  /* photo tool: full-width controls, big tap target */
-  .photo-tool { flex-direction: column; }
-  .photo-controls { width: 100%; }
+  /* photo tool: big tap target while empty (layout itself is in the
+     720px pinned-preview block) */
   .dropzone { min-height: 140px; }
-  .photo-roll { max-width: 100%; }
 
   .title-row { flex-wrap: wrap; gap: 10px; }
 }

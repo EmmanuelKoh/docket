@@ -6,24 +6,24 @@
 </div>
 
 <div class="card">
-  <div class="photo-tool">
+  <div class="photo-tool" id="photoTool">
     <div class="photo-controls">
-      <label class="dropzone" id="dropzone">
+      <label class="dropzone pnl" id="dropzone" data-panel="source">
         <input type="file" id="photoInput" accept="image/*" hidden>
         <span id="dropHint">Choose a photo<br><span class="sub">or drop one here</span></span>
       </label>
-      <label class="btn photo-take" id="takeBtn">
+      <label class="btn photo-take pnl" id="takeBtn" data-panel="source">
         <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
         Take a photo
       </label>
       <div class="photo-editor" id="photoEditor" hidden>
         <video id="cameraFeed" autoplay playsinline muted></video>
-        <canvas id="editCanvas"></canvas>
+        <canvas class="pnl" id="editCanvas" data-panel="crop"></canvas>
         <div class="camera-tools">
           <button type="button" class="shutter" id="captureBtn" title="Capture"></button>
           <button type="button" class="camera-cancel" id="cameraCancelBtn">cancel</button>
         </div>
-        <div class="edit-tools">
+        <div class="edit-tools pnl" data-panel="crop">
           <div class="seg" id="cropPresets">
             <button type="button" data-a="" class="on">Full</button>
             <button type="button" data-a="1">1:1</button>
@@ -39,37 +39,37 @@
             <span class="tone-chev" id="toneChev">&#9656;</span>
           </button>
           <div class="tone-body" id="toneBody" hidden>
-            <div class="tone-head">
+            <div class="tone-head pnl" data-panel="levels">
               <span class="label" id="levelsLabel">Levels</span>
               <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
               <span class="tone-val" id="levelsVal">0 · 255</span>
             </div>
-            <canvas id="histCanvas"></canvas>
-            <div class="level-track" id="levelTrack">
+            <canvas class="hist-canvas pnl" id="histCanvas" data-panel="levels"></canvas>
+            <div class="level-track pnl" id="levelTrack" data-panel="levels">
               <div class="level-handle black" id="handleBlack"></div>
               <div class="level-handle white" id="handleWhite"></div>
             </div>
-            <div class="tone-row">
+            <div class="tone-row pnl" data-panel="mid">
               <span class="label" id="midLabel">Midtone</span>
               <input type="range" id="midSlider" min="-100" max="100" value="0">
               <span class="tone-val" id="midVal">0</span>
             </div>
-            <div class="tone-row">
+            <div class="tone-row pnl" data-panel="shadow">
               <span class="label" id="shadowLabel">Shadows</span>
               <input type="range" id="shadowSlider" min="-100" max="100" value="0">
               <span class="tone-val" id="shadowVal">0</span>
             </div>
-            <div class="tone-row">
+            <div class="tone-row pnl" data-panel="bright">
               <span class="label" id="brightLabel">Brightness</span>
               <input type="range" id="brightSlider" min="-100" max="100" value="0">
               <span class="tone-val" id="brightVal">0</span>
             </div>
-            <div class="tone-row">
+            <div class="tone-row pnl" data-panel="contrast">
               <span class="label" id="contrastLabel">Contrast</span>
               <input type="range" id="contrastSlider" min="-100" max="100" value="0">
               <span class="tone-val" id="contrastVal">0</span>
             </div>
-            <div class="tone-row">
+            <div class="tone-row pnl" data-panel="sharp">
               <span class="label" id="sharpLabel">Sharpen</span>
               <input type="range" id="sharpSlider" min="0" max="200" value="0">
               <span class="tone-val" id="sharpVal">0</span>
@@ -92,12 +92,24 @@
           </div>
         </div>
       </div>
-      <button class="btn" id="printBtn" disabled>Print</button>
-      <span class="status" id="photoStatus"></span>
+      <div class="tool-dock" id="toolDock">
+        <button type="button" data-panel="source">Photo</button>
+        <button type="button" data-panel="crop" class="on">Crop</button>
+        <button type="button" data-panel="levels">Levels</button>
+        <button type="button" data-panel="mid">Midtone</button>
+        <button type="button" data-panel="shadow">Shadows</button>
+        <button type="button" data-panel="bright">Brightness</button>
+        <button type="button" data-panel="contrast">Contrast</button>
+        <button type="button" data-panel="sharp">Sharpen</button>
+      </div>
     </div>
     <div class="photo-stage">
       <div class="photo-roll" id="photoRoll">
         <div class="empty" id="photoEmpty">The dithered preview appears here — exactly what will print</div>
+      </div>
+      <div class="photo-actions">
+        <span class="status" id="photoStatus"></span>
+        <button class="btn" id="printBtn" disabled>Print</button>
       </div>
     </div>
   </div>
@@ -208,6 +220,9 @@
     crop = { x: 0, y: 0, w: oriented.width, h: oriented.height };
     clampAspect();
     setPresetActive('');
+    // the big dropzone earns its size only before a photo exists
+    document.getElementById('photoTool').classList.add('has-photo');
+    setPanel('crop');
     // fresh photo, fresh tone (auto keeps recomputing levels if it's on)
     Object.keys(toneCtl).forEach(function (k) { toneCtl[k].reset(); });
     if (!autoOn) { blackPt = 0; whitePt = 255; }
@@ -681,6 +696,28 @@
     toneChev.innerHTML = toneBody.hidden ? '&#9656;' : '&#9662;';
     // the histogram canvas had no width while hidden — draw it now
     if (!toneBody.hidden && oriented) { drawHist(); }
+  });
+
+  // ---- phone tool dock: one panel at a time, iPhone-editor style ----
+  // The chips only display under 720px; the classes are inert on desktop.
+
+  function setPanel(name) {
+    document.querySelectorAll('#toolDock button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.panel === name);
+    });
+    document.querySelectorAll('#photoTool .pnl').forEach(function (el) {
+      el.classList.toggle('pnl-on', el.dataset.panel === name);
+    });
+    // crop takes over the stage: the roll hides so the canvas can go big
+    document.getElementById('photoTool').classList.toggle('crop-mode', name === 'crop');
+    if (!oriented) return;
+    if (name === 'crop') drawEditor();     // canvases had no width while
+    if (name === 'levels') drawHist();     // their panel was hidden
+  }
+
+  document.getElementById('toolDock').addEventListener('click', function (e) {
+    var chip = e.target.closest('button');
+    if (chip) setPanel(chip.dataset.panel);
   });
 
   function schedule() {
