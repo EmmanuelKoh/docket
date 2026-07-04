@@ -150,7 +150,27 @@ function toEscpos({ bits, width, height }) {
 // multi-chunk output butts together seamlessly.
 const CHUNK_BLOCKS = 100; // probed RP850 ceiling: 100 blocks = 800 rows/chunk
 
-function toEscposChunked({ bits, width, height }) {
+// Rotate a bitmap 180° and strip the leading blank rows the rotation
+// creates (the former bottom margin). Used for the upside-down photo trick:
+// the print head sits ~2cm upstream of the cutter, so every slip has a
+// blank mechanical leader at its top — but the final cut lands EXACTLY at
+// the content's end, so the bottom is flush. Print the image rotated and
+// the flush-cut edge becomes the visual top; the leader becomes bottom
+// margin. (180° of a flat w×h grid is just index reversal.)
+function rotate180({ bits, width, height }) {
+  const n = width * height;
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = bits[n - 1 - i];
+  let first = 0;
+  for (let y = 0; y < height; y++) {
+    let any = false;
+    for (let x = 0; x < width; x++) if (out[y * width + x]) { any = true; break; }
+    if (any) { first = y; break; }
+  }
+  return { bits: out.slice(first * width), width, height: height - first };
+}
+
+function toEscposChunked({ bits, width, height }, { flushCut = false } = {}) {
   const parts = [
     Buffer.from([0x1b, 0x40]),        // ESC @  init
     Buffer.from([0x1b, 0x33, 0x00]),  // ESC 3 0  line spacing 0
@@ -176,11 +196,18 @@ function toEscposChunked({ bits, width, height }) {
       Buffer.from([0x1d, 0x2f, 0x00])                  // GS /  print it
     );
   }
-  parts.push(
-    Buffer.from([0x1b, 0x32]),                          // restore line spacing
-    Buffer.from([0x1b, 0x64, 0x02]),                    // feed 2
-    Buffer.from([0x1d, 0x56, 0x41, 0x03])               // feed 3 + full cut
-  );
+  parts.push(Buffer.from([0x1b, 0x32]));                // restore line spacing
+  if (flushCut) {
+    // rotated jobs: cut just past the content's last row — the image's
+    // (visual) top. The blade leaves ~1.5mm to the data by itself; +12 dots
+    // (~1.5mm) makes a measured ~3mm visual top margin after flipping.
+    parts.push(Buffer.from([0x1d, 0x56, 0x42, 0x0c]));  // feed to cut pos +12 dots, cut
+  } else {
+    parts.push(
+      Buffer.from([0x1b, 0x64, 0x02]),                  // feed 2
+      Buffer.from([0x1d, 0x56, 0x41, 0x03])             // feed 3 + full cut
+    );
+  }
   return Buffer.concat(parts);
 }
 
@@ -208,10 +235,15 @@ async function renderToEscpos(template, data) {
   const pixels = await toPixels(markup);
   const bw = dither(pixels);
   // Dithered, tall output (photos, gradients) ships as memorize-then-print
-  // chunks so the serial link never starves the head; solid-stroke output
+  // chunks so the serial link never starves the head — printed 180°
+  // ROTATED with a flush cut, so the mechanical top leader lands at the
+  // slip's visual bottom (flip the slip to view). Solid-stroke output
   // (text receipts) keeps the plain raster command it has always used.
+  // The preview stays unrotated: design right-side-up.
   const dithered = bw.height > 160 && transitionsPerPixel(bw) > 0.2;
-  const bytes = dithered ? toEscposChunked(bw) : toEscpos(bw);
+  const bytes = dithered
+    ? toEscposChunked(rotate180(bw), { flushCut: true })
+    : toEscpos(bw);
   // also emit a preview PNG of exactly what will print (the 1-bit result)
   const preview = previewPng(bw);
   return { bytes, preview, width: WIDTH, height: bw.height };
