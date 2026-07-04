@@ -50,19 +50,19 @@
     else statusEl.textContent = 'Photo Print template missing — run a tick to seed it';
   });
 
-  // Downscale to the template's inner width (490px), cap height for tall
+  // Downscale to the template's inner width (576px), cap height for tall
   // shots, re-encode as JPEG — phone photos shrink ~100x before upload.
   function loadFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
     var img = new Image();
     img.onload = function () {
-      var scale = Math.min(490 / img.width, 700 / img.height, 1);
+      var scale = Math.min(576 / img.width, 700 / img.height, 1);
       var w = Math.round(img.width * scale);
       var h = Math.round(img.height * scale);
       var canvas = document.createElement('canvas');
-      // render at the template's fixed 490px inner width; keep aspect
-      canvas.width = 490;
-      canvas.height = Math.round(h * (490 / w));
+      // render at the template's fixed 576px inner width; keep aspect
+      canvas.width = 576;
+      canvas.height = Math.round(h * (576 / w));
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       // The live preview dithers the ORIGINAL image: on screen (no dot

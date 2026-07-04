@@ -1,7 +1,7 @@
 [
   {
     "name": "Photo Print",
-    "template": "<div style=\"display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:24px\">\n  <div style=\"display:flex;flex-direction:column;border:3px solid #000;padding:16px\">\n    <img src=\"{{ photo }}\" style=\"width:490px;height:{{ photoHeight }}px\" />\n  </div>\n  {% if caption != \"\" %}\n  <div style=\"display:flex;font-family:Mono;font-size:36px;margin-top:14px\">{{ caption }}</div>\n  {% endif %}\n</div>",
+    "template": "<div style=\"display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:0\">\n  <img src=\"{{ photo }}\" style=\"width:576px;height:{{ photoHeight }}px\" />\n  {% if caption != \"\" %}\n  <div style=\"display:flex;font-family:Mono;font-size:36px;margin:14px 0 0 0\">{{ caption }}</div>\n  {% endif %}\n</div>",
     "data": {
       "photo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mO8fPnyfwAIcwOChn9lAgAAAABJRU5ErkJggg==",
       "photoHeight": 300,
