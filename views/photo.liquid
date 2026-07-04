@@ -6,24 +6,24 @@
 </div>
 
 <div class="card">
-  <div class="photo-tool">
+  <div class="photo-tool" id="photoTool">
     <div class="photo-controls">
-      <label class="dropzone" id="dropzone">
+      <label class="dropzone pnl" id="dropzone" data-panel="source">
         <input type="file" id="photoInput" accept="image/*" hidden>
         <span id="dropHint">Choose a photo<br><span class="sub">or drop one here</span></span>
       </label>
-      <label class="btn photo-take" id="takeBtn">
+      <label class="btn photo-take pnl" id="takeBtn" data-panel="source">
         <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
         Take a photo
       </label>
       <div class="photo-editor" id="photoEditor" hidden>
         <video id="cameraFeed" autoplay playsinline muted></video>
-        <canvas id="editCanvas"></canvas>
+        <canvas class="pnl" id="editCanvas" data-panel="crop"></canvas>
         <div class="camera-tools">
           <button type="button" class="shutter" id="captureBtn" title="Capture"></button>
           <button type="button" class="camera-cancel" id="cameraCancelBtn">cancel</button>
         </div>
-        <div class="edit-tools">
+        <div class="edit-tools pnl" data-panel="crop">
           <div class="seg" id="cropPresets">
             <button type="button" data-a="" class="on">Full</button>
             <button type="button" data-a="1">1:1</button>
@@ -31,6 +31,50 @@
             <button type="button" data-a="1.5">3:2</button>
           </div>
           <button type="button" class="btn small" id="rotateBtn">Rotate 90°</button>
+        </div>
+        <div class="tone-group">
+          <button type="button" class="tone-toggle" id="toneToggle">
+            <span class="label">Adjustments</span>
+            <span class="tone-val" id="toneSummary"></span>
+            <span class="tone-chev" id="toneChev">&#9656;</span>
+          </button>
+          <div class="tone-body" id="toneBody" hidden>
+            <div class="tone-head pnl" data-panel="levels">
+              <span class="label" id="levelsLabel">Levels</span>
+              <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
+              <span class="tone-val" id="levelsVal">0 · 255</span>
+            </div>
+            <canvas class="hist-canvas pnl" id="histCanvas" data-panel="levels"></canvas>
+            <div class="level-track pnl" id="levelTrack" data-panel="levels">
+              <div class="level-handle black" id="handleBlack"></div>
+              <div class="level-handle white" id="handleWhite"></div>
+            </div>
+            <div class="tone-row pnl" data-panel="mid">
+              <span class="label" id="midLabel">Midtone</span>
+              <input type="range" id="midSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="midVal">0</span>
+            </div>
+            <div class="tone-row pnl" data-panel="shadow">
+              <span class="label" id="shadowLabel">Shadows</span>
+              <input type="range" id="shadowSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="shadowVal">0</span>
+            </div>
+            <div class="tone-row pnl" data-panel="bright">
+              <span class="label" id="brightLabel">Brightness</span>
+              <input type="range" id="brightSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="brightVal">0</span>
+            </div>
+            <div class="tone-row pnl" data-panel="contrast">
+              <span class="label" id="contrastLabel">Contrast</span>
+              <input type="range" id="contrastSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="contrastVal">0</span>
+            </div>
+            <div class="tone-row pnl" data-panel="sharp">
+              <span class="label" id="sharpLabel">Sharpen</span>
+              <input type="range" id="sharpSlider" min="0" max="200" value="0">
+              <span class="tone-val" id="sharpVal">0</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="photo-field">
@@ -48,12 +92,24 @@
           </div>
         </div>
       </div>
-      <button class="btn" id="printBtn" disabled>Print</button>
-      <span class="status" id="photoStatus"></span>
+      <div class="tool-dock" id="toolDock">
+        <button type="button" data-panel="source">Photo</button>
+        <button type="button" data-panel="crop" class="on">Crop</button>
+        <button type="button" data-panel="levels">Levels</button>
+        <button type="button" data-panel="mid">Midtone</button>
+        <button type="button" data-panel="shadow">Shadows</button>
+        <button type="button" data-panel="bright">Brightness</button>
+        <button type="button" data-panel="contrast">Contrast</button>
+        <button type="button" data-panel="sharp">Sharpen</button>
+      </div>
     </div>
     <div class="photo-stage">
       <div class="photo-roll" id="photoRoll">
         <div class="empty" id="photoEmpty">The dithered preview appears here — exactly what will print</div>
+      </div>
+      <div class="photo-actions">
+        <span class="status" id="photoStatus"></span>
+        <button class="btn" id="printBtn" disabled>Print</button>
       </div>
     </div>
   </div>
@@ -83,6 +139,22 @@
   var captionSize = 36;
   var captionWeight = 400;
 
+  // Tone controls. These reshape the photo's tones BEFORE the calibration
+  // curve (which always runs last): levels stretch, midtone gamma, shadow
+  // lift, brightness shift, contrast curve, composed into one lookup
+  // table; sharpening runs after as a spatial pass. The edit canvas keeps
+  // showing the untouched photo; adjustments appear in the live render.
+  var blackPt = 0;
+  var whitePt = 255;
+  var midV = 0;
+  var shadowV = 0;
+  var brightV = 0;
+  var contrastV = 0;
+  var sharpV = 0;
+  var autoOn = true;        // recompute black/white points per crop
+  var hist = new Uint32Array(256);
+  var toneTimer = null;
+
   var input = document.getElementById('photoInput');
   var cameraInput = document.getElementById('cameraInput');
   var dropzone = document.getElementById('dropzone');
@@ -94,6 +166,15 @@
   var editor = document.getElementById('photoEditor');
   var editCanvas = document.getElementById('editCanvas');
   var presetsEl = document.getElementById('cropPresets');
+  var histCanvas = document.getElementById('histCanvas');
+  var levelTrack = document.getElementById('levelTrack');
+  var handleBlack = document.getElementById('handleBlack');
+  var handleWhite = document.getElementById('handleWhite');
+  var levelsVal = document.getElementById('levelsVal');
+  var autoBtn = document.getElementById('autoBtn');
+  var toneBody = document.getElementById('toneBody');
+  var toneChev = document.getElementById('toneChev');
+  var toneSummary = document.getElementById('toneSummary');
 
   // fetch the Photo Print template from the store (it's seeded on first tick)
   fetch('/templates').then(function (r) { return r.json(); }).then(function (list) {
@@ -139,6 +220,13 @@
     crop = { x: 0, y: 0, w: oriented.width, h: oriented.height };
     clampAspect();
     setPresetActive('');
+    // the big dropzone earns its size only before a photo exists
+    document.getElementById('photoTool').classList.add('has-photo');
+    setPanel('crop');
+    // fresh photo, fresh tone (auto keeps recomputing levels if it's on)
+    Object.keys(toneCtl).forEach(function (k) { toneCtl[k].reset(); });
+    if (!autoOn) { blackPt = 0; whitePt = 255; }
+    positionHandles();
     editor.hidden = false;
     document.getElementById('dropHint').innerHTML =
       label + '<br><span class="sub">choose another to replace</span>';
@@ -384,7 +472,9 @@
   editCanvas.addEventListener('pointerup', endDrag);
   editCanvas.addEventListener('pointercancel', endDrag);
 
-  window.addEventListener('resize', function () { if (oriented) drawEditor(); });
+  window.addEventListener('resize', function () {
+    if (oriented) { drawEditor(); drawHist(); }
+  });
 
   // ---- rotate/crop -> the two data URIs the rest of the flow uses ----
 
@@ -397,21 +487,238 @@
     canvas.height = outH;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, outW, outH);
-    // The live preview dithers the ORIGINAL tones: on screen (no dot gain)
-    // that approximates what the compensated print looks like on paper —
-    // the curve and the paper's darkening cancel out.
-    previewData = canvas.toDataURL('image/jpeg', 0.85);
     var pix = ctx.getImageData(0, 0, outW, outH);
-    for (var p = 0; p < pix.data.length; p += 4) {
-      pix.data[p] = LUT[pix.data[p]];
-      pix.data[p + 1] = LUT[pix.data[p + 1]];
-      pix.data[p + 2] = LUT[pix.data[p + 2]];
+    var d = pix.data;
+    // histogram of the cropped photo (pre-adjustment) drives the levels UI
+    hist.fill(0);
+    for (var hp = 0; hp < d.length; hp += 4) {
+      hist[(d[hp] * 2126 + d[hp + 1] * 7152 + d[hp + 2] * 722) / 10000 | 0]++;
+    }
+    if (autoOn) autoLevels();
+    drawHist();
+    updateSummary();
+    var tone = toneLUT();
+    for (var p = 0; p < d.length; p += 4) {
+      d[p] = tone[d[p]];
+      d[p + 1] = tone[d[p + 1]];
+      d[p + 2] = tone[d[p + 2]];
+    }
+    if (sharpV > 0) sharpen(d, outW, outH, sharpV / 100);
+    ctx.putImageData(pix, 0, 0);
+    // The live preview dithers the adjusted but UNCOMPENSATED tones: on
+    // screen (no dot gain) that approximates what the compensated print
+    // looks like on paper — the curve and the paper's darkening cancel out.
+    previewData = canvas.toDataURL('image/jpeg', 0.85);
+    for (var q = 0; q < d.length; q += 4) {
+      d[q] = LUT[d[q]];
+      d[q + 1] = LUT[d[q + 1]];
+      d[q + 2] = LUT[d[q + 2]];
     }
     ctx.putImageData(pix, 0, 0);
     photoData = canvas.toDataURL('image/jpeg', 0.85);
     photoHeight = outH;
     schedule();
   }
+
+  // ---- tone: levels + brightness + contrast, one lookup table ----
+
+  function toneLUT() {
+    var t = new Uint8Array(256);
+    var f = (259 * (contrastV + 255)) / (255 * (259 - contrastV));
+    var g = Math.pow(2, -midV / 100);   // +100 lightens mids (gamma 0.5), -100 darkens (gamma 2)
+    for (var v = 0; v < 256; v++) {
+      var x = (v - blackPt) * 255 / Math.max(1, whitePt - blackPt);
+      x = x < 0 ? 0 : x > 255 ? 255 : x;
+      x = 255 * Math.pow(x / 255, g);
+      // shadow lift/deepen fades out quadratically toward the highlights
+      x += (shadowV / 100) * 80 * Math.pow(1 - x / 255, 2);
+      x += brightV;
+      x = f * (x - 128) + 128;
+      t[v] = x < 0 ? 0 : x > 255 ? 255 : Math.round(x);
+    }
+    return t;
+  }
+
+  // Unsharp mask: exaggerate the difference between each pixel and a small
+  // blur of its neighborhood. Works on brightness only, applied equally to
+  // the channels, so it can't introduce color fringes.
+  function sharpen(d, w, h, amount) {
+    var luma = new Float32Array(w * h);
+    for (var i = 0, p = 0; p < d.length; p += 4, i++) {
+      luma[i] = (d[p] * 2126 + d[p + 1] * 7152 + d[p + 2] * 722) / 10000;
+    }
+    var k = amount * 1.2;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var c = y * w + x;
+        var blur = (
+          luma[c - w - 1] + 2 * luma[c - w] + luma[c - w + 1] +
+          2 * luma[c - 1] + 4 * luma[c] + 2 * luma[c + 1] +
+          luma[c + w - 1] + 2 * luma[c + w] + luma[c + w + 1]) / 16;
+        var delta = (luma[c] - blur) * k;
+        if (delta) {
+          var p2 = c * 4;
+          var r = d[p2] + delta, g2 = d[p2 + 1] + delta, b = d[p2 + 2] + delta;
+          d[p2] = r < 0 ? 0 : r > 255 ? 255 : r;
+          d[p2 + 1] = g2 < 0 ? 0 : g2 > 255 ? 255 : g2;
+          d[p2 + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        }
+      }
+    }
+  }
+
+  function updateSummary() {
+    var adjusted = midV || shadowV || brightV || contrastV || sharpV ||
+      (!autoOn && (blackPt > 0 || whitePt < 255));
+    toneSummary.textContent = adjusted ? 'adjusted' : '';
+  }
+
+  function toneChanged() {
+    clearTimeout(toneTimer);
+    toneTimer = setTimeout(derive, 120);
+  }
+
+  // black/white points from the histogram, clipping 0.5% at each end
+  function autoLevels() {
+    var total = 0;
+    for (var i = 0; i < 256; i++) total += hist[i];
+    if (!total) return;
+    var clip = total * 0.005;
+    var sum = 0, lo = 0, hi = 255;
+    for (var a = 0; a < 256; a++) { sum += hist[a]; if (sum > clip) { lo = a; break; } }
+    sum = 0;
+    for (var b = 255; b >= 0; b--) { sum += hist[b]; if (sum > clip) { hi = b; break; } }
+    if (hi - lo < 16) { lo = 0; hi = 255; }
+    blackPt = lo;
+    whitePt = hi;
+    positionHandles();
+  }
+
+  function positionHandles() {
+    handleBlack.style.left = 'calc(' + (blackPt / 255 * 100) + '% - 5px)';
+    handleWhite.style.left = 'calc(' + (whitePt / 255 * 100) + '% - 5px)';
+    levelsVal.textContent = blackPt + ' · ' + whitePt;
+  }
+
+  function drawHist() {
+    var cssW = histCanvas.clientWidth || 288;
+    var dpr = window.devicePixelRatio || 1;
+    histCanvas.width = Math.round(cssW * dpr);
+    histCanvas.height = Math.round(40 * dpr);
+    var hx = histCanvas.getContext('2d');
+    var max = 0;
+    for (var i = 0; i < 256; i++) if (hist[i] > max) max = hist[i];
+    if (!max) return;
+    hx.fillStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ink-muted').trim() || '#888';
+    var bw = histCanvas.width / 256;
+    for (var v = 0; v < 256; v++) {
+      var h = Math.round((hist[v] / max) * histCanvas.height);
+      if (h) hx.fillRect(v * bw, histCanvas.height - h, Math.ceil(bw), h);
+    }
+    // dim the tones the current black/white points clip away
+    hx.fillStyle = 'rgba(128,128,128,0.25)';
+    hx.fillRect(0, 0, blackPt * bw, histCanvas.height);
+    hx.fillRect((whitePt + 1) * bw, 0, histCanvas.width - (whitePt + 1) * bw, histCanvas.height);
+  }
+
+  function setAuto(on) {
+    autoOn = on;
+    autoBtn.classList.toggle('on', on);
+  }
+
+  autoBtn.addEventListener('click', function () {
+    setAuto(!autoOn);
+    if (autoOn && oriented) derive();  // recomputes the points from the crop
+  });
+
+  var levelDrag = null;
+
+  function trackValue(e) {
+    var r = levelTrack.getBoundingClientRect();
+    var t = (e.clientX - r.left) / r.width;
+    return Math.max(0, Math.min(255, Math.round(t * 255)));
+  }
+
+  levelTrack.addEventListener('pointerdown', function (e) {
+    if (!oriented) return;
+    e.preventDefault();
+    levelTrack.setPointerCapture(e.pointerId);
+    var v = trackValue(e);
+    levelDrag = Math.abs(v - blackPt) <= Math.abs(v - whitePt) ? 'black' : 'white';
+    setAuto(false);
+    moveLevel(v);
+  });
+  levelTrack.addEventListener('pointermove', function (e) {
+    if (levelDrag) moveLevel(trackValue(e));
+  });
+  levelTrack.addEventListener('pointerup', function () { levelDrag = null; });
+  levelTrack.addEventListener('pointercancel', function () { levelDrag = null; });
+
+  function moveLevel(v) {
+    if (levelDrag === 'black') blackPt = Math.min(v, whitePt - 8);
+    else whitePt = Math.max(v, blackPt + 8);
+    positionHandles();
+    drawHist();
+    toneChanged();
+  }
+
+  // one binder per slider: input updates, double-click the label resets
+  function toneSlider(name, setter) {
+    var s = document.getElementById(name + 'Slider');
+    var val = document.getElementById(name + 'Val');
+    function show(v) { val.textContent = (v > 0 ? '+' : '') + v; }
+    s.addEventListener('input', function () { setter(+this.value); show(+this.value); toneChanged(); });
+    document.getElementById(name + 'Label').addEventListener('dblclick', function () {
+      s.value = 0; setter(0); show(0); toneChanged();
+    });
+    return { reset: function () { s.value = 0; setter(0); val.textContent = '0'; } };
+  }
+
+  var toneCtl = {
+    mid: toneSlider('mid', function (v) { midV = v; }),
+    shadow: toneSlider('shadow', function (v) { shadowV = v; }),
+    bright: toneSlider('bright', function (v) { brightV = v; }),
+    contrast: toneSlider('contrast', function (v) { contrastV = v; }),
+    sharp: toneSlider('sharp', function (v) { sharpV = v; }),
+  };
+
+  document.getElementById('levelsLabel').addEventListener('dblclick', function () {
+    setAuto(false);
+    blackPt = 0; whitePt = 255;
+    positionHandles();
+    drawHist();
+    toneChanged();
+  });
+
+  document.getElementById('toneToggle').addEventListener('click', function () {
+    toneBody.hidden = !toneBody.hidden;
+    toneChev.innerHTML = toneBody.hidden ? '&#9656;' : '&#9662;';
+    // the histogram canvas had no width while hidden — draw it now
+    if (!toneBody.hidden && oriented) { drawHist(); }
+  });
+
+  // ---- phone tool dock: one panel at a time, iPhone-editor style ----
+  // The chips only display under 720px; the classes are inert on desktop.
+
+  function setPanel(name) {
+    document.querySelectorAll('#toolDock button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.panel === name);
+    });
+    document.querySelectorAll('#photoTool .pnl').forEach(function (el) {
+      el.classList.toggle('pnl-on', el.dataset.panel === name);
+    });
+    // crop takes over the stage: the roll hides so the canvas can go big
+    document.getElementById('photoTool').classList.toggle('crop-mode', name === 'crop');
+    if (!oriented) return;
+    if (name === 'crop') drawEditor();     // canvases had no width while
+    if (name === 'levels') drawHist();     // their panel was hidden
+  }
+
+  document.getElementById('toolDock').addEventListener('click', function (e) {
+    var chip = e.target.closest('button');
+    if (chip) setPanel(chip.dataset.panel);
+  });
 
   function schedule() {
     clearTimeout(debounceTimer);
@@ -440,14 +747,19 @@
       if (!r.ok) throw new Error('render failed');
       return r.blob();
     }).then(function (blob) {
-      empty.style.display = 'none';
-      var old = roll.querySelector('img');
-      if (old) { URL.revokeObjectURL(old.src); old.remove(); }
       var im = document.createElement('img');
       im.src = URL.createObjectURL(blob);
-      roll.appendChild(im);
-      printBtn.disabled = false;
-      statusEl.textContent = '';
+      // decode off-screen BEFORE swapping — removing the old image first
+      // leaves a blank frame while the new one decodes (visible flicker)
+      var ready = im.decode ? im.decode().catch(function () {}) : Promise.resolve();
+      return ready.then(function () {
+        empty.style.display = 'none';
+        var old = roll.querySelector('img');
+        if (old) { URL.revokeObjectURL(old.src); old.remove(); }
+        roll.appendChild(im);
+        printBtn.disabled = false;
+        statusEl.textContent = '';
+      });
     }).catch(function (e) {
       statusEl.textContent = e.message;
     });
