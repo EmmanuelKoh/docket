@@ -30,7 +30,8 @@
 <script>
 (function () {
   var TPL = null;
-  var photoData = null;    // downscaled JPEG data URI
+  var photoData = null;     // compensated image — what actually prints
+  var previewData = null;   // uncompensated — what the paper will LOOK like
   var photoHeight = 0;
   var debounceTimer = null;
 
@@ -64,6 +65,40 @@
       canvas.height = Math.round(h * (490 / w));
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // The live preview dithers the ORIGINAL image: on screen (no dot
+      // gain) that approximates what the compensated print looks like on
+      // paper — the curve and the paper's darkening cancel out.
+      previewData = canvas.toDataURL('image/jpeg', 0.85);
+      // Thermal dot gain compensation: printed dots bleed larger than their
+      // pixels, darkening paper vs the dither — mildly in highlights,
+      // fatally in shadows (dark grays fuse to black). Tone-dependent
+      // transfer curve, calibrated on printed wedges: anchors are
+      // [brightness, gamma], blended linearly; output = b^gamma(b).
+      // Keep in sync with scripts/print-calibration.js.
+      var CURVE = [
+        [0.0, 0.50], [0.1, 0.53], [0.2, 0.53], [0.3, 0.58], [0.4, 0.63],
+        [0.5, 0.70], [0.6, 0.78], [0.7, 0.88], [0.8, 0.96], [1.0, 1.00]
+      ];
+      var pix = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var lut = new Uint8Array(256);
+      for (var v = 0; v < 256; v++) {
+        var b = v / 255;
+        var g = CURVE[CURVE.length - 1][1];
+        for (var ci = 1; ci < CURVE.length; ci++) {
+          if (b <= CURVE[ci][0]) {
+            var f = (b - CURVE[ci - 1][0]) / (CURVE[ci][0] - CURVE[ci - 1][0]);
+            g = CURVE[ci - 1][1] + f * (CURVE[ci][1] - CURVE[ci - 1][1]);
+            break;
+          }
+        }
+        lut[v] = Math.round(255 * Math.pow(b, g));
+      }
+      for (var p = 0; p < pix.data.length; p += 4) {
+        pix.data[p] = lut[pix.data[p]];
+        pix.data[p + 1] = lut[pix.data[p + 1]];
+        pix.data[p + 2] = lut[pix.data[p + 2]];
+      }
+      ctx.putImageData(pix, 0, 0);
       photoData = canvas.toDataURL('image/jpeg', 0.85);
       photoHeight = canvas.height;
       URL.revokeObjectURL(img.src);
@@ -87,7 +122,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template: TPL,
-        data: { photo: photoData, photoHeight: photoHeight, caption: caption.value.trim() },
+        data: { photo: previewData, photoHeight: photoHeight, caption: caption.value.trim() },
       }),
     }).then(function (r) {
       if (!r.ok) throw new Error('render failed');
