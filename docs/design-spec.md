@@ -159,14 +159,30 @@ the pattern for records — History, Queue.)
 ### Photo
 A print tool, not a registry plugin (no run()/toggle — user-initiated).
 Title block ("print a picture — dithered like everything else"), one card:
-left column (240px) — dashed dropzone (1px dashed --dash, choose-or-drop),
-CAPTION label + dotted editable input (mono output), outline Print button,
-mono status text; right — the live preview on white paper (the real
-/preview render of the "Photo Print" template: bordered photo, optional
-mono 16px caption, no title). Photos downscale client-side to the
-template's 544px inner width before upload. What you see is the dithered
-print, not an approximation. Stacks vertically under 720px (phone use is
-the point).
+left column (320px) — dashed dropzone (1px dashed --dash, choose-or-drop),
+a full-width "Take a photo" button (phones open the native camera via the
+file input's capture hint; desktops open an in-page webcam viewfinder that
+shares the editor's stage — mirrored video on black swaps in where the
+edit canvas sits, with a camera-app shutter below: a 44px --ink ring whose
+inner disc grows on hover, centered, quiet mono "cancel" right-aligned;
+capturing mirrors the frame to match the viewfinder and swaps the canvas
+back in place), then the editor
+(appears once a photo loads): the source image on a bordered canvas with a
+draggable/resizable crop rectangle (white border + corner handles over a
+55% dim outside the crop), preset shortcuts Full / 1:1 / 4:3 / 3:2 (ratios
+follow the image's orientation; presets only set the rectangle — it stays
+adjustable) and a Rotate 90° button; CAPTION label + dotted editable input
+(mono output) with segmented controls for size (S/M/L = 28/36/48px) and
+weight (Regular/Bold); outline Print button, mono status text. Right — the
+live preview on white paper (the real /preview render of the full-bleed
+"Photo Print" template: borderless 576px photo, optional mono caption
+below). Photos downscale client-side before upload; every edit re-derives
+the print image, so what you see is the dithered print, not an
+approximation. Stacks vertically under 720px (phone use is the point).
+
+Segmented control (.seg): a bordered pill of flush buttons; the active
+option is inverse mono (--ink background, --page text) — same idiom as a
+toggle that's on, never red.
 
 ### Plugins
 Title block + "Register plugin" button. Per-plugin CARDS (not a list):

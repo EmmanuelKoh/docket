@@ -471,7 +471,7 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 240px;
+  width: 320px;
   flex-shrink: 0;
 }
 .dropzone {
@@ -490,8 +490,97 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 .dropzone:hover { border-color: var(--ink-faint); }
 .dropzone .sub { font-size: 12px; color: var(--ink-faint); }
 
+.photo-take { text-align: center; }
+.photo-take input { display: none; }
+
+/* the viewfinder shares the editor stage: camera mode shows the video and
+   shutter where the canvas and crop tools normally sit */
+.photo-editor video {
+  display: block;
+  width: 100%;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  background: #000;
+  transform: scaleX(-1);  /* mirrored viewfinder; the capture is mirrored to match */
+}
+.photo-editor:not(.camera) video,
+.photo-editor:not(.camera) .camera-tools { display: none; }
+.photo-editor.camera canvas,
+.photo-editor.camera .edit-tools { display: none; }
+.camera-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+/* camera-app shutter: a ring with an inner disc that grows on hover */
+.shutter {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  background-clip: content-box;
+  padding: 4px;
+  cursor: pointer;
+}
+.shutter:hover { padding: 3px; }
+.shutter:active { padding: 6px; }
+.camera-cancel {
+  position: absolute;
+  right: 0;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.camera-cancel:hover { color: var(--ink); }
+
+.photo-editor { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.photo-editor[hidden] { display: none; }
+.photo-editor canvas {
+  display: block;
+  max-width: 100%;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  touch-action: none;   /* the canvas owns drags — don't scroll the page */
+  cursor: crosshair;
+}
+.edit-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* segmented control: one choice lit, inverse mono like .toggle.on */
+.seg {
+  display: inline-flex;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  background: var(--raised);
+  color: var(--ink);
+  border: 0;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg button + button { border-left: 0.5px solid var(--border); }
+.seg:hover { border-color: var(--ink-faint); }
+.seg button.on { background: var(--ink); color: var(--page); }
+
 .photo-field { display: flex; flex-direction: column; gap: 6px; }
 .photo-field .editable { width: 100%; }
+.caption-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
 
 .photo-stage { flex: 1; min-width: 0; }
 .photo-roll {
