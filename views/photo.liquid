@@ -747,14 +747,19 @@
       if (!r.ok) throw new Error('render failed');
       return r.blob();
     }).then(function (blob) {
-      empty.style.display = 'none';
-      var old = roll.querySelector('img');
-      if (old) { URL.revokeObjectURL(old.src); old.remove(); }
       var im = document.createElement('img');
       im.src = URL.createObjectURL(blob);
-      roll.appendChild(im);
-      printBtn.disabled = false;
-      statusEl.textContent = '';
+      // decode off-screen BEFORE swapping — removing the old image first
+      // leaves a blank frame while the new one decodes (visible flicker)
+      var ready = im.decode ? im.decode().catch(function () {}) : Promise.resolve();
+      return ready.then(function () {
+        empty.style.display = 'none';
+        var old = roll.querySelector('img');
+        if (old) { URL.revokeObjectURL(old.src); old.remove(); }
+        roll.appendChild(im);
+        printBtn.disabled = false;
+        statusEl.textContent = '';
+      });
     }).catch(function (e) {
       statusEl.textContent = e.message;
     });
