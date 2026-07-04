@@ -53,32 +53,53 @@ function dither({ rgba, width, height }) {
          + 0.587 * (rgba[i * 4 + 1] * af + 255 * (1 - af))
          + 0.114 * (rgba[i * 4 + 2] * af + 255 * (1 - af));
   }
-  // Floyd-Steinberg — mirrors Pillow's C tobilevel() exactly.
-  // Grayscale is inverted before dithering (as python-escpos does via
-  // ImageOps.invert) so error propagation and integer truncation behave
-  // identically. All four error contributions are accumulated before a
-  // single integer division by 16.
+  // Floyd-Steinberg, serpentine + threshold jitter.
+  // Plain row-major FS locks into a rigid checkerboard at ~50% gray, which
+  // prints as horizontal streaks (dot gain fuses the alternating rows).
+  // Serpentine scanning (alternate rows sweep right-to-left) denies the
+  // pattern a consistent direction, and a few levels of position-seeded
+  // threshold noise breaks any residual lock. The jitter is deterministic
+  // (hashed x,y) so preview and print dither identically; solid black/white
+  // (text) can't be flipped by ±12.
+  // Works in inverted domain (255 = black dot) like the original port.
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) gray[i] = 255 - Math.round(g[i]);
-  const errors = new Int32Array(width + 1);
   const bits = new Uint8Array(width * height);
+  let cur = new Float32Array(width + 2);
+  let nxt = new Float32Array(width + 2);
   for (let y = 0; y < height; y++) {
-    let l = 0, l0 = 0, l1 = 0;
-    for (let x = 0; x < width; x++) {
-      l = gray[y * width + x] + (((l + errors[x + 1]) / 16) | 0);
-      if (l < 0) l = 0; else if (l > 255) l = 255;
-      const out = l > 128 ? 255 : 0;
-      bits[y * width + x] = out === 0 ? 0 : 1;  // inverted: 255 = black dot
-      l -= out;
-      const l2 = l, d2 = l + l;
-      l += d2;               // 3 * err
-      errors[x] = l + l0;
-      l += d2;               // 5 * err
-      l0 = l + l1;
-      l1 = l2;               // 1 * err
-      l += d2;               // 7 * err  (carried right)
+    nxt.fill(0);
+    const ltr = y % 2 === 0;
+    for (let i = 0; i < width; i++) {
+      const x = ltr ? i : width - 1 - i;
+      // Anti-checkerboard: at ~50% gray the checkerboard is FS's stable
+      // fixed point — it prints as horizontal streaks (dot gain fuses the
+      // alternating rows) and it self-repairs against small perturbations.
+      // Cure: big position-seeded threshold swings whose amplitude fades in
+      // ONLY near mid-gray (peak ±48 at 128, zero beyond ±48 away), so the
+      // lattice can't form there while all other tones — and pure black/
+      // white text and margins — dither exactly as before. Deterministic,
+      // so preview and print match; error diffusion still conserves tone.
+      const gv = gray[y * width + x];
+      let v = gv + cur[x + 1];
+      if (v < 0) v = 0; else if (v > 255) v = 255;
+      let threshold = 128;
+      const amp = 48 - Math.abs(gv - 128);
+      if (amp > 0 && gv > 15 && gv < 240) {
+        let h = (x * 374761393 + y * 668265263) | 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        threshold += (((h >>> 16) % (2 * amp + 1)) - amp);
+      }
+      const out = v > threshold ? 255 : 0;
+      bits[y * width + x] = out === 0 ? 0 : 1;
+      const e = v - out;
+      const fwd = ltr ? 1 : -1;
+      cur[x + 1 + fwd] += (e * 7) / 16;   // ahead, same row
+      nxt[x + 1 - fwd] += (e * 3) / 16;   // behind, next row
+      nxt[x + 1] += (e * 5) / 16;         // below
+      nxt[x + 1 + fwd] += (e * 1) / 16;   // ahead, next row
     }
-    errors[width] = l0;
+    const t = cur; cur = nxt; nxt = t;
   }
   // trim trailing all-white rows so receipts aren't padded with blank paper
   let last = 0;
@@ -163,12 +184,22 @@ function toEscposChunked({ bits, width, height }) {
   return Buffer.concat(parts);
 }
 
-// Fraction of pixels that are ink — photos land ~0.3-0.6, text ~0.05-0.15.
-function inkDensity({ bits, width, height }) {
-  let on = 0;
+// Horizontal tone transitions per pixel — the fingerprint of dithered
+// imagery. Dithering fakes gray by alternating ink/no-ink constantly
+// (measured: photos ~0.38), while text is solid strokes (~0.01-0.12, the
+// high end being templates with dithered accent bars). Threshold at 0.2.
+// Ink *density* can't separate the classes: bold text hits ~20% ink while
+// gamma-compensated photos sit ~25%.
+function transitionsPerPixel({ bits, width, height }) {
+  let t = 0;
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 1; x < width; x++) {
+      if (bits[row + x] !== bits[row + x - 1]) t++;
+    }
+  }
   const total = width * height;
-  for (let i = 0; i < total; i++) if (bits[i]) on++;
-  return total ? on / total : 0;
+  return total ? t / total : 0;
 }
 
 // Orchestrate: template + data -> { bytes, preview(png), height }
@@ -176,11 +207,11 @@ async function renderToEscpos(template, data) {
   const markup = await fill(template, data);
   const pixels = await toPixels(markup);
   const bw = dither(pixels);
-  // Dense, tall output (photos) ships as memorize-then-print chunks so the
-  // serial link never starves the head; sparse output (text receipts) keeps
-  // the plain raster command it has always used.
-  const dense = bw.height > 160 && inkDensity(bw) > 0.25;
-  const bytes = dense ? toEscposChunked(bw) : toEscpos(bw);
+  // Dithered, tall output (photos, gradients) ships as memorize-then-print
+  // chunks so the serial link never starves the head; solid-stroke output
+  // (text receipts) keeps the plain raster command it has always used.
+  const dithered = bw.height > 160 && transitionsPerPixel(bw) > 0.2;
+  const bytes = dithered ? toEscposChunked(bw) : toEscpos(bw);
   // also emit a preview PNG of exactly what will print (the 1-bit result)
   const preview = previewPng(bw);
   return { bytes, preview, width: WIDTH, height: bw.height };
