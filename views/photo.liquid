@@ -32,6 +32,28 @@
           </div>
           <button type="button" class="btn small" id="rotateBtn">Rotate 90°</button>
         </div>
+        <div class="tone-group">
+          <div class="tone-head">
+            <span class="label" id="levelsLabel">Levels</span>
+            <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
+            <span class="tone-val" id="levelsVal">0 · 255</span>
+          </div>
+          <canvas id="histCanvas"></canvas>
+          <div class="level-track" id="levelTrack">
+            <div class="level-handle black" id="handleBlack"></div>
+            <div class="level-handle white" id="handleWhite"></div>
+          </div>
+          <div class="tone-row">
+            <span class="label" id="brightLabel">Brightness</span>
+            <input type="range" id="brightSlider" min="-100" max="100" value="0">
+            <span class="tone-val" id="brightVal">0</span>
+          </div>
+          <div class="tone-row">
+            <span class="label" id="contrastLabel">Contrast</span>
+            <input type="range" id="contrastSlider" min="-100" max="100" value="0">
+            <span class="tone-val" id="contrastVal">0</span>
+          </div>
+        </div>
       </div>
       <div class="photo-field">
         <span class="label">Caption</span>
@@ -83,6 +105,18 @@
   var captionSize = 36;
   var captionWeight = 400;
 
+  // Tone controls. These reshape the photo's tones BEFORE the calibration
+  // curve (which always runs last): levels stretch, brightness shift,
+  // contrast curve, composed into one lookup table. The edit canvas keeps
+  // showing the untouched photo; adjustments appear in the live render.
+  var blackPt = 0;
+  var whitePt = 255;
+  var brightV = 0;
+  var contrastV = 0;
+  var autoOn = true;        // recompute black/white points per crop
+  var hist = new Uint32Array(256);
+  var toneTimer = null;
+
   var input = document.getElementById('photoInput');
   var cameraInput = document.getElementById('cameraInput');
   var dropzone = document.getElementById('dropzone');
@@ -94,6 +128,16 @@
   var editor = document.getElementById('photoEditor');
   var editCanvas = document.getElementById('editCanvas');
   var presetsEl = document.getElementById('cropPresets');
+  var histCanvas = document.getElementById('histCanvas');
+  var levelTrack = document.getElementById('levelTrack');
+  var handleBlack = document.getElementById('handleBlack');
+  var handleWhite = document.getElementById('handleWhite');
+  var levelsVal = document.getElementById('levelsVal');
+  var autoBtn = document.getElementById('autoBtn');
+  var brightSlider = document.getElementById('brightSlider');
+  var contrastSlider = document.getElementById('contrastSlider');
+  var brightVal = document.getElementById('brightVal');
+  var contrastVal = document.getElementById('contrastVal');
 
   // fetch the Photo Print template from the store (it's seeded on first tick)
   fetch('/templates').then(function (r) { return r.json(); }).then(function (list) {
@@ -139,6 +183,15 @@
     crop = { x: 0, y: 0, w: oriented.width, h: oriented.height };
     clampAspect();
     setPresetActive('');
+    // fresh photo, fresh tone (auto keeps recomputing levels if it's on)
+    brightV = 0;
+    contrastV = 0;
+    brightSlider.value = 0;
+    contrastSlider.value = 0;
+    brightVal.textContent = '0';
+    contrastVal.textContent = '0';
+    if (!autoOn) { blackPt = 0; whitePt = 255; }
+    positionHandles();
     editor.hidden = false;
     document.getElementById('dropHint').innerHTML =
       label + '<br><span class="sub">choose another to replace</span>';
@@ -384,7 +437,9 @@
   editCanvas.addEventListener('pointerup', endDrag);
   editCanvas.addEventListener('pointercancel', endDrag);
 
-  window.addEventListener('resize', function () { if (oriented) drawEditor(); });
+  window.addEventListener('resize', function () {
+    if (oriented) { drawEditor(); drawHist(); }
+  });
 
   // ---- rotate/crop -> the two data URIs the rest of the flow uses ----
 
@@ -397,21 +452,166 @@
     canvas.height = outH;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, outW, outH);
-    // The live preview dithers the ORIGINAL tones: on screen (no dot gain)
-    // that approximates what the compensated print looks like on paper —
-    // the curve and the paper's darkening cancel out.
-    previewData = canvas.toDataURL('image/jpeg', 0.85);
     var pix = ctx.getImageData(0, 0, outW, outH);
-    for (var p = 0; p < pix.data.length; p += 4) {
-      pix.data[p] = LUT[pix.data[p]];
-      pix.data[p + 1] = LUT[pix.data[p + 1]];
-      pix.data[p + 2] = LUT[pix.data[p + 2]];
+    var d = pix.data;
+    // histogram of the cropped photo (pre-adjustment) drives the levels UI
+    hist.fill(0);
+    for (var hp = 0; hp < d.length; hp += 4) {
+      hist[(d[hp] * 2126 + d[hp + 1] * 7152 + d[hp + 2] * 722) / 10000 | 0]++;
+    }
+    if (autoOn) autoLevels();
+    drawHist();
+    var tone = toneLUT();
+    for (var p = 0; p < d.length; p += 4) {
+      d[p] = tone[d[p]];
+      d[p + 1] = tone[d[p + 1]];
+      d[p + 2] = tone[d[p + 2]];
+    }
+    ctx.putImageData(pix, 0, 0);
+    // The live preview dithers the adjusted but UNCOMPENSATED tones: on
+    // screen (no dot gain) that approximates what the compensated print
+    // looks like on paper — the curve and the paper's darkening cancel out.
+    previewData = canvas.toDataURL('image/jpeg', 0.85);
+    for (var q = 0; q < d.length; q += 4) {
+      d[q] = LUT[d[q]];
+      d[q + 1] = LUT[d[q + 1]];
+      d[q + 2] = LUT[d[q + 2]];
     }
     ctx.putImageData(pix, 0, 0);
     photoData = canvas.toDataURL('image/jpeg', 0.85);
     photoHeight = outH;
     schedule();
   }
+
+  // ---- tone: levels + brightness + contrast, one lookup table ----
+
+  function toneLUT() {
+    var t = new Uint8Array(256);
+    var f = (259 * (contrastV + 255)) / (255 * (259 - contrastV));
+    for (var v = 0; v < 256; v++) {
+      var x = (v - blackPt) * 255 / Math.max(1, whitePt - blackPt);
+      x += brightV;
+      x = f * (x - 128) + 128;
+      t[v] = x < 0 ? 0 : x > 255 ? 255 : Math.round(x);
+    }
+    return t;
+  }
+
+  function toneChanged() {
+    clearTimeout(toneTimer);
+    toneTimer = setTimeout(derive, 120);
+  }
+
+  // black/white points from the histogram, clipping 0.5% at each end
+  function autoLevels() {
+    var total = 0;
+    for (var i = 0; i < 256; i++) total += hist[i];
+    if (!total) return;
+    var clip = total * 0.005;
+    var sum = 0, lo = 0, hi = 255;
+    for (var a = 0; a < 256; a++) { sum += hist[a]; if (sum > clip) { lo = a; break; } }
+    sum = 0;
+    for (var b = 255; b >= 0; b--) { sum += hist[b]; if (sum > clip) { hi = b; break; } }
+    if (hi - lo < 16) { lo = 0; hi = 255; }
+    blackPt = lo;
+    whitePt = hi;
+    positionHandles();
+  }
+
+  function positionHandles() {
+    handleBlack.style.left = 'calc(' + (blackPt / 255 * 100) + '% - 5px)';
+    handleWhite.style.left = 'calc(' + (whitePt / 255 * 100) + '% - 5px)';
+    levelsVal.textContent = blackPt + ' · ' + whitePt;
+  }
+
+  function drawHist() {
+    var cssW = histCanvas.clientWidth || 288;
+    var dpr = window.devicePixelRatio || 1;
+    histCanvas.width = Math.round(cssW * dpr);
+    histCanvas.height = Math.round(40 * dpr);
+    var hx = histCanvas.getContext('2d');
+    var max = 0;
+    for (var i = 0; i < 256; i++) if (hist[i] > max) max = hist[i];
+    if (!max) return;
+    hx.fillStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ink-muted').trim() || '#888';
+    var bw = histCanvas.width / 256;
+    for (var v = 0; v < 256; v++) {
+      var h = Math.round((hist[v] / max) * histCanvas.height);
+      if (h) hx.fillRect(v * bw, histCanvas.height - h, Math.ceil(bw), h);
+    }
+    // dim the tones the current black/white points clip away
+    hx.fillStyle = 'rgba(128,128,128,0.25)';
+    hx.fillRect(0, 0, blackPt * bw, histCanvas.height);
+    hx.fillRect((whitePt + 1) * bw, 0, histCanvas.width - (whitePt + 1) * bw, histCanvas.height);
+  }
+
+  function setAuto(on) {
+    autoOn = on;
+    autoBtn.classList.toggle('on', on);
+  }
+
+  autoBtn.addEventListener('click', function () {
+    setAuto(!autoOn);
+    if (autoOn && oriented) derive();  // recomputes the points from the crop
+  });
+
+  var levelDrag = null;
+
+  function trackValue(e) {
+    var r = levelTrack.getBoundingClientRect();
+    var t = (e.clientX - r.left) / r.width;
+    return Math.max(0, Math.min(255, Math.round(t * 255)));
+  }
+
+  levelTrack.addEventListener('pointerdown', function (e) {
+    if (!oriented) return;
+    e.preventDefault();
+    levelTrack.setPointerCapture(e.pointerId);
+    var v = trackValue(e);
+    levelDrag = Math.abs(v - blackPt) <= Math.abs(v - whitePt) ? 'black' : 'white';
+    setAuto(false);
+    moveLevel(v);
+  });
+  levelTrack.addEventListener('pointermove', function (e) {
+    if (levelDrag) moveLevel(trackValue(e));
+  });
+  levelTrack.addEventListener('pointerup', function () { levelDrag = null; });
+  levelTrack.addEventListener('pointercancel', function () { levelDrag = null; });
+
+  function moveLevel(v) {
+    if (levelDrag === 'black') blackPt = Math.min(v, whitePt - 8);
+    else whitePt = Math.max(v, blackPt + 8);
+    positionHandles();
+    drawHist();
+    toneChanged();
+  }
+
+  brightSlider.addEventListener('input', function () {
+    brightV = +this.value;
+    brightVal.textContent = (brightV > 0 ? '+' : '') + brightV;
+    toneChanged();
+  });
+  contrastSlider.addEventListener('input', function () {
+    contrastV = +this.value;
+    contrastVal.textContent = (contrastV > 0 ? '+' : '') + contrastV;
+    toneChanged();
+  });
+
+  // double-click a label to reset that control
+  document.getElementById('brightLabel').addEventListener('dblclick', function () {
+    brightV = 0; brightSlider.value = 0; brightVal.textContent = '0'; toneChanged();
+  });
+  document.getElementById('contrastLabel').addEventListener('dblclick', function () {
+    contrastV = 0; contrastSlider.value = 0; contrastVal.textContent = '0'; toneChanged();
+  });
+  document.getElementById('levelsLabel').addEventListener('dblclick', function () {
+    setAuto(false);
+    blackPt = 0; whitePt = 255;
+    positionHandles();
+    drawHist();
+    toneChanged();
+  });
 
   function schedule() {
     clearTimeout(debounceTimer);
