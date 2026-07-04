@@ -500,7 +500,16 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   border-radius: 2px;
   max-width: 400px;
 }
-.photo-roll img { display: block; width: 100%; }
+/* physical paper: the printable 576 dots sit inside 80mm stock (624) with
+   ~3mm unprintable sides and ~3mm cut-edge top. Sizing the IMAGE at
+   576/624 = 92.3% with auto side margins keeps the ratios anchored to the
+   box itself (percentage padding on the box would resolve against the
+   PARENT's width and render ~double — a real CSS gotcha). */
+.photo-roll img {
+  display: block;
+  width: 92.3%;
+  margin: 3.75% auto 0;
+}
 .photo-roll .empty { color: var(--ink-faint); }
 
 /* ---- inline field errors ---- */

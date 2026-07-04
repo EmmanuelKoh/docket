@@ -106,7 +106,10 @@
   .scroll { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 28px 16px 60px; }
   .roll {
     background: #ffffff; border: 0.5px solid var(--border);
-    position: relative; width: 576px; flex-shrink: 0; height: fit-content;
+    position: relative; width: 624px; flex-shrink: 0; height: fit-content;
+    /* 80mm paper = 624 dot-widths; the printable 576 sits inside ~3mm
+       unprintable side margins (24px each) — preview the slip, not the pixels */
+    padding: 0 24px;
   }
   .roll img { display: block; width: 100%; image-rendering: pixelated; }
   .empty-msg { color: var(--ink-faint); font-size: 12px; padding: 40px 20px; text-align: center; }
@@ -486,7 +489,7 @@ async function renderPreview() {
 // ---- scale the roll to fit ----
 function scaleRoll() {
   const avail = roll.parentElement.clientWidth - 32;
-  const scale = Math.min(1, avail / 576);
+  const scale = Math.min(1, avail / 624);
   roll.style.transform = 'scale(' + scale + ')';
   roll.style.transformOrigin = 'top center';
 }

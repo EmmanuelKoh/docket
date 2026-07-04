@@ -246,8 +246,8 @@ it should refuse. Reload; it should print.
   boot. This looked exactly like a hardware fault and wasn't.
 - Always says "out" → your printer reports status differently; log the raw
   status byte in each state (paper in / lid open / paper low) and adjust the
-  bit mask. RP850 reference values: EOT1 online `0x16`, offline `0x1E`;
-  EOT4 ok `0x12`, near-end `0x1E` (still prints), out `0x72` (refuses).
+  bit mask. Reference values for this project's RP850 are in
+  `rp850-field-notes.md`.
 - Never detects out → the printer's TXD-back wire (to the ESP32 RX pin) isn't connected; recheck that wire.
 
 ---
@@ -280,12 +280,15 @@ mistakes stay off production.
 involved, the Serial Monitor shows `job job-N: printed` then `ack`, and the
 dashboard's job goes queued → printing → done.
 
-**Know this quirk:** the RP850's serial status transmitter can go mute after
-hearing reset glitches — and every firmware upload resets the ESP32, glitching
-the TX line. Symptom: jobs fetch but nack with `EOT1=-1 EOT4=-1` (probes
-silent). Fix: **power-cycle the printer after a flashing session.** Printing
-itself still works when mute; only the status probes die, and the firmware
-refuses jobs without them (by design — it can't verify paper).
+**Measure your printer.** Every unit has physical quirks the datasheet
+won't tell you: unprintable side margins, blade-to-data distance, the blank
+leader between print head and cutter, status-byte values, real command
+limits. This project's measured values — and the compensations built on
+them — are collected in `rp850-field-notes.md`; use it as a checklist of
+what to measure on your own hardware. One universal from it worth knowing
+during bring-up: if status probes go silent after flashing the ESP32
+(`EOT... = -1`), **power-cycle the printer** — reset glitches on the TX
+line can mute its transmitter.
 
 **If it fails:**
 - Jobs fetch but nack with `EOT... = -1` → power-cycle the printer (see quirk above).

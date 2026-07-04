@@ -164,7 +164,7 @@ CAPTION label + dotted editable input (mono output), outline Print button,
 mono status text; right — the live preview on white paper (the real
 /preview render of the "Photo Print" template: bordered photo, optional
 mono 16px caption, no title). Photos downscale client-side to the
-template's 490px inner width before upload. What you see is the dithered
+template's 544px inner width before upload. What you see is the dithered
 print, not an approximation. Stacks vertically under 720px (phone use is
 the point).
 
