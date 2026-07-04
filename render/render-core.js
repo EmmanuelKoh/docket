@@ -115,12 +115,72 @@ function toEscpos({ bits, width, height }) {
   ]);
 }
 
+// 4b) 1-bit -> ESC/POS as memorize-then-print chunks (GS * / GS /).
+// For dense images over serial: one big raster command starves the printer's
+// buffer (the wire is ~8x slower than the head), making it crawl and stop —
+// over-burnt photos with dark stall bands. Chunked, the printer absorbs each
+// chunk with the head idle, then prints it as a short full-speed burst:
+// even heat, no starvation. The spec caps GS * at x*y <= 1536 (~168 rows),
+// but the RP850 was probed accepting 100 blocks (800 rows ≈ 58KB) in one
+// definition — which single-chunks every photo we produce: one silent
+// upload, one continuous full-speed print, zero seams. Taller-than-800-row
+// output still splits automatically. Note GS * wants COLUMN-major data
+// (top bit = top dot), unlike GS v 0's rows. Line spacing is zeroed so any
+// multi-chunk output butts together seamlessly.
+const CHUNK_BLOCKS = 100; // probed RP850 ceiling: 100 blocks = 800 rows/chunk
+
+function toEscposChunked({ bits, width, height }) {
+  const parts = [
+    Buffer.from([0x1b, 0x40]),        // ESC @  init
+    Buffer.from([0x1b, 0x33, 0x00]),  // ESC 3 0  line spacing 0
+  ];
+  for (let y0 = 0; y0 < height; y0 += CHUNK_BLOCKS * 8) {
+    const rows = Math.min(CHUNK_BLOCKS * 8, height - y0);
+    const yBlocks = Math.ceil(rows / 8);
+    const data = Buffer.alloc(WIDTH_BYTES * 8 * yBlocks);
+    let i = 0;
+    for (let x = 0; x < WIDTH_BYTES * 8; x++) {
+      for (let b = 0; b < yBlocks; b++) {
+        let byte = 0;
+        for (let dy = 0; dy < 8; dy++) {
+          const y = y0 + b * 8 + dy;
+          if (y < height && x < width && bits[y * width + x]) byte |= (0x80 >> dy);
+        }
+        data[i++] = byte;
+      }
+    }
+    parts.push(
+      Buffer.from([0x1d, 0x2a, WIDTH_BYTES, yBlocks]), // GS *  memorize
+      data,
+      Buffer.from([0x1d, 0x2f, 0x00])                  // GS /  print it
+    );
+  }
+  parts.push(
+    Buffer.from([0x1b, 0x32]),                          // restore line spacing
+    Buffer.from([0x1b, 0x64, 0x02]),                    // feed 2
+    Buffer.from([0x1d, 0x56, 0x41, 0x03])               // feed 3 + full cut
+  );
+  return Buffer.concat(parts);
+}
+
+// Fraction of pixels that are ink — photos land ~0.3-0.6, text ~0.05-0.15.
+function inkDensity({ bits, width, height }) {
+  let on = 0;
+  const total = width * height;
+  for (let i = 0; i < total; i++) if (bits[i]) on++;
+  return total ? on / total : 0;
+}
+
 // Orchestrate: template + data -> { bytes, preview(png), height }
 async function renderToEscpos(template, data) {
   const markup = await fill(template, data);
   const pixels = await toPixels(markup);
   const bw = dither(pixels);
-  const bytes = toEscpos(bw);
+  // Dense, tall output (photos) ships as memorize-then-print chunks so the
+  // serial link never starves the head; sparse output (text receipts) keeps
+  // the plain raster command it has always used.
+  const dense = bw.height > 160 && inkDensity(bw) > 0.25;
+  const bytes = dense ? toEscposChunked(bw) : toEscpos(bw);
   // also emit a preview PNG of exactly what will print (the 1-bit result)
   const preview = previewPng(bw);
   return { bytes, preview, width: WIDTH, height: bw.height };
