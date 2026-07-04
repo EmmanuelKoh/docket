@@ -33,25 +33,47 @@
           <button type="button" class="btn small" id="rotateBtn">Rotate 90°</button>
         </div>
         <div class="tone-group">
-          <div class="tone-head">
-            <span class="label" id="levelsLabel">Levels</span>
-            <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
-            <span class="tone-val" id="levelsVal">0 · 255</span>
-          </div>
-          <canvas id="histCanvas"></canvas>
-          <div class="level-track" id="levelTrack">
-            <div class="level-handle black" id="handleBlack"></div>
-            <div class="level-handle white" id="handleWhite"></div>
-          </div>
-          <div class="tone-row">
-            <span class="label" id="brightLabel">Brightness</span>
-            <input type="range" id="brightSlider" min="-100" max="100" value="0">
-            <span class="tone-val" id="brightVal">0</span>
-          </div>
-          <div class="tone-row">
-            <span class="label" id="contrastLabel">Contrast</span>
-            <input type="range" id="contrastSlider" min="-100" max="100" value="0">
-            <span class="tone-val" id="contrastVal">0</span>
+          <button type="button" class="tone-toggle" id="toneToggle">
+            <span class="label">Adjustments</span>
+            <span class="tone-val" id="toneSummary"></span>
+            <span class="tone-chev" id="toneChev">&#9656;</span>
+          </button>
+          <div class="tone-body" id="toneBody" hidden>
+            <div class="tone-head">
+              <span class="label" id="levelsLabel">Levels</span>
+              <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
+              <span class="tone-val" id="levelsVal">0 · 255</span>
+            </div>
+            <canvas id="histCanvas"></canvas>
+            <div class="level-track" id="levelTrack">
+              <div class="level-handle black" id="handleBlack"></div>
+              <div class="level-handle white" id="handleWhite"></div>
+            </div>
+            <div class="tone-row">
+              <span class="label" id="midLabel">Midtone</span>
+              <input type="range" id="midSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="midVal">0</span>
+            </div>
+            <div class="tone-row">
+              <span class="label" id="shadowLabel">Shadows</span>
+              <input type="range" id="shadowSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="shadowVal">0</span>
+            </div>
+            <div class="tone-row">
+              <span class="label" id="brightLabel">Brightness</span>
+              <input type="range" id="brightSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="brightVal">0</span>
+            </div>
+            <div class="tone-row">
+              <span class="label" id="contrastLabel">Contrast</span>
+              <input type="range" id="contrastSlider" min="-100" max="100" value="0">
+              <span class="tone-val" id="contrastVal">0</span>
+            </div>
+            <div class="tone-row">
+              <span class="label" id="sharpLabel">Sharpen</span>
+              <input type="range" id="sharpSlider" min="0" max="100" value="0">
+              <span class="tone-val" id="sharpVal">0</span>
+            </div>
           </div>
         </div>
       </div>
@@ -106,13 +128,17 @@
   var captionWeight = 400;
 
   // Tone controls. These reshape the photo's tones BEFORE the calibration
-  // curve (which always runs last): levels stretch, brightness shift,
-  // contrast curve, composed into one lookup table. The edit canvas keeps
+  // curve (which always runs last): levels stretch, midtone gamma, shadow
+  // lift, brightness shift, contrast curve, composed into one lookup
+  // table; sharpening runs after as a spatial pass. The edit canvas keeps
   // showing the untouched photo; adjustments appear in the live render.
   var blackPt = 0;
   var whitePt = 255;
+  var midV = 0;
+  var shadowV = 0;
   var brightV = 0;
   var contrastV = 0;
+  var sharpV = 0;
   var autoOn = true;        // recompute black/white points per crop
   var hist = new Uint32Array(256);
   var toneTimer = null;
@@ -134,10 +160,9 @@
   var handleWhite = document.getElementById('handleWhite');
   var levelsVal = document.getElementById('levelsVal');
   var autoBtn = document.getElementById('autoBtn');
-  var brightSlider = document.getElementById('brightSlider');
-  var contrastSlider = document.getElementById('contrastSlider');
-  var brightVal = document.getElementById('brightVal');
-  var contrastVal = document.getElementById('contrastVal');
+  var toneBody = document.getElementById('toneBody');
+  var toneChev = document.getElementById('toneChev');
+  var toneSummary = document.getElementById('toneSummary');
 
   // fetch the Photo Print template from the store (it's seeded on first tick)
   fetch('/templates').then(function (r) { return r.json(); }).then(function (list) {
@@ -184,12 +209,7 @@
     clampAspect();
     setPresetActive('');
     // fresh photo, fresh tone (auto keeps recomputing levels if it's on)
-    brightV = 0;
-    contrastV = 0;
-    brightSlider.value = 0;
-    contrastSlider.value = 0;
-    brightVal.textContent = '0';
-    contrastVal.textContent = '0';
+    Object.keys(toneCtl).forEach(function (k) { toneCtl[k].reset(); });
     if (!autoOn) { blackPt = 0; whitePt = 255; }
     positionHandles();
     editor.hidden = false;
@@ -461,12 +481,14 @@
     }
     if (autoOn) autoLevels();
     drawHist();
+    updateSummary();
     var tone = toneLUT();
     for (var p = 0; p < d.length; p += 4) {
       d[p] = tone[d[p]];
       d[p + 1] = tone[d[p + 1]];
       d[p + 2] = tone[d[p + 2]];
     }
+    if (sharpV > 0) sharpen(d, outW, outH, sharpV / 100);
     ctx.putImageData(pix, 0, 0);
     // The live preview dithers the adjusted but UNCOMPENSATED tones: on
     // screen (no dot gain) that approximates what the compensated print
@@ -488,13 +510,52 @@
   function toneLUT() {
     var t = new Uint8Array(256);
     var f = (259 * (contrastV + 255)) / (255 * (259 - contrastV));
+    var g = Math.pow(2, -midV / 100);   // +100 lightens mids (gamma 0.5), -100 darkens (gamma 2)
     for (var v = 0; v < 256; v++) {
       var x = (v - blackPt) * 255 / Math.max(1, whitePt - blackPt);
+      x = x < 0 ? 0 : x > 255 ? 255 : x;
+      x = 255 * Math.pow(x / 255, g);
+      // shadow lift/deepen fades out quadratically toward the highlights
+      x += (shadowV / 100) * 80 * Math.pow(1 - x / 255, 2);
       x += brightV;
       x = f * (x - 128) + 128;
       t[v] = x < 0 ? 0 : x > 255 ? 255 : Math.round(x);
     }
     return t;
+  }
+
+  // Unsharp mask: exaggerate the difference between each pixel and a small
+  // blur of its neighborhood. Works on brightness only, applied equally to
+  // the channels, so it can't introduce color fringes.
+  function sharpen(d, w, h, amount) {
+    var luma = new Float32Array(w * h);
+    for (var i = 0, p = 0; p < d.length; p += 4, i++) {
+      luma[i] = (d[p] * 2126 + d[p + 1] * 7152 + d[p + 2] * 722) / 10000;
+    }
+    var k = amount * 1.2;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var c = y * w + x;
+        var blur = (
+          luma[c - w - 1] + 2 * luma[c - w] + luma[c - w + 1] +
+          2 * luma[c - 1] + 4 * luma[c] + 2 * luma[c + 1] +
+          luma[c + w - 1] + 2 * luma[c + w] + luma[c + w + 1]) / 16;
+        var delta = (luma[c] - blur) * k;
+        if (delta) {
+          var p2 = c * 4;
+          var r = d[p2] + delta, g2 = d[p2 + 1] + delta, b = d[p2 + 2] + delta;
+          d[p2] = r < 0 ? 0 : r > 255 ? 255 : r;
+          d[p2 + 1] = g2 < 0 ? 0 : g2 > 255 ? 255 : g2;
+          d[p2 + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        }
+      }
+    }
+  }
+
+  function updateSummary() {
+    var adjusted = midV || shadowV || brightV || contrastV || sharpV ||
+      (!autoOn && (blackPt > 0 || whitePt < 255));
+    toneSummary.textContent = adjusted ? 'adjusted' : '';
   }
 
   function toneChanged() {
@@ -587,30 +648,39 @@
     toneChanged();
   }
 
-  brightSlider.addEventListener('input', function () {
-    brightV = +this.value;
-    brightVal.textContent = (brightV > 0 ? '+' : '') + brightV;
-    toneChanged();
-  });
-  contrastSlider.addEventListener('input', function () {
-    contrastV = +this.value;
-    contrastVal.textContent = (contrastV > 0 ? '+' : '') + contrastV;
-    toneChanged();
-  });
+  // one binder per slider: input updates, double-click the label resets
+  function toneSlider(name, setter) {
+    var s = document.getElementById(name + 'Slider');
+    var val = document.getElementById(name + 'Val');
+    function show(v) { val.textContent = (v > 0 ? '+' : '') + v; }
+    s.addEventListener('input', function () { setter(+this.value); show(+this.value); toneChanged(); });
+    document.getElementById(name + 'Label').addEventListener('dblclick', function () {
+      s.value = 0; setter(0); show(0); toneChanged();
+    });
+    return { reset: function () { s.value = 0; setter(0); val.textContent = '0'; } };
+  }
 
-  // double-click a label to reset that control
-  document.getElementById('brightLabel').addEventListener('dblclick', function () {
-    brightV = 0; brightSlider.value = 0; brightVal.textContent = '0'; toneChanged();
-  });
-  document.getElementById('contrastLabel').addEventListener('dblclick', function () {
-    contrastV = 0; contrastSlider.value = 0; contrastVal.textContent = '0'; toneChanged();
-  });
+  var toneCtl = {
+    mid: toneSlider('mid', function (v) { midV = v; }),
+    shadow: toneSlider('shadow', function (v) { shadowV = v; }),
+    bright: toneSlider('bright', function (v) { brightV = v; }),
+    contrast: toneSlider('contrast', function (v) { contrastV = v; }),
+    sharp: toneSlider('sharp', function (v) { sharpV = v; }),
+  };
+
   document.getElementById('levelsLabel').addEventListener('dblclick', function () {
     setAuto(false);
     blackPt = 0; whitePt = 255;
     positionHandles();
     drawHist();
     toneChanged();
+  });
+
+  document.getElementById('toneToggle').addEventListener('click', function () {
+    toneBody.hidden = !toneBody.hidden;
+    toneChev.innerHTML = toneBody.hidden ? '&#9656;' : '&#9662;';
+    // the histogram canvas had no width while hidden — draw it now
+    if (!toneBody.hidden && oriented) { drawHist(); }
   });
 
   function schedule() {

@@ -583,6 +583,24 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 .tone-group { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .tone-group .label { user-select: none; -webkit-user-select: none; }  /* labels reset on dblclick */
 .photo-editor.camera .tone-group { display: none; }
+.tone-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-top: 1px dashed var(--dash);
+  padding: 10px 0 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.tone-toggle .label { cursor: pointer; }
+.tone-toggle .tone-val { margin-left: auto; }
+.tone-chev { font-size: 10px; color: var(--ink-faint); }
+.tone-toggle:hover .tone-chev { color: var(--ink); }
+.tone-body { display: flex; flex-direction: column; gap: 8px; }
+.tone-body[hidden] { display: none; }
 .tone-head { display: flex; align-items: center; gap: 8px; }
 .tone-head .tone-val { margin-left: auto; }
 .tone-val { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted); }

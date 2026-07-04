@@ -171,16 +171,21 @@ back in place), then the editor
 draggable/resizable crop rectangle (white border + corner handles over a
 55% dim outside the crop), preset shortcuts Full / 1:1 / 4:3 / 3:2 (ratios
 follow the image's orientation; presets only set the rectangle — it stays
-adjustable) and a Rotate 90° button; below that a TONE group: a LEVELS row
-(caps label, small mono AUTO chip — inverse ink while on — and a mono
-"black · white" readout), a 40px monochrome histogram of the cropped photo
-with clipped tones dimmed, a hairline track with two 10px square handles
-(black filled, white outlined) dragged to set black/white points, then
-BRIGHTNESS and CONTRAST rows: caps label, hairline-track slider with a
-10px square --ink thumb, mono value right. Auto recomputes the points on
-every crop/rotate; dragging a handle turns it off; double-clicking a label
-resets that control. Adjustments show in the live render only — the edit
-canvas keeps the untouched photo; CAPTION label + dotted editable input
+adjustable) and a Rotate 90° button; below that an ADJUSTMENTS section,
+collapsed by default behind a header row (caps label, quiet mono
+"adjusted" note when anything is non-default, ▸/▾ chevron in --ink-faint,
+dashed top rule). Expanded it holds: a LEVELS row (caps label, small mono
+AUTO chip — inverse ink while on — and a mono "black · white" readout), a
+40px monochrome histogram of the cropped photo with clipped tones dimmed,
+a hairline track with two 10px square handles (black filled, white
+outlined) dragged to set black/white points, then MIDTONE, SHADOWS,
+BRIGHTNESS, CONTRAST and SHARPEN rows: caps label, hairline-track slider
+with a 10px square --ink thumb, mono value right. Auto recomputes the
+points on every crop/rotate; dragging a handle turns it off;
+double-clicking a label resets that control. Adjustments show in the live
+render only — the edit canvas keeps the untouched photo (tone ops compose
+into one lookup table, sharpening is an unsharp-mask pass, and the
+calibration curve still runs last); CAPTION label + dotted editable input
 (mono output) with segmented controls for size (S/M/L = 28/36/48px) and
 weight (Regular/Bold); outline Print button, mono status text. Right — the
 live preview on white paper (the real /preview render of the full-bleed
