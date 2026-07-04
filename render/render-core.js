@@ -27,6 +27,7 @@ const fonts = [
   { name: 'Sans', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSans.ttf')), weight: 400, style: 'normal' },
   { name: 'Sans', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSans-Bold.ttf')), weight: 700, style: 'normal' },
   { name: 'Mono', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSansMono.ttf')), weight: 400, style: 'normal' },
+  { name: 'Mono', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSansMono-Bold.ttf')), weight: 700, style: 'normal' },
 ];
 
 // 1) Liquid template + data -> HTML

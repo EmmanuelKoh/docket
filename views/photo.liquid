@@ -12,9 +12,41 @@
         <input type="file" id="photoInput" accept="image/*" hidden>
         <span id="dropHint">Choose a photo<br><span class="sub">or drop one here</span></span>
       </label>
+      <label class="btn photo-take" id="takeBtn">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+        Take a photo
+      </label>
+      <div class="photo-editor" id="photoEditor" hidden>
+        <video id="cameraFeed" autoplay playsinline muted></video>
+        <canvas id="editCanvas"></canvas>
+        <div class="camera-tools">
+          <button type="button" class="shutter" id="captureBtn" title="Capture"></button>
+          <button type="button" class="camera-cancel" id="cameraCancelBtn">cancel</button>
+        </div>
+        <div class="edit-tools">
+          <div class="seg" id="cropPresets">
+            <button type="button" data-a="" class="on">Full</button>
+            <button type="button" data-a="1">1:1</button>
+            <button type="button" data-a="1.3333">4:3</button>
+            <button type="button" data-a="1.5">3:2</button>
+          </div>
+          <button type="button" class="btn small" id="rotateBtn">Rotate 90°</button>
+        </div>
+      </div>
       <div class="photo-field">
         <span class="label">Caption</span>
         <input class="editable" id="captionInput" placeholder="optional" spellcheck="false" maxlength="120">
+        <div class="caption-tools">
+          <div class="seg" id="capSize">
+            <button type="button" data-v="28">S</button>
+            <button type="button" data-v="36" class="on">M</button>
+            <button type="button" data-v="48">L</button>
+          </div>
+          <div class="seg" id="capWeight">
+            <button type="button" data-v="400" class="on">Regular</button>
+            <button type="button" data-v="700">Bold</button>
+          </div>
+        </div>
       </div>
       <button class="btn" id="printBtn" disabled>Print</button>
       <span class="status" id="photoStatus"></span>
@@ -35,13 +67,33 @@
   var photoHeight = 0;
   var debounceTimer = null;
 
+  // Editing state. The uploaded photo is kept as `base` (rotation 0) and
+  // every edit re-derives the print image from it, so the tone curve always
+  // runs last, on the exact pixels that print.
+  var base = null;          // canvas: original, downscaled to EDIT_MAX
+  var rot = 0;              // clockwise 90° steps, 0..3
+  var oriented = null;      // canvas: base with rotation applied
+  var crop = null;          // {x,y,w,h} in oriented-canvas pixels
+  var EDIT_MAX = 1600;      // working resolution — plenty above the 576-dot output
+  var MIN_CROP = 32;        // oriented px
+  // Very tall crops make very long slips and would outgrow the renderer's
+  // canvas; cap crop height at 2.4× its width (≈1382 print rows).
+  var MAX_ASPECT = 2.4;
+
+  var captionSize = 36;
+  var captionWeight = 400;
+
   var input = document.getElementById('photoInput');
+  var cameraInput = document.getElementById('cameraInput');
   var dropzone = document.getElementById('dropzone');
   var caption = document.getElementById('captionInput');
   var printBtn = document.getElementById('printBtn');
   var statusEl = document.getElementById('photoStatus');
   var roll = document.getElementById('photoRoll');
   var empty = document.getElementById('photoEmpty');
+  var editor = document.getElementById('photoEditor');
+  var editCanvas = document.getElementById('editCanvas');
+  var presetsEl = document.getElementById('cropPresets');
 
   // fetch the Photo Print template from the store (it's seeded on first tick)
   fetch('/templates').then(function (r) { return r.json(); }).then(function (list) {
@@ -50,63 +102,315 @@
     else statusEl.textContent = 'Photo Print template missing — run a tick to seed it';
   });
 
-  // Downscale to the template's inner width (576px), cap height for tall
-  // shots, re-encode as JPEG — phone photos shrink ~100x before upload.
+  // Thermal dot gain compensation: printed dots bleed larger than their
+  // pixels, darkening paper vs the dither — mildly in highlights, fatally
+  // in shadows (dark grays fuse to black). Tone-dependent transfer curve,
+  // calibrated on printed wedges: anchors are [brightness, gamma], blended
+  // linearly; output = b^gamma(b).
+  // Keep in sync with scripts/print-calibration.js.
+  var CURVE = [
+    [0.0, 0.50], [0.1, 0.53], [0.2, 0.53], [0.3, 0.58], [0.4, 0.63],
+    [0.5, 0.70], [0.6, 0.78], [0.7, 0.88], [0.8, 0.96], [1.0, 1.00]
+  ];
+  var LUT = new Uint8Array(256);
+  for (var v = 0; v < 256; v++) {
+    var b = v / 255;
+    var g = CURVE[CURVE.length - 1][1];
+    for (var ci = 1; ci < CURVE.length; ci++) {
+      if (b <= CURVE[ci][0]) {
+        var f = (b - CURVE[ci - 1][0]) / (CURVE[ci][0] - CURVE[ci - 1][0]);
+        g = CURVE[ci - 1][1] + f * (CURVE[ci][1] - CURVE[ci - 1][1]);
+        break;
+      }
+    }
+    LUT[v] = Math.round(255 * Math.pow(b, g));
+  }
+
+  // Shared entry for uploads AND webcam frames: anything drawImage accepts.
+  function loadFromSource(src, w, h, label) {
+    closeCamera();
+    var scale = Math.min(EDIT_MAX / w, EDIT_MAX / h, 1);
+    base = document.createElement('canvas');
+    base.width = Math.round(w * scale);
+    base.height = Math.round(h * scale);
+    base.getContext('2d').drawImage(src, 0, 0, base.width, base.height);
+    rot = 0;
+    buildOriented();
+    crop = { x: 0, y: 0, w: oriented.width, h: oriented.height };
+    clampAspect();
+    setPresetActive('');
+    editor.hidden = false;
+    document.getElementById('dropHint').innerHTML =
+      label + '<br><span class="sub">choose another to replace</span>';
+    drawEditor();
+    derive();
+  }
+
   function loadFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
     var img = new Image();
     img.onload = function () {
-      var scale = Math.min(576 / img.width, 700 / img.height, 1);
-      var w = Math.round(img.width * scale);
-      var h = Math.round(img.height * scale);
-      var canvas = document.createElement('canvas');
-      // render at the template's fixed 576px inner width; keep aspect
-      canvas.width = 576;
-      canvas.height = Math.round(h * (576 / w));
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      // The live preview dithers the ORIGINAL image: on screen (no dot
-      // gain) that approximates what the compensated print looks like on
-      // paper — the curve and the paper's darkening cancel out.
-      previewData = canvas.toDataURL('image/jpeg', 0.85);
-      // Thermal dot gain compensation: printed dots bleed larger than their
-      // pixels, darkening paper vs the dither — mildly in highlights,
-      // fatally in shadows (dark grays fuse to black). Tone-dependent
-      // transfer curve, calibrated on printed wedges: anchors are
-      // [brightness, gamma], blended linearly; output = b^gamma(b).
-      // Keep in sync with scripts/print-calibration.js.
-      var CURVE = [
-        [0.0, 0.50], [0.1, 0.53], [0.2, 0.53], [0.3, 0.58], [0.4, 0.63],
-        [0.5, 0.70], [0.6, 0.78], [0.7, 0.88], [0.8, 0.96], [1.0, 1.00]
-      ];
-      var pix = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      var lut = new Uint8Array(256);
-      for (var v = 0; v < 256; v++) {
-        var b = v / 255;
-        var g = CURVE[CURVE.length - 1][1];
-        for (var ci = 1; ci < CURVE.length; ci++) {
-          if (b <= CURVE[ci][0]) {
-            var f = (b - CURVE[ci - 1][0]) / (CURVE[ci][0] - CURVE[ci - 1][0]);
-            g = CURVE[ci - 1][1] + f * (CURVE[ci][1] - CURVE[ci - 1][1]);
-            break;
-          }
-        }
-        lut[v] = Math.round(255 * Math.pow(b, g));
-      }
-      for (var p = 0; p < pix.data.length; p += 4) {
-        pix.data[p] = lut[pix.data[p]];
-        pix.data[p + 1] = lut[pix.data[p + 1]];
-        pix.data[p + 2] = lut[pix.data[p + 2]];
-      }
-      ctx.putImageData(pix, 0, 0);
-      photoData = canvas.toDataURL('image/jpeg', 0.85);
-      photoHeight = canvas.height;
+      loadFromSource(img, img.width, img.height, file.name.replace(/</g, '&lt;'));
       URL.revokeObjectURL(img.src);
-      document.getElementById('dropHint').innerHTML =
-        file.name.replace(/</g, '&lt;') + '<br><span class="sub">choose another to replace</span>';
-      schedule();
     };
     img.src = URL.createObjectURL(file);
+  }
+
+  // ---- desktop camera: in-page viewfinder via getUserMedia ----
+  // Phones keep the native camera (the capture hint on the file input);
+  // desktops ignore that hint, so intercept the click and open the webcam.
+  // iPads masquerade as Macs — the touch-point check catches them.
+
+  var IS_MOBILE = navigator.userAgentData ? navigator.userAgentData.mobile :
+    (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+  var cameraFeed = document.getElementById('cameraFeed');
+  var cameraStream = null;
+
+  // The viewfinder shares the editor's stage: camera mode swaps the canvas
+  // for the video in place, and capturing swaps back.
+  function closeCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(function (t) { t.stop(); });
+      cameraStream = null;
+    }
+    cameraFeed.srcObject = null;
+    editor.classList.remove('camera');
+    if (!base) editor.hidden = true;
+  }
+
+  if (!IS_MOBILE && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    document.getElementById('takeBtn').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (cameraStream) return;
+      navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      }).then(function (stream) {
+        cameraStream = stream;
+        cameraFeed.srcObject = stream;
+        editor.hidden = false;
+        editor.classList.add('camera');
+      }).catch(function () {
+        statusEl.textContent = 'camera unavailable — check permissions';
+      });
+    });
+    document.getElementById('captureBtn').addEventListener('click', function () {
+      if (!cameraStream || !cameraFeed.videoWidth) return;
+      // mirror the frame so the capture matches the mirrored viewfinder —
+      // what you saw is what prints
+      var w = cameraFeed.videoWidth, h = cameraFeed.videoHeight;
+      var flip = document.createElement('canvas');
+      flip.width = w;
+      flip.height = h;
+      var fctx = flip.getContext('2d');
+      fctx.translate(w, 0);
+      fctx.scale(-1, 1);
+      fctx.drawImage(cameraFeed, 0, 0);
+      loadFromSource(flip, w, h, 'camera capture');
+    });
+    document.getElementById('cameraCancelBtn').addEventListener('click', closeCamera);
+  }
+
+  function buildOriented() {
+    oriented = document.createElement('canvas');
+    if (rot % 2) { oriented.width = base.height; oriented.height = base.width; }
+    else { oriented.width = base.width; oriented.height = base.height; }
+    var ctx = oriented.getContext('2d');
+    ctx.translate(oriented.width / 2, oriented.height / 2);
+    ctx.rotate(rot * Math.PI / 2);
+    ctx.drawImage(base, -base.width / 2, -base.height / 2);
+  }
+
+  function clampAspect() {
+    var maxH = Math.round(crop.w * MAX_ASPECT);
+    if (crop.h > maxH) {
+      crop.y += Math.round((crop.h - maxH) / 2);
+      crop.h = maxH;
+    }
+  }
+
+  // Rotate the image AND carry the crop rect along with it (90° clockwise:
+  // a rect at (x,y) lands at (oldH - y - h, x) with width/height swapped).
+  document.getElementById('rotateBtn').addEventListener('click', function () {
+    if (!oriented) return;
+    var oldH = oriented.height;
+    crop = { x: oldH - crop.y - crop.h, y: crop.x, w: crop.h, h: crop.w };
+    rot = (rot + 1) % 4;
+    buildOriented();
+    clampAspect();
+    setPresetActive(null);
+    drawEditor();
+    derive();
+  });
+
+  presetsEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn || !oriented) return;
+    var W = oriented.width, H = oriented.height;
+    var a = btn.dataset.a;
+    if (!a) {
+      crop = { x: 0, y: 0, w: W, h: H };
+    } else {
+      // ratio follows the image's orientation: 4:3 on a portrait shot
+      // means 3:4, like every phone cropper
+      var ratio = parseFloat(a);
+      if (H > W && ratio > 1) ratio = 1 / ratio;
+      var w = W, h = Math.round(w / ratio);
+      if (h > H) { h = H; w = Math.round(h * ratio); }
+      crop = { x: Math.round((W - w) / 2), y: Math.round((H - h) / 2), w: w, h: h };
+    }
+    clampAspect();
+    setPresetActive(a);
+    drawEditor();
+    derive();
+  });
+
+  function setPresetActive(a) {
+    presetsEl.querySelectorAll('button').forEach(function (btn) {
+      btn.classList.toggle('on', a !== null && btn.dataset.a === a);
+    });
+  }
+
+  // ---- editor canvas: draw + drag ----
+
+  var editScale = 1;   // oriented px -> canvas css px
+
+  function drawEditor() {
+    if (!oriented) return;
+    var colW = editor.clientWidth || 320;
+    editScale = Math.min(colW / oriented.width, 380 / oriented.height);
+    var cssW = Math.round(oriented.width * editScale);
+    var cssH = Math.round(oriented.height * editScale);
+    var dpr = window.devicePixelRatio || 1;
+    editCanvas.style.width = cssW + 'px';
+    editCanvas.style.height = cssH + 'px';
+    editCanvas.width = Math.round(cssW * dpr);
+    editCanvas.height = Math.round(cssH * dpr);
+    var ctx = editCanvas.getContext('2d');
+    var k = editCanvas.width / oriented.width;  // oriented px -> device px
+    ctx.drawImage(oriented, 0, 0, editCanvas.width, editCanvas.height);
+    // dim everything outside the crop
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, editCanvas.width, crop.y * k);
+    ctx.fillRect(0, (crop.y + crop.h) * k, editCanvas.width, editCanvas.height - (crop.y + crop.h) * k);
+    ctx.fillRect(0, crop.y * k, crop.x * k, crop.h * k);
+    ctx.fillRect((crop.x + crop.w) * k, crop.y * k, editCanvas.width - (crop.x + crop.w) * k, crop.h * k);
+    // crop border: white line with a dark shadow line so it reads on any photo
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(crop.x * k, crop.y * k, crop.w * k, crop.h * k);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(crop.x * k, crop.y * k, crop.w * k, crop.h * k);
+    // corner handles
+    var hs = 8 * (editCanvas.width / cssW);
+    ctx.fillStyle = '#fff';
+    [[crop.x, crop.y], [crop.x + crop.w, crop.y], [crop.x, crop.y + crop.h], [crop.x + crop.w, crop.y + crop.h]]
+      .forEach(function (c) {
+        ctx.fillRect(c[0] * k - hs / 2, c[1] * k - hs / 2, hs, hs);
+      });
+  }
+
+  var drag = null;
+
+  function toOriented(e) {
+    var r = editCanvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) / r.width * oriented.width,
+      y: (e.clientY - r.top) / r.height * oriented.height,
+    };
+  }
+
+  editCanvas.addEventListener('pointerdown', function (e) {
+    if (!oriented) return;
+    e.preventDefault();
+    editCanvas.setPointerCapture(e.pointerId);
+    var p = toOriented(e);
+    var grab = 14 / editScale;  // 14 css px grab radius, in oriented units
+    var nearL = Math.abs(p.x - crop.x) < grab;
+    var nearR = Math.abs(p.x - (crop.x + crop.w)) < grab;
+    var nearT = Math.abs(p.y - crop.y) < grab;
+    var nearB = Math.abs(p.y - (crop.y + crop.h)) < grab;
+    var inX = p.x > crop.x - grab && p.x < crop.x + crop.w + grab;
+    var inY = p.y > crop.y - grab && p.y < crop.y + crop.h + grab;
+    var mode = '';
+    if (nearT && inX) mode += 'n';
+    if (nearB && inX) mode += 's';
+    if (nearL && inY) mode += 'w';
+    if (nearR && inY) mode += 'e';
+    if (!mode) {
+      if (p.x > crop.x && p.x < crop.x + crop.w && p.y > crop.y && p.y < crop.y + crop.h) {
+        mode = 'move';
+      } else {
+        // start a fresh rect from here
+        crop = { x: Math.round(p.x), y: Math.round(p.y), w: MIN_CROP, h: MIN_CROP };
+        mode = 'se';
+      }
+    }
+    drag = { mode: mode, start: p, orig: { x: crop.x, y: crop.y, w: crop.w, h: crop.h } };
+    setPresetActive(null);
+  });
+
+  editCanvas.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    e.preventDefault();
+    var p = toOriented(e);
+    var dx = p.x - drag.start.x;
+    var dy = p.y - drag.start.y;
+    var o = drag.orig;
+    var W = oriented.width, H = oriented.height;
+    if (drag.mode === 'move') {
+      crop.x = Math.round(Math.max(0, Math.min(W - o.w, o.x + dx)));
+      crop.y = Math.round(Math.max(0, Math.min(H - o.h, o.y + dy)));
+    } else {
+      var x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
+      if (drag.mode.indexOf('w') >= 0) x1 = Math.max(0, Math.min(x2 - MIN_CROP, o.x + dx));
+      if (drag.mode.indexOf('e') >= 0) x2 = Math.min(W, Math.max(x1 + MIN_CROP, o.x + o.w + dx));
+      if (drag.mode.indexOf('n') >= 0) y1 = Math.max(0, Math.min(y2 - MIN_CROP, o.y + dy));
+      if (drag.mode.indexOf('s') >= 0) y2 = Math.min(H, Math.max(y1 + MIN_CROP, o.y + o.h + dy));
+      crop = { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2 - x1), h: Math.round(y2 - y1) };
+    }
+    drawEditor();
+  });
+
+  function endDrag(e) {
+    if (!drag) return;
+    drag = null;
+    clampAspect();
+    drawEditor();
+    derive();
+  }
+  editCanvas.addEventListener('pointerup', endDrag);
+  editCanvas.addEventListener('pointercancel', endDrag);
+
+  window.addEventListener('resize', function () { if (oriented) drawEditor(); });
+
+  // ---- rotate/crop -> the two data URIs the rest of the flow uses ----
+
+  function derive() {
+    if (!oriented) return;
+    var outW = 576;
+    var outH = Math.round(crop.h * outW / crop.w);
+    var canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, outW, outH);
+    // The live preview dithers the ORIGINAL tones: on screen (no dot gain)
+    // that approximates what the compensated print looks like on paper —
+    // the curve and the paper's darkening cancel out.
+    previewData = canvas.toDataURL('image/jpeg', 0.85);
+    var pix = ctx.getImageData(0, 0, outW, outH);
+    for (var p = 0; p < pix.data.length; p += 4) {
+      pix.data[p] = LUT[pix.data[p]];
+      pix.data[p + 1] = LUT[pix.data[p + 1]];
+      pix.data[p + 2] = LUT[pix.data[p + 2]];
+    }
+    ctx.putImageData(pix, 0, 0);
+    photoData = canvas.toDataURL('image/jpeg', 0.85);
+    photoHeight = outH;
+    schedule();
   }
 
   function schedule() {
@@ -114,16 +418,24 @@
     debounceTimer = setTimeout(preview, 350);
   }
 
+  function payload() {
+    return {
+      photoHeight: photoHeight,
+      caption: caption.value.trim(),
+      captionSize: captionSize,
+      captionWeight: captionWeight,
+    };
+  }
+
   function preview() {
     if (!photoData || !TPL) return;
     statusEl.textContent = 'rendering…';
+    var data = payload();
+    data.photo = previewData;
     fetch('/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        template: TPL,
-        data: { photo: previewData, photoHeight: photoHeight, caption: caption.value.trim() },
-      }),
+      body: JSON.stringify({ template: TPL, data: data }),
     }).then(function (r) {
       if (!r.ok) throw new Error('render failed');
       return r.blob();
@@ -142,6 +454,7 @@
   }
 
   input.addEventListener('change', function () { loadFile(input.files[0]); });
+  cameraInput.addEventListener('change', function () { loadFile(cameraInput.files[0]); });
   dropzone.addEventListener('dragover', function (e) { e.preventDefault(); });
   dropzone.addEventListener('drop', function (e) {
     e.preventDefault();
@@ -149,15 +462,32 @@
   });
   caption.addEventListener('input', function () { if (photoData) schedule(); });
 
+  document.getElementById('capSize').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    captionSize = parseInt(btn.dataset.v, 10);
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === btn); });
+    if (photoData) schedule();
+  });
+  document.getElementById('capWeight').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    captionWeight = parseInt(btn.dataset.v, 10);
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === btn); });
+    if (photoData) schedule();
+  });
+
   printBtn.addEventListener('click', function () {
     printBtn.disabled = true;
     printBtn.textContent = 'Queuing…';
+    var data = payload();
+    data.photo = photoData;
     fetch('/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template: TPL,
-        data: { photo: photoData, photoHeight: photoHeight, caption: caption.value.trim() },
+        data: data,
         name: 'Photo Print',
         source: 'photo',
       }),
