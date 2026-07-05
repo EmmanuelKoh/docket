@@ -124,6 +124,15 @@ export default async function handler(req, res) {
       await ensureSeedTemplates();
       const record = await ensureRecord(module);
 
+      // Passive plugins (e.g. message-ingest) are push-driven, not polled:
+      // registered so they appear on the Plugins page, but never run on a
+      // timer. The endpoint that feeds them reads their record directly.
+      if (module.passive) {
+        summary.status = 'passive';
+        results.push(summary);
+        continue;
+      }
+
       if (!record.enabled) {
         summary.status = 'disabled';
         results.push(summary);

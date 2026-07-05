@@ -12,8 +12,10 @@
   <form class="card-detail cfg{% unless p.enabled %} dim{% endunless %}"
         hx-post="/dashboard/plugins/config?id={{ p.encoded }}"
         hx-trigger="change" hx-target="closest .card" hx-swap="outerHTML">
+    {% unless p.passive %}
     <span class="cfg-label">interval</span>
     <span class="cfg-value"><input class="editable" name="intervalSeconds" value="{{ p.intervalSeconds }}" size="5">s</span>
+    {% endunless %}
     {% for f in p.fields %}
     <span class="cfg-label">{{ f.label }}</span>
     {% if f.multiline %}

@@ -5,5 +5,6 @@
 
 import * as espnWorldcup from './espn-worldcup.js';
 import * as morningBrief from './morning-brief.js';
+import * as messageIngest from './message-ingest.js';
 
-export const PLUGINS = [espnWorldcup, morningBrief];
+export const PLUGINS = [espnWorldcup, morningBrief, messageIngest];

@@ -121,18 +121,50 @@ function parseConfigField(original, raw) {
   return { value: s };
 }
 
+// List plugin records, seeding a default record for any installed plugin
+// that has none yet — so a newly added plugin appears on the Plugins page
+// immediately instead of only after the first /tick registers it. Ordered
+// to match the PLUGINS list. (tick.js does the authoritative registration,
+// including espn's state import; this just ensures visibility.)
+async function ensurePluginRecords() {
+  const records = await listPlugins(OWNER_ID);
+  const have = new Set(records.map(r => r.id));
+  for (const module of PLUGINS) {
+    if (have.has(module.id)) continue;
+    const record = {
+      id: module.id,
+      ownerId: OWNER_ID,
+      enabled: module.defaults?.enabled !== false,
+      intervalSeconds: module.defaults?.intervalSeconds ?? null,
+      lastRunAt: null,
+      config: { ...(module.defaults?.config || {}) },
+      state: {},
+      lastError: null,
+      lastErrorAt: null,
+    };
+    await upsertPlugin(record);
+    records.push(record);
+  }
+  const order = new Map(PLUGINS.map((m, i) => [m.id, i]));
+  return records.sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
 async function pluginCardData(record, error) {
   const module = PLUGINS.find(m => m.id === record.id);
+  const passive = !!module?.passive;
   return {
     id: record.id,
     encoded: encodeURIComponent(record.id),
     enabled: !!record.enabled,
+    passive, // push-driven: no interval, hide the interval editor
     intervalSeconds: record.intervalSeconds,
     fields: configFields(record.config, module?.configLabels),
     templates: (module?.templates || []).join(', ') || '—',
     lastRunText: record.lastError
       ? `${record.lastError} · ${agoText(record.lastErrorAt)}`
-      : record.lastRunAt ? `ran ${agoText(record.lastRunAt)}` : 'never run',
+      : record.lastRunAt
+        ? `${passive ? 'last message' : 'ran'} ${agoText(record.lastRunAt)}`
+        : passive ? 'no messages yet' : 'never run',
     lastRunRed: !!record.lastError,
     error: error || '',
   };
@@ -305,7 +337,7 @@ export default async function handler(req, res) {
 
   // -- plugins --
   if (p === '/dashboard/plugins' && req.method === 'GET') {
-    const records = await listPlugins(OWNER_ID);
+    const records = await ensurePluginRecords();
     const plugins = await Promise.all(records.map(r => pluginCardData(r)));
     return html(res, await renderPage('plugins', { title: 'Plugins', active: 'plugins', plugins }));
   }
@@ -318,10 +350,13 @@ export default async function handler(req, res) {
   if (p === '/dashboard/plugins/config' && req.method === 'POST') {
     const record = await getPlugin(OWNER_ID, q.id);
     if (!record) return res.status(404).send('');
-    const interval = parseInt(req.body?.intervalSeconds, 10);
+    // Passive (push-driven) plugins have no interval to edit — keep their
+    // stored value and don't require the field the card never rendered.
+    const passive = !!PLUGINS.find(m => m.id === record.id)?.passive;
+    const interval = passive ? record.intervalSeconds : parseInt(req.body?.intervalSeconds, 10);
     let error = '';
     const config = { ...(record.config || {}) };
-    if (!Number.isFinite(interval) || interval < 1) {
+    if (!passive && (!Number.isFinite(interval) || interval < 1)) {
       error = 'interval must be a positive number of seconds — not saved';
     } else {
       // Types come from the plugin's defaults.config (canonical), not the
