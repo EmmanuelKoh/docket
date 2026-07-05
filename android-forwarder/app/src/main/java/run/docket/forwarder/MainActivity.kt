@@ -21,6 +21,7 @@ class MainActivity : AppCompatActivity() {
     private val permissions = arrayOf(
         Manifest.permission.READ_SMS,
         Manifest.permission.RECEIVE_SMS,
+        Manifest.permission.READ_CONTACTS,
         Manifest.permission.POST_NOTIFICATIONS,
     )
 

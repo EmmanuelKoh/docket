@@ -2,6 +2,7 @@ package run.docket.forwarder
 
 import android.content.Context
 import android.net.Uri
+import android.provider.ContactsContract
 import android.util.Log
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -74,7 +75,8 @@ object MessageScanner {
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
                 val body = c.getString(bodyCol) ?: ""
-                val sender = c.getString(addrCol) ?: "unknown"
+                val number = c.getString(addrCol) ?: "unknown"
+                val sender = contactName(ctx, number) ?: number
                 if (!post(url, token, body, sender, "sms")) return  // retry next scan
                 last = id
                 prefs.edit().putLong(KEY_LAST_SMS, last).apply()
@@ -93,7 +95,8 @@ object MessageScanner {
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
                 val body = mmsText(ctx, id)
-                val sender = mmsSender(ctx, id)
+                val number = mmsSender(ctx, id)
+                val sender = contactName(ctx, number) ?: number
                 // Some MMS rows are notifications/receipts with no text part; skip.
                 if (body.isNotBlank()) {
                     if (!post(url, token, body, sender, "rcs")) return  // retry next scan
@@ -137,6 +140,27 @@ object MessageScanner {
             }
         }
         return "unknown"
+    }
+
+    /**
+     * Resolve a phone number to a saved contact's display name via the
+     * Contacts provider. Returns null if the number isn't a saved contact
+     * (caller falls back to the raw number) or if READ_CONTACTS wasn't
+     * granted — the query throws a SecurityException, which we swallow so a
+     * missing permission degrades to "number as sender" instead of crashing.
+     */
+    private fun contactName(ctx: Context, number: String): String? {
+        if (number.isBlank() || number == "unknown") return null
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)
+            )
+            ctx.contentResolver.query(
+                uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null
+            )?.use { if (it.moveToFirst()) it.getString(0) else null }
+        } catch (e: SecurityException) {
+            null
+        }
     }
 
     /** POST {text, sender, source} to /ingest. Returns true on 2xx. */
