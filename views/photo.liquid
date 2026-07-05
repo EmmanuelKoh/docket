@@ -297,6 +297,10 @@
   var camFrames = 0;
   var camFpsTimer = null;
   var camCap = null;         // capture canvas (video frame -> pixels)
+  // dither width ladder: start at the print's 576 so the texture matches
+  // the render; slow devices step down until they hold a usable framerate
+  var CAM_WIDTHS = [576, 448, 352];
+  var camWidthIdx = 0;
 
   // pace to real camera frames where supported — dithering the same frame
   // twice is free heat (a 120Hz screen pumps rAF 4x faster than the camera)
@@ -311,7 +315,8 @@
     // dither at the print's 576-dot width and let the display scale it
     // down smoothly, exactly like the rendered preview is displayed —
     // same dot count over the same scene, so the texture and tone match
-    var w = 576;
+    // (slow devices step down the ladder; see the fps timer)
+    var w = CAM_WIDTHS[camWidthIdx];
     var h = Math.round(w * cameraFeed.videoHeight / cameraFeed.videoWidth);
     if (!camCap) camCap = document.createElement('canvas');
     if (camCap.width !== w || camCap.height !== h) { camCap.width = w; camCap.height = h; }
@@ -360,9 +365,17 @@
     }
     camRunning = true;
     camFrames = 0;
+    camWidthIdx = 0;
+    var camSeconds = 0;
     camFpsTimer = setInterval(function () {
       statusEl.textContent = camFrames + ' fps \u00b7 dithered viewfinder';
-      console.log('[viewfinder] ' + camFrames + ' fps');
+      console.log('[viewfinder] ' + camFrames + ' fps @ ' + CAM_WIDTHS[camWidthIdx] + 'px');
+      camSeconds++;
+      // give the pipeline a settling second, then step down if struggling
+      if (camSeconds > 1 && camFrames < 18 && camWidthIdx < CAM_WIDTHS.length - 1) {
+        camWidthIdx++;
+        console.log('[viewfinder] slow — dropping dither width to ' + CAM_WIDTHS[camWidthIdx] + 'px');
+      }
       camFrames = 0;
     }, 1000);
     scheduleCamFrame();

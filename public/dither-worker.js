@@ -129,10 +129,17 @@ self.onmessage = function (ev) {
     shown = new Float32Array(gray);
   } else {
     for (var ti = 0; ti < n; ti++) {
-      ema[ti] += (gray[ti] - ema[ti]) * 0.25;
-      var diff = ema[ti] - shown[ti];
-      if (diff >= DEADBAND || diff <= -DEADBAND) shown[ti] = ema[ti];
-      gray[ti] = shown[ti];
+      var jump = gray[ti] - ema[ti];
+      if (jump > 20 || jump < -20) {
+        // real motion: snap immediately — smoothing here reads as ghosting
+        ema[ti] = gray[ti];
+        shown[ti] = gray[ti];
+      } else {
+        ema[ti] += jump * 0.25;
+        var diff = ema[ti] - shown[ti];
+        if (diff >= DEADBAND || diff <= -DEADBAND) shown[ti] = ema[ti];
+        gray[ti] = shown[ti];
+      }
     }
   }
 
