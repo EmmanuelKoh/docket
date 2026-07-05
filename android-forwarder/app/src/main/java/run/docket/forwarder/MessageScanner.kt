@@ -30,6 +30,13 @@ object MessageScanner {
 
     // PduHeaders.FROM — the address row that holds the MMS/RCS sender.
     private const val MMS_ADDR_FROM = 137
+
+    // An RCS/MMS message is written across three tables (mms row, addr, part)
+    // in separate transactions, so a row can be seen before its sender/body
+    // land. Within this window we treat an incomplete row as "not ready yet"
+    // and wait; past it we give up waiting (e.g. a genuinely body-less MMS)
+    // so one stuck row can't block the queue forever. mms `date` is seconds.
+    private const val MMS_GRACE_SECONDS = 60
     // Placeholder address the provider stores for the local user.
     private const val INSERT_ADDRESS_TOKEN = "insert-address-token"
 
@@ -92,12 +99,26 @@ object MessageScanner {
             "msg_box=1 AND _id > ?", arrayOf(last.toString()), "_id ASC"
         )?.use { c ->
             val idCol = c.getColumnIndexOrThrow("_id")
+            val dateCol = c.getColumnIndexOrThrow("date")
+            val nowSec = System.currentTimeMillis() / 1000
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
+                val dateSec = c.getLong(dateCol)
                 val body = mmsText(ctx, id)
                 val number = mmsSender(ctx, id)
                 val sender = contactName(ctx, number) ?: number
-                // Some MMS rows are notifications/receipts with no text part; skip.
+
+                // A blank body or unknown sender on a fresh row means the
+                // provider hasn't finished writing the addr/part tables. Leave
+                // this row — and everything after it, to preserve order — for
+                // the next scan (the observer re-fires as the row completes,
+                // and the 60s rescan is a backstop). Do NOT advance `last`.
+                val ready = body.isNotBlank() && number != "unknown"
+                if (!ready && (nowSec - dateSec) < MMS_GRACE_SECONDS) return
+
+                // Ready, or past the grace window (genuinely incomplete, e.g.
+                // an image-only MMS with no text part). Forward if there's a
+                // body; either way advance past it.
                 if (body.isNotBlank()) {
                     if (!post(url, token, body, sender, "rcs")) return  // retry next scan
                 }
