@@ -41,6 +41,7 @@ async function loadHandlers() {
       ack:       (await import('./api/ack.js')).default,
       nack:      (await import('./api/nack.js')).default,
       tick:      (await import('./api/tick.js')).default,
+      ingest:    (await import('./api/ingest.js')).default,
       dashboard: (await import('./api/dashboard.js')).default,
     };
   }
@@ -140,6 +141,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/ack')       return route(handlers.ack, req, res);
     if (url === '/nack')      return route(handlers.nack, req, res);
     if (url === '/tick')      return route(handlers.tick, req, res);
+    if (url === '/ingest')    return route(handlers.ingest, req, res, { body: true });
     if (url === '/templates') return route(handlers.templates, req, res, { body: req.method === 'POST' });
 
     // Dashboard, studio, and the login door — one handler, path-routed.

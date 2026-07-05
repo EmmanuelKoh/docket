@@ -15,6 +15,7 @@
     { "source": "/ack", "destination": "/api/ack" },
     { "source": "/nack", "destination": "/api/nack" },
     { "source": "/tick", "destination": "/api/tick" },
+    { "source": "/ingest", "destination": "/api/ingest" },
     { "source": "/login", "destination": "/api/dashboard" },
     { "source": "/logout", "destination": "/api/dashboard" },
     { "source": "/studio", "destination": "/api/dashboard" },

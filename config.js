@@ -41,6 +41,16 @@ export const SESSION_SECRET = process.env.SESSION_SECRET || '';
 // runs whichever registered plugins are enabled and due.
 export const HEARTBEAT_SECONDS = parseInt(process.env.HEARTBEAT_SECONDS, 10) || 30;
 
+// Message ingestion (/ingest) — texts forwarded from a phone are classified
+// by Gemini and printed as task receipts when they contain one.
+// INGEST_TOKEN is the shared secret the forwarder sends (no default: the
+// endpoint refuses to run without it). GEMINI_API_KEY comes from Google AI
+// Studio. INGEST_TIMEZONE controls how "received at" prints on the receipt.
+export const INGEST_TOKEN    = process.env.INGEST_TOKEN || '';
+export const GEMINI_API_KEY  = process.env.GEMINI_API_KEY || '';
+export const GEMINI_MODEL    = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+export const INGEST_TIMEZONE = process.env.INGEST_TIMEZONE || 'America/New_York';
+
 // ESPN poller (WATCH_TEAMS also seeds the espn-worldcup plugin's config on
 // first registration)
 export const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL, 10) || 30;
