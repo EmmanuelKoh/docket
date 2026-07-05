@@ -167,11 +167,17 @@ slims to a one-line row once a photo exists so the editor becomes the
 hero),
 a full-width "Take a photo" button (phones open the native camera via the
 file input's capture hint; desktops open an in-page webcam viewfinder that
-shares the editor's stage — mirrored video on black swaps in where the
-edit canvas sits, with a camera-app shutter below: a 44px --ink ring whose
-inner disc grows on hover, centered, quiet mono "cancel" right-aligned;
-capturing mirrors the frame to match the viewfinder and swaps the canvas
-back in place), then the editor
+shares the editor's stage — and the viewfinder is LIVE DITHERED: a Web
+Worker runs the print pipeline's serpentine dither on each camera frame
+(mirrored, paced to the camera's ~30fps, image-rendering: pixelated), so
+framing already looks like the print; a camera-app shutter below: a 44px
+--ink ring whose inner disc grows on hover, centered, quiet mono "cancel"
+right-aligned; capturing grabs the full-resolution raw frame (mirrored to
+match) but the editor then WEARS IT DITHERED: the crop canvas displays a
+worker-dithered skin of the capture while the color original stays the
+hidden edit source underneath — sharp crops, real grays for tone and
+calibration — so nothing color ever shows for a camera capture), then the
+editor
 (appears once a photo loads): the source image on a bordered canvas with a
 draggable/resizable crop rectangle (white border + corner handles over a
 55% dim outside the crop), preset shortcuts Full / 1:1 / 4:3 / 3:2 (ratios
