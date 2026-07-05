@@ -246,10 +246,12 @@
     img.src = URL.createObjectURL(file);
   }
 
-  // ---- desktop camera: in-page viewfinder via getUserMedia ----
-  // Phones keep the native camera (the capture hint on the file input);
-  // desktops ignore that hint, so intercept the click and open the webcam.
-  // iPads masquerade as Macs — the touch-point check catches them.
+  // ---- in-page camera: live dithered viewfinder via getUserMedia ----
+  // Runs on desktops AND phones (needs a secure page: https or localhost —
+  // a phone hitting http://<laptop-ip> gets no camera API at all). Phones
+  // prefer the rear camera; the native camera app stays reachable through
+  // the Choose-a-photo picker. iPads masquerade as Macs — the touch-point
+  // check catches them.
 
   var IS_MOBILE = navigator.userAgentData ? navigator.userAgentData.mobile :
     (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -257,6 +259,101 @@
   var cameraFeed = document.getElementById('cameraFeed');
   var cameraStream = null;
 
+<<<<<<< Updated upstream
+=======
+  // ---- live dithered viewfinder ----
+  // The hidden <video> is only a frame source; what you see is #camDither,
+  // fed by a Web Worker running the print pipeline's dither off the main
+  // thread. One frame in flight at a time: the worker's reply schedules
+  // the next capture, so a slow device drops to a lower framerate instead
+  // of queueing stale frames.
+
+  var camDither = document.getElementById('camDither');
+  var camFacingUser = true;   // selfie cams mirror; rear cams must not
+  var camWorker = null;
+  var camRunning = false;
+  var camBusy = false;
+  var camFrames = 0;
+  var camFpsTimer = null;
+  var camCap = null;         // capture canvas (video frame -> pixels)
+
+  // pace to real camera frames where supported — dithering the same frame
+  // twice is free heat (a 120Hz screen pumps rAF 4x faster than the camera)
+  function scheduleCamFrame() {
+    if (cameraFeed.requestVideoFrameCallback) cameraFeed.requestVideoFrameCallback(pumpCamFrame);
+    else requestAnimationFrame(pumpCamFrame);
+  }
+
+  function pumpCamFrame() {
+    if (!camRunning || camBusy) return;
+    if (!cameraFeed.videoWidth) { scheduleCamFrame(); return; }
+    // dither at the print's 576-dot width and let the display scale it
+    // down smoothly, exactly like the rendered preview is displayed —
+    // same dot count over the same scene, so the texture and tone match
+    var w = 576;
+    var h = Math.round(w * cameraFeed.videoHeight / cameraFeed.videoWidth);
+    if (!camCap) camCap = document.createElement('canvas');
+    if (camCap.width !== w || camCap.height !== h) { camCap.width = w; camCap.height = h; }
+    var ctx = camCap.getContext('2d', { willReadFrequently: true });
+    // selfie cams mirror for natural framing; rear cams must not, or
+    // any text in frame would print backwards
+    if (camFacingUser) ctx.setTransform(-1, 0, 0, 1, w, 0);
+    ctx.drawImage(cameraFeed, 0, 0, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    var img = ctx.getImageData(0, 0, w, h);
+    camBusy = true;
+    camWorker.postMessage({ buf: img.data.buffer, w: w, h: h }, [img.data.buffer]);
+  }
+
+  function startDitherCam() {
+    if (!window.Worker) {              // ancient browser: show the raw feed
+      cameraFeed.style.display = 'block';
+      camDither.style.display = 'none';
+      return;
+    }
+    if (!camWorker) {
+      camWorker = new Worker('/dither-worker.js');
+      camWorker.onmessage = function (ev) {
+        var m = ev.data;
+        if (m.still) {
+          // the editor's dithered display skin (see buildEditorSkin)
+          editorSkin = document.createElement('canvas');
+          editorSkin.width = m.w;
+          editorSkin.height = m.h;
+          editorSkin.getContext('2d')
+            .putImageData(new ImageData(new Uint8ClampedArray(m.buf), m.w, m.h), 0, 0);
+          drawEditor();
+          return;
+        }
+        camBusy = false;
+        if (!camRunning) return;
+        if (camDither.width !== m.w || camDither.height !== m.h) {
+          camDither.width = m.w;
+          camDither.height = m.h;
+        }
+        camDither.getContext('2d')
+          .putImageData(new ImageData(new Uint8ClampedArray(m.buf), m.w, m.h), 0, 0);
+        camFrames++;
+        scheduleCamFrame();
+      };
+    }
+    camRunning = true;
+    camFrames = 0;
+    camFpsTimer = setInterval(function () {
+      statusEl.textContent = camFrames + ' fps \u00b7 dithered viewfinder';
+      console.log('[viewfinder] ' + camFrames + ' fps');
+      camFrames = 0;
+    }, 1000);
+    scheduleCamFrame();
+  }
+
+  function stopDitherCam() {
+    camRunning = false;
+    clearInterval(camFpsTimer);
+    statusEl.textContent = '';
+  }
+
+>>>>>>> Stashed changes
   // The viewfinder shares the editor's stage: camera mode swaps the canvas
   // for the video in place, and capturing swaps back.
   function closeCamera() {
@@ -269,15 +366,21 @@
     if (!base) editor.hidden = true;
   }
 
-  if (!IS_MOBILE && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     document.getElementById('takeBtn').addEventListener('click', function (e) {
       e.preventDefault();
       if (cameraStream) return;
       navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: {
+          facingMode: IS_MOBILE ? { ideal: 'environment' } : 'user',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       }).then(function (stream) {
         cameraStream = stream;
+        var st = stream.getVideoTracks()[0].getSettings();
+        camFacingUser = !st.facingMode || st.facingMode === 'user';
         cameraFeed.srcObject = stream;
         editor.hidden = false;
         editor.classList.add('camera');
@@ -287,15 +390,23 @@
     });
     document.getElementById('captureBtn').addEventListener('click', function () {
       if (!cameraStream || !cameraFeed.videoWidth) return;
+<<<<<<< Updated upstream
       // mirror the frame so the capture matches the mirrored viewfinder —
       // what you saw is what prints
+=======
+      // full-resolution raw frame, oriented to match the viewfinder. The
+      // color original stays the hidden edit source (sharp crops, real
+      // grays for tone + calibration); the editor DISPLAYS it dithered.
+>>>>>>> Stashed changes
       var w = cameraFeed.videoWidth, h = cameraFeed.videoHeight;
       var flip = document.createElement('canvas');
       flip.width = w;
       flip.height = h;
       var fctx = flip.getContext('2d');
-      fctx.translate(w, 0);
-      fctx.scale(-1, 1);
+      if (camFacingUser) {
+        fctx.translate(w, 0);
+        fctx.scale(-1, 1);
+      }
       fctx.drawImage(cameraFeed, 0, 0);
       loadFromSource(flip, w, h, 'camera capture');
     });

@@ -782,6 +782,9 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
   }
   .photo-tool.has-photo .photo-editor:not(:has(.pnl-on)),
   .photo-tool.has-photo .tone-group:not(:has(.pnl-on)) { display: none; }
+  /* camera mode survives the one-panel rule: the viewfinder and shutter
+     aren't panels, so the editor must show even with no panel active */
+  .photo-tool.has-photo .photo-editor.camera { display: flex; }
 
   .photo-tool.has-photo .tool-dock {
     display: flex;
