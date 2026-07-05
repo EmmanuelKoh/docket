@@ -494,19 +494,23 @@ html:not([data-theme="dark"]) .icon-sun { display: none; }
 .photo-take { text-align: center; }
 .photo-take input { display: none; }
 
-/* the viewfinder shares the editor stage: camera mode shows the video and
-   shutter where the canvas and crop tools normally sit */
-.photo-editor video {
+/* the viewfinder shares the editor stage: camera mode shows the live
+   DITHERED feed (the <video> is only a hidden frame source for the
+   dither worker; mirroring happens in the frame capture) */
+.photo-editor video { display: none; }
+.photo-editor .cam-dither {
   display: block;
   width: 100%;
   border: 0.5px solid var(--border);
   border-radius: 2px;
   background: #000;
-  transform: scaleX(-1);  /* mirrored viewfinder; the capture is mirrored to match */
+  /* NO image-rendering: pixelated — the canvas holds a 576-dot dither
+     shown smaller, smooth-scaled just like the rendered preview img, so
+     the two read as the same texture */
 }
-.photo-editor:not(.camera) video,
+.photo-editor:not(.camera) .cam-dither,
 .photo-editor:not(.camera) .camera-tools { display: none; }
-.photo-editor.camera canvas,
+.photo-editor.camera canvas.pnl,
 .photo-editor.camera .edit-tools { display: none; }
 .camera-tools {
   position: relative;
