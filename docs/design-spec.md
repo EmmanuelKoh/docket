@@ -166,14 +166,6 @@ column (400px) — dashed dropzone (1px dashed --dash, choose-or-drop;
 slims to a one-line row once a photo exists so the editor becomes the
 hero),
 a full-width "Take a photo" button (phones open the native camera via the
-<<<<<<< Updated upstream
-file input's capture hint; desktops open an in-page webcam viewfinder that
-shares the editor's stage — mirrored video on black swaps in where the
-edit canvas sits, with a camera-app shutter below: a 44px --ink ring whose
-inner disc grows on hover, centered, quiet mono "cancel" right-aligned;
-capturing mirrors the frame to match the viewfinder and swaps the canvas
-back in place), then the editor
-=======
 file input's capture hint or the in-page camera below; the Take-a-photo
 button opens an in-page viewfinder on desktops AND phones (phones use the
 rear camera, unmirrored — selfie cams mirror) that shares the editor's
@@ -188,7 +180,6 @@ worker-dithered skin of the capture while the color original stays the
 hidden edit source underneath — sharp crops, real grays for tone and
 calibration — so nothing color ever shows for a camera capture), then the
 editor
->>>>>>> Stashed changes
 (appears once a photo loads): the source image on a bordered canvas with a
 draggable/resizable crop rectangle (white border + corner handles over a
 55% dim outside the crop), preset shortcuts Full / 1:1 / 4:3 / 3:2 (ratios
