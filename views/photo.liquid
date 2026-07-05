@@ -118,8 +118,9 @@
 <script>
 (function () {
   var TPL = null;
-  var photoData = null;     // compensated image — what actually prints
   var previewData = null;   // uncompensated — what the paper will LOOK like
+                            // (the compensated print version is built once,
+                            // when Print is pressed)
   var photoHeight = 0;
   var debounceTimer = null;
 
@@ -231,6 +232,7 @@
     document.getElementById('dropHint').innerHTML =
       label + '<br><span class="sub">choose another to replace</span>';
     drawEditor();
+    refreshHistogram();
     derive();
   }
 
@@ -329,6 +331,7 @@
     clampAspect();
     setPresetActive(null);
     drawEditor();
+    refreshHistogram();
     derive();
   });
 
@@ -351,6 +354,7 @@
     clampAspect();
     setPresetActive(a);
     drawEditor();
+    refreshHistogram();
     derive();
   });
 
@@ -467,6 +471,7 @@
     drag = null;
     clampAspect();
     drawEditor();
+    refreshHistogram();
     derive();
   }
   editCanvas.addEventListener('pointerup', endDrag);
@@ -478,8 +483,8 @@
 
   // ---- rotate/crop -> the two data URIs the rest of the flow uses ----
 
-  function derive() {
-    if (!oriented) return;
+  // crop + tone + sharpen, shared by the live preview and the print path
+  function renderAdjusted() {
     var outW = 576;
     var outH = Math.round(crop.h * outW / crop.w);
     var canvas = document.createElement('canvas');
@@ -489,14 +494,6 @@
     ctx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, outW, outH);
     var pix = ctx.getImageData(0, 0, outW, outH);
     var d = pix.data;
-    // histogram of the cropped photo (pre-adjustment) drives the levels UI
-    hist.fill(0);
-    for (var hp = 0; hp < d.length; hp += 4) {
-      hist[(d[hp] * 2126 + d[hp + 1] * 7152 + d[hp + 2] * 722) / 10000 | 0]++;
-    }
-    if (autoOn) autoLevels();
-    drawHist();
-    updateSummary();
     var tone = toneLUT();
     for (var p = 0; p < d.length; p += 4) {
       d[p] = tone[d[p]];
@@ -505,19 +502,42 @@
     }
     if (sharpV > 0) sharpen(d, outW, outH, sharpV / 100);
     ctx.putImageData(pix, 0, 0);
+    return { canvas: canvas, ctx: ctx, pix: pix };
+  }
+
+  // Only the preview JPEG is produced per adjustment — the compensated
+  // print version costs a second full encode, so Print builds it instead.
+  function derive() {
+    if (!oriented) return;
+    updateSummary();
+    var r = renderAdjusted();
     // The live preview dithers the adjusted but UNCOMPENSATED tones: on
     // screen (no dot gain) that approximates what the compensated print
     // looks like on paper — the curve and the paper's darkening cancel out.
-    previewData = canvas.toDataURL('image/jpeg', 0.85);
-    for (var q = 0; q < d.length; q += 4) {
-      d[q] = LUT[d[q]];
-      d[q + 1] = LUT[d[q + 1]];
-      d[q + 2] = LUT[d[q + 2]];
-    }
-    ctx.putImageData(pix, 0, 0);
-    photoData = canvas.toDataURL('image/jpeg', 0.85);
-    photoHeight = outH;
+    previewData = r.canvas.toDataURL('image/jpeg', 0.85);
+    photoHeight = r.canvas.height;
     schedule();
+  }
+
+  // Histogram of the cropped photo (pre-adjustment). Only crop, rotation,
+  // or a new photo change it — sliders don't — so it's computed here at
+  // half resolution (plenty for 256 bins), not per slider move in derive.
+  function refreshHistogram() {
+    if (!oriented) return;
+    var outW = 288;
+    var outH = Math.max(1, Math.round(crop.h * outW / crop.w));
+    var c = document.createElement('canvas');
+    c.width = outW;
+    c.height = outH;
+    var cx = c.getContext('2d');
+    cx.drawImage(oriented, crop.x, crop.y, crop.w, crop.h, 0, 0, outW, outH);
+    var d = cx.getImageData(0, 0, outW, outH).data;
+    hist.fill(0);
+    for (var p = 0; p < d.length; p += 4) {
+      hist[(d[p] * 2126 + d[p + 1] * 7152 + d[p + 2] * 722) / 10000 | 0]++;
+    }
+    if (autoOn) autoLevels();
+    drawHist();
   }
 
   // ---- tone: levels + brightness + contrast, one lookup table ----
@@ -575,7 +595,7 @@
 
   function toneChanged() {
     clearTimeout(toneTimer);
-    toneTimer = setTimeout(derive, 120);
+    toneTimer = setTimeout(derive, 100);
   }
 
   // black/white points from the histogram, clipping 0.5% at each end
@@ -629,7 +649,11 @@
 
   autoBtn.addEventListener('click', function () {
     setAuto(!autoOn);
-    if (autoOn && oriented) derive();  // recomputes the points from the crop
+    if (autoOn && oriented) {
+      autoLevels();      // from the stored histogram — no pixel pass
+      drawHist();
+      toneChanged();
+    }
   });
 
   var levelDrag = null;
@@ -720,9 +744,9 @@
     if (chip) setPanel(chip.dataset.panel);
   });
 
-  function schedule() {
+  function schedule(delay) {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(preview, 350);
+    debounceTimer = setTimeout(preview, delay || 150);
   }
 
   function payload() {
@@ -735,7 +759,7 @@
   }
 
   function preview() {
-    if (!photoData || !TPL) return;
+    if (!previewData || !TPL) return;
     statusEl.textContent = 'rendering…';
     var data = payload();
     data.photo = previewData;
@@ -772,28 +796,40 @@
     e.preventDefault();
     loadFile(e.dataTransfer.files[0]);
   });
-  caption.addEventListener('input', function () { if (photoData) schedule(); });
+  caption.addEventListener('input', function () { if (previewData) schedule(350); });
 
   document.getElementById('capSize').addEventListener('click', function (e) {
     var btn = e.target.closest('button');
     if (!btn) return;
     captionSize = parseInt(btn.dataset.v, 10);
     this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === btn); });
-    if (photoData) schedule();
+    if (previewData) schedule();
   });
   document.getElementById('capWeight').addEventListener('click', function (e) {
     var btn = e.target.closest('button');
     if (!btn) return;
     captionWeight = parseInt(btn.dataset.v, 10);
     this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === btn); });
-    if (photoData) schedule();
+    if (previewData) schedule();
   });
 
   printBtn.addEventListener('click', function () {
+    if (!oriented) return;
     printBtn.disabled = true;
     printBtn.textContent = 'Queuing…';
+    // build the print version now: same crop/tone/sharpen as the preview,
+    // plus the calibration curve — deferred here so slider moves don't pay
+    // for a second JPEG encode
+    var r = renderAdjusted();
+    var d = r.pix.data;
+    for (var p = 0; p < d.length; p += 4) {
+      d[p] = LUT[d[p]];
+      d[p + 1] = LUT[d[p + 1]];
+      d[p + 2] = LUT[d[p + 2]];
+    }
+    r.ctx.putImageData(r.pix, 0, 0);
     var data = payload();
-    data.photo = photoData;
+    data.photo = r.canvas.toDataURL('image/jpeg', 0.85);
     fetch('/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
