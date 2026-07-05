@@ -72,12 +72,29 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'text is required' });
   }
 
+  // Manual override: a message that starts with "task:" is always printed,
+  // whatever the classifier thinks — an explicit escape hatch for "just
+  // print this". Gemini still runs (on the text with the prefix stripped)
+  // so it cleans up the wording and extracts due/priority; the override
+  // only stops Gemini — or a Gemini outage — from vetoing the print.
+  const forced = /^\s*task:/i.test(text);
+  const classifyText = forced ? text.replace(/^\s*task:\s*/i, '').trim() : text;
+
   let verdict;
   try {
-    verdict = await classifyMessage({ text, sender, source, receivedAt });
+    verdict = await classifyMessage({ text: classifyText, sender, source, receivedAt });
   } catch (err) {
     console.error(`[ingest] classify failed: ${err.message}`);
-    return res.status(502).json({ error: 'classification failed' });
+    if (!forced) return res.status(502).json({ error: 'classification failed' });
+    verdict = {}; // forced task prints even when the classifier is down
+  }
+
+  if (forced) {
+    verdict.is_task = true;
+    verdict.confidence = 1;
+    // Keep Gemini's cleaned-up title; fall back to the raw text only if it
+    // gave none (e.g. trivial content, or the classifier was down).
+    if (!verdict.title) verdict.title = classifyText || text.trim();
   }
 
   if (!verdict.is_task || (verdict.confidence ?? 0) < MIN_CONFIDENCE) {
