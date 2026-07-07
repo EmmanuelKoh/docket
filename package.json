@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Thermal-receipt platform: Liquid+HTML templates rendered to ESC/POS, printed by an ESP32 appliance \u2014 with plugins, a dashboard, and SMS-to-task capture",
+  "description": "Thermal-receipt platform: Liquid+HTML templates rendered to ESC/POS, printed by an ESP32 appliance — with plugins, a dashboard, and SMS-to-task capture",
   "main": "render/render-core.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "biome check app",
     "migrate": "node scripts/migrate-json-to-redis.js"
   },
   "dependencies": {
@@ -15,8 +18,11 @@
     "@vercel/blob": "^0.27.0",
     "dotenv": "^16.4.7",
     "liquidjs": "^10.21.0",
+    "next": "^16.2.10",
     "node-ical": "^0.26.1",
     "pngjs": "^7.0.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "satori": "^0.12.1",
     "satori-html": "^0.3.2"
   },
@@ -25,5 +31,16 @@
     "type": "git",
     "url": "https://github.com/EmmanuelKoh/docket"
   },
-  "author": "Emmanuel Koh"
+  "author": "Emmanuel Koh",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/node": "^26.1.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3"
+  }
 }
