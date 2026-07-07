@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(b.root)
 
         val prefs = getSharedPreferences(Config.PREFS, Context.MODE_PRIVATE)
-        b.urlField.setText(prefs.getString(Config.KEY_URL, "https://docket.ekoh.run/ingest"))
+        b.urlField.setText(prefs.getString(Config.KEY_URL, "https://your-app.vercel.app/ingest"))
         b.tokenField.setText(prefs.getString(Config.KEY_TOKEN, ""))
 
         b.saveBtn.setOnClickListener {

@@ -1,6 +1,6 @@
 # docket forwarder
 
-A small Android app that forwards every incoming message — **SMS and RCS** —
+A small Android app that forwards every incoming message (SMS and RCS)
 to the docket `/ingest` endpoint, which classifies it with Gemini and prints
 a task receipt when it contains one.
 
@@ -8,11 +8,12 @@ a task receipt when it contains one.
 
 RCS messages never trigger the SMS broadcast, and Android exposes no RCS API.
 But on this phone, Google Messages writes RCS into the shared telephony
-provider (`content://mms`) — verified: inbound RCS rows appear even with the
-thread open on screen. This app registers a **ContentObserver** on that
-provider, so it captures every message the instant it lands, regardless of
-screen state, open threads, or muted conversations. Notification-listener
-apps can't do that (open thread = no notification = nothing to forward).
+provider (`content://mms`). This was verified directly: inbound RCS rows
+appear even with the thread open on screen. This app registers a
+**ContentObserver** on that provider, so it captures every message as it
+arrives, regardless of screen state, open threads, or muted conversations.
+Notification-listener apps can't do that (an open thread suppresses the
+notification, so there is nothing to forward).
 
 ## How it works
 
@@ -26,7 +27,7 @@ apps can't do that (open thread = no notification = nothing to forward).
 
 ## One-time toolchain setup (on the Mac)
 
-You have Java 8 and no Android SDK; the build needs JDK 17 + the Android SDK.
+The build needs JDK 17 and the Android SDK command-line tools (skip any step you already have).
 
 ```sh
 brew install openjdk@17 gradle
@@ -51,9 +52,9 @@ gradle assembleDebug          # first run downloads Gradle deps (~1–2 min)
 
 Use the **debug** build for sideloading: it's auto-signed with the debug key,
 so `adb install` accepts it. ("Debug" refers only to the signing key and a
-debuggable flag — the forwarding logic is identical to release.)
+debuggable flag: the forwarding logic is identical to release.)
 `gradle assembleRelease` produces `app-release-unsigned.apk`, which `adb
-install` **rejects** because it has no signature — don't use it for sideload.
+install` rejects because it has no signature, so don't use it for sideloading.
 
 ## Sideload onto the phone
 
@@ -66,7 +67,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Configure and run (on the phone)
 
 1. Open **docket forwarder**.
-2. Ingest URL: `https://docket.ekoh.run/ingest` (or your deployment).
+2. Ingest URL: `https://your-app.vercel.app/ingest` (or your deployment).
    Ingest token: the `INGEST_TOKEN` you set in the Vercel env. Tap **Save**.
 3. Tap **Grant permissions** → allow SMS and notifications.
 4. Tap **Start forwarder**. A persistent "Forwarding incoming messages"
@@ -77,7 +78,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Test
 
 Have someone send you a task-shaped message ("remember to renew the
-insurance by thursday") — SMS or RCS, thread open or closed. A TASK receipt
+insurance by thursday") over SMS or RCS, thread open or closed. A TASK receipt
 should print within a few seconds. Send an "ok see you later" and nothing
 should print. Watch live logs while testing:
 
@@ -88,7 +89,7 @@ adb logcat -s docket-forwarder
 ## Notes
 
 - First launch adopts the current newest message id per table as a baseline,
-  so your existing history is not replayed — only messages received after you
+  so your existing history is not replayed. Only messages received after you
   start the service are forwarded.
 - No duplicate protection on the server yet; the app's per-table "last seen
   id" prevents the app from re-sending, which covers the normal case.

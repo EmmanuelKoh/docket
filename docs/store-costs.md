@@ -4,7 +4,7 @@ Every service this system runs on has a meter. This doc records what each
 hot path costs, the rules that keep costs proportional to activity, and the
 approaches that were evaluated and rejected. **Run the quota math before
 adding any polled or timer-driven query**: cadence × commands per request ×
-30 days, compared against the plan's cap — for every metered service the
+30 days, compared against the plan's cap, for every metered service the
 change touches, not just the obvious one.
 
 ## The meters (July 2026)
@@ -27,14 +27,14 @@ polling, throttled presence, POLL_MS 5s (takes effect at the next reflash).
 |---|---|---|---|
 | `GET /next` claim | every poll | 3s polls: 28,800/day | queue flag says "empty" → 0 Redis; ~1 safety claim/60s = 1,440/day |
 | `GET /next` last-seen write | every poll | 28,800 | throttled to 1/60s = 1,440 |
-| `POST /tick`, nothing due | every 30s | 4–6 cmds = ~14,000 | one atomic due-claim = 2,880 |
+| `POST /tick`, nothing due | every 30s | 4-6 cmds = ~14,000 | one atomic due-claim = 2,880 |
 | World Cup runs (enabled) | every 60s | 4 per run = 5,760 | 3 per run = 4,320 |
 | Morning-brief | 288 wake-ups/day | 4 each = 1,152 | 1 real run/day ≈ 3 |
 | Dashboard queue refresh | every 3s per tab | ~2 per refresh, 24/7 = 57,600/tab | only while tab visible ≈ ~1,200 |
-| **Total (Redis)** | | **~130K/day ≈ 4M/mo** (one open tab) | **~11K/day ≈ 330K/mo — under the 500K free tier; ~200K/mo once the World Cup plugin is off** |
+| **Total (Redis)** | | **~130K/day ≈ 4M/mo** (one open tab) | **~11K/day ≈ 330K/mo (under the 500K free tier; ~200K/mo once the World Cup plugin is off)** |
 
-Blob flag reads add ~520K/mo × $0.40/M ≈ $0.21/mo (writes are ~2 per print
-— negligible). Idle cost per plugin is zero — only actual runs cost
+Blob flag reads add ~520K/mo × $0.40/M ≈ $0.21/mo (writes are ~2 per print,
+which is negligible). Idle cost per plugin is zero: only actual runs cost
 commands, so cost scales with each plugin's schedule, not with how many
 plugins exist.
 
@@ -48,7 +48,7 @@ safety check in /next bounds any stale flag to a 60s print delay, never a
 lost print. Chosen over Redis for the read price ($0.40/M vs $2.00/M) and
 over Edge Config for the meter (no read cap). Probed July 2026 against the
 production store with scripts/blob-staleness-probe.mjs: an overwritten
-flag is visible to a cache-busted fetch in 46–184ms; plain fetches can lag
+flag is visible to a cache-busted fetch in 46-184ms; plain fetches can lag
 ~2s on the CDN, so the reader always cache-busts.
 
 Vercel function invocations are separate: `/next` + `/tick` at 5s/30s ≈
@@ -59,24 +59,24 @@ Print latency worst case is 5s.
 
 Plugins declare when they run; users edit it on the Plugins page:
 
-- `schedule: { every: seconds }` — watchers (World Cup checks ESPN each run)
-- `schedule: { at: "HH:MM", timezone }` — fixed-time (the daily brief)
-- `passive: true` — push-driven (message-ingest), never runs on a timer
+- `schedule: { every: seconds }` for watchers (World Cup checks ESPN each run)
+- `schedule: { at: "HH:MM", timezone }` for fixed-time plugins (the daily brief)
+- `passive: true` for push-driven plugins (message-ingest), which never run on a timer
 
 The store layer derives a `nextDueAt` per plugin and keeps it in a sorted
 due-index. An idle tick asks one question ("anything due?") via an atomic
-claim that also leases what it returns — concurrent ticks can't double-run
+claim that also leases what it returns, so concurrent ticks can't double-run
 a plugin, and a crashed run re-becomes due after ~90s. Failures always fall
 toward one late re-run, never a silently stopped plugin (plugins keep their
 own idempotence guards, e.g. the brief's once-per-day check). A failed run
 retries at the lease cadence, not its normal schedule. "At" schedules fire
-on the first tick after the wall-clock time — ~30s precision, tied to
-TICK_MS. Schedule edits apply on Save (which recomputes the due time);
+on the first tick after the wall-clock time (~30s precision, tied to
+TICK_MS). Schedule edits apply on Save (which recomputes the due time);
 enabling a plugin reschedules it from now.
 
 ## Rules that keep costs proportional to activity
 
-- **Dashboard fragments poll only while visible** — `hx-trigger="every 3s
+- **Dashboard fragments poll only while visible**: `hx-trigger="every 3s
   [document.visibilityState=='visible']"` (`views/queue-list.liquid`).
   Hidden tabs cost zero; cost scales with people watching, not tabs open.
 - **Device presence writes are throttled** (`lib/device-presence.js`, 60s).
@@ -102,10 +102,10 @@ enabling a plugin reschedules it from now.
 **Edge Config as the change-beacon transport (built July 2026, removed
 before deploy).** Same flag design as the shipped queue flag, wrong meter:
 Edge Config's Hobby allowance is 100K reads/mo and 100 writes/mo against
-our ~520K reads/mo — roughly $4–5/mo in overage. The design itself was
+our ~520K reads/mo, roughly $4-5/mo in overage. The design itself was
 right and shipped later the same week on Blob (see The queue flag above),
-whose read price and uncapped meter fit. Lesson: the transport is a
-pricing decision, verified by probe, not an architecture decision.
+whose read price and uncapped meter fit. The transport turned out to be a
+pricing decision, verified by probe, rather than an architecture decision.
 
 **Vercel Cron for fixed-time plugins.** Hour-level precision on Hobby
 (a 06:30 job fires anywhere in the 6 o'clock hour), 2 crons max, and a
@@ -113,5 +113,5 @@ second clock to reason about. The scheduling redesign achieves 30-second
 precision from the existing device tick instead.
 
 **MQTT push to the device.** Eliminates polling entirely, but adds a
-broker vendor, firmware rework, and reconnect handling — for a latency
-improvement (3s → instant) nothing currently needs.
+broker vendor, firmware rework, and reconnect handling, all for a latency
+improvement (3s → instant) that nothing currently needs.

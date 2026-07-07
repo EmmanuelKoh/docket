@@ -1,6 +1,11 @@
-# receipt-printer
+# docket
 
-Thermal receipt system for a 576px-wide (80mm) ESC/POS printer. Templates are
+A thermal-receipt platform for an 80mm (576px) ESC/POS printer: a hosted
+server renders Liquid+HTML templates into printer bytes; an ESP32 appliance
+polls for jobs and prints them. Plugins print autonomously on schedules
+(live sports goals, a daily morning brief) or on push (SMS/RCS messages
+classified into task receipts by Gemini); a password-protected dashboard
+manages templates, plugins, the queue, and history. Templates are
 authored as Liquid + flexbox HTML, rendered to a 1-bit dithered image entirely
 in Node (no headless browser), and sent to the printer as raw ESC/POS raster
 bytes over TCP.
@@ -45,23 +50,29 @@ cp .env.example .env
 | `HEARTBEAT_SECONDS` | `30` | Seconds between `/tick` POSTs from `agent/heartbeat.js` |
 | `POLL_INTERVAL` | `30` | Printer agent: ms between `/next` polls (legacy name) |
 | `WATCH_TEAMS` | *(empty = all)* | Seeds the espn-worldcup plugin's `watchTeams` config on first registration |
+| `DASHBOARD_PASSWORD` | *(required)* | What you type at `/login` |
+| `SESSION_SECRET` | *(required)* | Signs the stateless session cookie |
+| `INGEST_TOKEN` | *(unset = ingest off)* | Shared secret for `POST /ingest` (forwarded messages) |
+| `GEMINI_API_KEY` | *(unset = ingest off)* | Google AI Studio key for task classification |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Gemini model for the classifier (also editable per-plugin) |
+| `INGEST_TIMEZONE` | `America/New_York` | "Received at" timezone on task receipts |
 
 All settings live in `config.js` and fall back to the defaults above when the
 env var is unset. The redis driver additionally needs `UPSTASH_REDIS_REST_URL`,
 `UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` names the Vercel Marketplace
-integration sets), and `BLOB_READ_WRITE_TOKEN` — see `.env.example`.
+integration sets), and `BLOB_READ_WRITE_TOKEN` (see `.env.example`).
 
 ## Storage
 
-All state lives behind three store interfaces — `lib/store.js` (templates),
+All state lives behind three store interfaces: `lib/store.js` (templates),
 `lib/job-store.js` (job queue), `lib/state-store.js` (poller state). Nothing
 outside `lib/` touches files, Redis, or Blob directly. `STORE_DRIVER` selects
 one of two interchangeable implementations:
 
-- **`json`** (default) — everything in local files under `data/`. Zero setup,
-  works offline; this is the dev fallback. No lease handling: an inflight job
+- **`json`** (default): everything in local files under `data/`. It needs no
+  setup and works offline; this is the dev fallback. No lease handling: an inflight job
   stays inflight until acked or nacked.
-- **`redis`** — small live state (job queue, job records, templates, poller
+- **`redis`**: small live state (job queue, job records, templates, poller
   state) in Upstash Redis; heavy artifacts (each job's preview PNG and ESC/POS
   bytes) in Vercel Blob, referenced by URL from the job record. This is what
   lets the server half deploy to Vercel while the local printer agent and
@@ -71,7 +82,7 @@ one of two interchangeable implementations:
 atomic Lua script, so two concurrent polls can never receive the same job. A
 claimed job holds a lease for `LEASE_SECONDS` (default 120); if the printer
 dies silently without acking, the lease expires and the job returns to the
-front of the queue on the next claim — no print is ever lost. `/nack` requeues
+front of the queue on the next claim, so the job is not lost. `/nack` requeues
 immediately without waiting for the lease.
 
 **Device token:** `/next`, `/ack`, and `/nack` require
@@ -79,13 +90,13 @@ immediately without waiting for the lease.
 agent sends it automatically; both sides read the same `.env` locally (default
 `dev-token`). Set a long random value on any deployment reachable from outside.
 
-**Multi-user-ready, not multi-user:** every record carries an `ownerId`
+**Multi-user readiness:** every record carries an `ownerId`
 (hardcoded to `OWNER_ID`) and all Redis keys are namespaced by owner
-(`rp:{owner}:...`). There are no accounts or logins yet — the fields and the
+(`rp:{owner}:...`). There are no accounts or logins yet; the fields and the
 token mechanism exist so they can be added without a storage rewrite.
 
-**Migrating existing local data** into Redis/Blob (idempotent — existing
-records are never overwritten, safe to re-run):
+**Migrating existing local data** into Redis/Blob (idempotent: existing
+records are never overwritten, so it is safe to re-run):
 
 ```
 npm run migrate
@@ -93,19 +104,19 @@ npm run migrate
 
 ## Dashboard
 
-`/dashboard` is the DOCKET management UI — server-rendered LiquidJS pages
+`/dashboard` is the DOCKET management UI: server-rendered LiquidJS pages
 with [htmx](https://htmx.org) for in-place updates, styled per
 `docs/design-spec.md` (monochrome + register red, light "paper" and dark
 "darkroom" themes; the moon/sun toggle in the nav persists via localStorage).
 
-**The password door.** Set two env vars (see `.env.example`):
+**Authentication.** Set two env vars (see `.env.example`):
 `DASHBOARD_PASSWORD` (what you type at `/login`) and `SESSION_SECRET`
-(signs the session cookie). The cookie is stateless — an HMAC-signed,
-httpOnly cookie valid for 30 days — so it works across serverless
+(signs the session cookie). The cookie is stateless (an HMAC-signed,
+httpOnly cookie valid for 30 days), so it works across serverless
 invocations with no session storage. `/logout` clears it. The dashboard
 pages, the studio, and the JSON APIs (`/templates`, `/jobs`, `/preview`)
 all require it. The device endpoints (`/next`, `/ack`, `/nack`, `/tick`)
-do NOT — they keep Bearer `DEVICE_TOKEN` auth only, because the ESP32
+do not; they keep Bearer `DEVICE_TOKEN` auth only, because the ESP32
 can't log in.
 
 **Sections → stores:**
@@ -115,13 +126,16 @@ can't log in.
 | Home | counts from all three stores + device last-contact (state store) |
 | Templates | template store (`lib/store.js`); Open/New load the studio at `/studio` |
 | Photo | print tool: upload a picture, live dithered preview via `/preview`, prints the seeded "Photo Print" template with an optional mono caption |
-| Plugins | plugin registry (`lib/plugin-registry.js`): toggle, interval, config JSON |
+| Plugins | plugin registry (`lib/plugin-registry.js`): toggle, schedule (`every Ns` / `at HH:MM`), per-field config with an explicit Save |
 | Queue | job store queued/inflight; Cancel only while still queued (atomic) |
 | History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |
 
 **htmx polling.** The Queue list fragment re-fetches itself every 3 seconds
-(`hx-trigger="every 3s"` swapping `/dashboard/fragments/queue`), which is
-how status changes from the printer agent appear without websockets. The
+while the tab is visible (`hx-trigger="every 3s
+[document.visibilityState=='visible']"` swapping
+`/dashboard/fragments/queue`). Hidden tabs don't poll (see
+`docs/store-costs.md`). Status changes from the printer appear without
+websockets. The
 job count in the title updates out-of-band in the same response. Everything
 else swaps on demand: plugin toggles and config edits swap the card,
 template deletes swap the list, history rows fetch their detail panel on
@@ -164,15 +178,15 @@ await printToNetwork(bytes, '10.0.0.5', 9100);  // or pass explicit host/port
 
 ### Design Studio
 
-The hosted design studio previews templates with the **real render core** — the
-exact same Liquid → Satori → resvg → Floyd-Steinberg pipeline that produces
-print bytes. What you see is what prints.
+The hosted design studio previews templates with the real render core: the
+same Liquid → Satori → resvg → Floyd-Steinberg pipeline that produces the
+print bytes, so the preview matches the printed output.
 
 ```
 npm start
 ```
 
-Opens at `http://localhost:3000` — sign in and open `/studio` (or any
+Opens at `http://localhost:3000`. Sign in and open `/studio` (or any
 template's Open button in the dashboard's Templates section). Select a
 starter template, edit the HTML/Liquid and the JSON data, and see the 1-bit
 dithered preview update live.
@@ -180,7 +194,7 @@ dithered preview update live.
 - **Preview**: `POST /preview` runs the render core and returns the 1-bit PNG.
 - **Print**: hit the Print button (or `Cmd+P`) to queue a job. The printer
   agent picks it up and sends it to the printer.
-- **Storage**: templates are saved through `lib/store.js` — `data/templates.json`
+- **Storage**: templates are saved through `lib/store.js`: `data/templates.json`
   with the json driver, Upstash Redis with the redis driver; seeded from
   `reference/starter-templates.json` on first run either way.
 - **Deploy to Vercel** (optional): `vercel` with `STORE_DRIVER=redis` and the
@@ -208,7 +222,7 @@ Studio Print button
      (or POST /nack?job=ID on failure -> status: queued, retry)
 ```
 
-**Run the printer agent** (local "device" — your Mac standing in for the ESP32):
+**Run the printer agent** (local "device", your Mac standing in for the ESP32):
 
 ```
 node agent/printer-agent.js
@@ -231,7 +245,7 @@ All four require `Authorization: Bearer <DEVICE_TOKEN>` (the agents send it
 automatically).
 
 **Storage**: jobs are full debug records (inputs + rendered outputs), capped
-at 50 by default (`JOB_CAP` env var), stored through `lib/job-store.js` —
+at 50 by default (`JOB_CAP` env var), stored through `lib/job-store.js`;
 see the Storage section for the json/redis drivers and lease semantics. With
 the redis driver the hosted job queue works on Vercel.
 
@@ -241,63 +255,65 @@ Nothing in the system polls on its own timer. Plugins do one unit of work when
 asked; a heartbeat (your Mac now, an ESP32 later) POSTs `/tick`, and the
 server runs whichever registered plugins are enabled and due.
 
-**What a plugin is** — a module in `plugins/` exporting three things:
+**What a plugin is:** a module in `plugins/` exporting three things:
 
 ```js
 export const id = 'my-plugin';
-export const defaults = { intervalSeconds: 60, config: {} };
+// schedule: { every: seconds } for watchers, or
+// { at: 'HH:MM', timezone: 'America/New_York' } for once-a-day plugins.
+// Push-driven plugins export `passive: true` and no schedule.
+export const defaults = { schedule: { every: 60 }, config: {} };
 export async function run({ config, state, ctx }) {
   // one unit of work; return the new state
   return { state };
 }
 ```
 
-Plugins never touch Redis, files, or HTTP routes directly — only `ctx`:
+Plugins never touch Redis, files, or HTTP routes directly; they go through
+`ctx`:
 
-- `ctx.createJob({ template, data })` — queue a print job (renders via the
+- `ctx.createJob({ template, data })`: queue a print job (renders via the
   job store / render-core)
-- `ctx.getTemplate(name)` — fetch a template record from the template store
-- `ctx.log(msg)` — prefixed console logging
+- `ctx.getTemplate(name)`: fetch a template record from the template store
+- `ctx.log(msg)`: prefixed console logging
 
 Installed plugins are listed explicitly in `plugins/index.js`.
 
-**How /tick decides what runs** — for each plugin, sequentially:
+**How /tick decides what runs.** Each plugin's record carries its
+`schedule` and a derived `nextDueAt`, kept in a sorted due-index by the
+store layer (`lib/plugin-registry.js` and `lib/schedule.js`). A tick makes
+one atomic claim of everything due, so an idle tick is a single store
+command regardless of plugin count. The claim leases what it returns:
+concurrent ticks can't double-run a plugin, and a crashed run becomes due
+again after about 90 seconds. A failed run records `lastError` on the
+record (shown in red on its card) and retries at the lease cadence. On
+success the next due time is computed from now, so a printer that was off
+past a due time runs the plugin once, late, without a backlog.
 
-1. Ensure a registry record exists (`{ id, ownerId, enabled, intervalSeconds,
-   lastRunAt, config, state }`, stored via `lib/plugin-registry.js` in
-   `data/plugins.json` or Redis per `STORE_DRIVER`).
-2. Skip if `enabled` is false, or if `now - lastRunAt < intervalSeconds`
-   (not due). The heartbeat can tick every 30s while a plugin runs every 60s.
-3. Take a short expiring run lock (same lease pattern as the job queue) — if
-   a previous run is still going, skip instead of running twice concurrently.
-4. Call `run()`, persist the returned `state` and `lastRunAt`. An error is
-   recorded on the record (`lastError`, `lastErrorAt`) and the remaining
-   plugins still run; `lastRunAt` advances either way, so a broken plugin
-   retries at its own interval, not at heartbeat rate.
-
-**Toggling a plugin today** — flip `enabled` on its registry record: edit
-`data/plugins.json` (json driver) or the `rp:{owner}:plugin:{id}` key in the
-Upstash console (redis driver). No UI yet.
+**Toggling and configuring.** The dashboard's Plugins page has the
+enable/disable toggle, the schedule (`every Ns` or `at HH:MM` plus
+timezone), and per-field config, saved with a Save button. Registration and
+migration happen automatically on the first tick or first Plugins-page
+view.
 
 ### Morning brief plugin (`morning-brief`)
 
 Prints the `Daily Brief` template once each morning: today's meetings
 merged from one or more calendar iCal feeds, the day's weather
-(Open-Meteo, no API key), and a focus line. Registers **disabled** —
+(Open-Meteo, no API key), and a focus line. Registers **disabled**;
 configure it from the Plugins page, then flip the toggle.
 
 | Config | Meaning |
 |--------|---------|
-| `icsUrls` | Array of secret iCal addresses — Google Calendar: Settings → [calendar] → "Secret address in iCal format". One per calendar; treat them as secrets. |
+| `icsUrls` | Array of secret iCal addresses (Google Calendar: Settings → [calendar] → "Secret address in iCal format"). One per calendar; treat them as secrets. |
 | `latitude` / `longitude` | Coordinates for the forecast |
-| `timezone` | IANA zone defining "today" and `printAt` (e.g. `America/Los_Angeles`) |
-| `printAt` | `"HH:MM"` local time after which the brief prints (default `06:30`) |
+| `timezone` | IANA zone defining "today" for the calendar (usually matches the schedule's timezone) |
 | `temperatureUnit` | `fahrenheit` (default) or `celsius` |
 | `focus` | Focus-bar text; empty hides the bar |
 
-Behavior: runs every 5 minutes but prints once per local day, on the
-first tick at/after `printAt` (a late heartbeat prints late, same day —
-never twice, never yesterday's). Recurring events are expanded; all-day
+Behavior: scheduled `at 06:30` (edit the time/timezone on its card); prints
+once per local day (a printer offline at print time prints late the same
+day; it does not print twice or print the previous day's brief). Recurring events are expanded; all-day
 items are ignored; the same event on two calendars is deduped. If any
 calendar feed fails the run errors visibly on the plugin card and
 retries next interval rather than printing an incomplete brief; a
@@ -305,7 +321,7 @@ weather failure just degrades that stat to "—".
 
 ### World Cup plugin (`espn-worldcup`)
 
-The first registry entry — it watches live FIFA World Cup matches via the
+The first registry entry. It watches live FIFA World Cup matches via the
 ESPN API and prints receipts for three events. One `run()` = one poll cycle
 (default every 60s). It replaces the retired `agent/espn-poller.js`; the
 detection logic was ported as-is.
@@ -316,7 +332,7 @@ detection logic was ported as-is.
 | **Goal** | `WC Goal` | A competitor's score increases |
 | **Full-time** | `WC Full Time` | Match state changes from `in` to `post` |
 
-**Run during a match** (three terminals — the heartbeat replaces the old
+**Run during a match** (three terminals; the heartbeat replaces the old
 poller process):
 
 ```
@@ -353,14 +369,34 @@ in the studio like any other template.
 
 **Why a local heartbeat:** live goals need sub-minute cadence. Vercel cron
 runs at most once per minute and is limited on the Hobby plan, so the pulse
-comes from a local process (later the ESP32 itself) — but the decision of
-what to run lives server-side in `/tick`, so the heartbeat stays dumb.
+comes from a local process (later the ESP32 itself), but the decision of
+what to run lives server-side in `/tick`, so the heartbeat carries no
+scheduling logic.
+
+### SMS/RCS task capture (`message-ingest`)
+
+Forward incoming texts to `POST /ingest`. Gemini decides whether each one
+contains a task; tasks print immediately as a "Task" receipt with the title
+worded from the recipient's perspective and the due date resolved from
+phrases like "by friday". A message starting with `task:` always prints,
+regardless of the classifier. The plugin is *passive* (push-driven, never
+run on a timer) but appears on the Plugins page with an enable toggle and
+config for min confidence, timezone, and Gemini model.
+
+The endpoint is authenticated by `INGEST_TOKEN` (Bearer header or `?token=`)
+and accepts `{ text, sender, source?, receivedAt? }`, so anything that can
+POST JSON can feed it. For phones, `android-forwarder/` in this repo is a
+small Android app that reads both SMS and RCS from the telephony provider
+(including while the conversation is open on screen, which
+notification-based forwarders miss), resolves sender numbers to contact
+names, and retries failed sends. See `android-forwarder/README.md` for
+build and setup.
 
 ### Design templates (offline)
 
 `reference/receipt-design-studio.html` can be opened directly in a browser for
 quick offline sketching. It uses html2canvas + client-side dithering which only
-approximates the print output — use the hosted studio above for accurate
+approximates the print output; use the hosted studio above for accurate
 previews.
 
 ## Project layout
@@ -377,16 +413,27 @@ api/
   next.js                  GET /next — device endpoint, fetch queued job
   ack.js                   POST /ack — device endpoint, mark job done
   nack.js                  POST /nack — device endpoint, requeue job
-  tick.js                  POST /tick — run enabled + due plugins
+  tick.js                  POST /tick — atomic due-claim, run due plugins
+  ingest.js                POST /ingest — classify forwarded messages, print tasks
+  dashboard.js             Dashboard pages + fragments (LiquidJS + htmx)
   templates.js             GET/POST/DELETE /templates — template CRUD
 plugins/
   index.js                 Explicit list of installed plugin modules
   espn-worldcup.js         World Cup plugin (kickoff/goal/full-time)
+  morning-brief.js         Daily brief at a scheduled time (calendar + weather)
+  message-ingest.js        Passive plugin: forwarded messages -> task receipts
 lib/
   store.js                 Template storage facade (json/redis driver)
   job-store.js             Job queue storage facade (json/redis driver)
   plugin-registry.js       Plugin registry facade (json/redis driver)
   state-store.js           Legacy poller state facade (json/redis driver)
+  schedule.js              Plugin schedule math (every/at, timezone-aware)
+  plugin-setup.js          Plugin registration + record migration
+  change-signal.js         Blob-backed queue flag (idle polls skip Redis)
+  device-presence.js       Throttled "printer online" bookkeeping
+  task-classifier.js       Gemini call: does this message contain a task?
+  session.js               Stateless HMAC session cookie for the dashboard
+  views.js                 LiquidJS renderer for views/
   auth.js                  Device token check for /next, /ack, /nack
   redis.js                 Upstash Redis client + owner-namespaced keys
   blob.js                  Vercel Blob helpers (job png + bytes)
@@ -396,7 +443,7 @@ lib/
     jobs-json.js           Jobs: data/jobs.json (no lease semantics)
     jobs-redis.js          Jobs: Redis queue (atomic claim + lease) + Blob
     plugins-json.js        Plugin registry: data/plugins.json
-    plugins-redis.js       Plugin registry: Upstash Redis (+ run lock)
+    plugins-redis.js       Plugin registry: Upstash Redis (+ sorted due-index)
     state-json.js          State: data/{name}-state.json
     state-redis.js         State: Upstash Redis
 scripts/
@@ -408,10 +455,18 @@ public/
   index.html               Design studio frontend (preview + print + jobs panel)
 transport/
   print-net.js             TCP sender (printToNetwork)
+views/                     Dashboard pages + fragments (LiquidJS)
 firmware/
-  rp850_endpoint.ino       ESP32 firmware (for later)
+  docket-agent/            ESP32 sketch: polls /next, prints, POSTs /tick
+android-forwarder/         Android app: SMS/RCS -> POST /ingest
+scripts/
+  blob-staleness-probe.mjs Measure Blob read-after-write staleness
+  print-calibration.js     Grayscale wedges through the real pipeline
 docs/
+  design-spec.md           Dashboard visual source of truth
+  rp850-field-notes.md     Measured RP850 printer behavior
   receipt-printer-build-guide.md   Hardware build guide
+  store-costs.md           Per-path store costs + quota-math rules
   *.png                    Documentation images
 reference/
   starter-templates.json   Starter templates (seeds the local store)
@@ -435,3 +490,8 @@ jobs/                      Sample receipt PNGs for the print queue
 - **Borders**: `solid` and `dashed` only; `dotted` is not supported by Satori.
 - The Python files in `reference/` are the original server loop and renderer.
   They work but are pending a full JS rewrite. Do not expand them.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Contributions are welcome, see
+[CONTRIBUTING.md](CONTRIBUTING.md).

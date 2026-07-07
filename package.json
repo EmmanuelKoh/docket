@@ -1,9 +1,9 @@
 {
-  "name": "receipt-printer",
+  "name": "docket",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Thermal receipt system for 80mm ESC/POS printers",
+  "description": "Thermal-receipt platform: Liquid+HTML templates rendered to ESC/POS, printed by an ESP32 appliance \u2014 with plugins, a dashboard, and SMS-to-task capture",
   "main": "render/render-core.js",
   "scripts": {
     "start": "node server.js",
@@ -19,5 +19,11 @@
     "pngjs": "^7.0.0",
     "satori": "^0.12.1",
     "satori-html": "^0.3.2"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EmmanuelKoh/docket"
+  },
+  "author": "Emmanuel Koh"
 }
