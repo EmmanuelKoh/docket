@@ -2,10 +2,15 @@
 // Device-facing endpoint. Returns the oldest queued job's ESC/POS bytes
 // with X-Job-Id header, or 204 if the queue is empty.
 // Requires Authorization: Bearer <DEVICE_TOKEN>.
+//
+// This is the hottest path in the system (the device polls every POLL_MS,
+// 3s as of this writing) and Upstash bills per command — see
+// docs/store-costs.md before adding any store call here. The device's
+// "last seen" write is throttled to once per 60s instead of every poll.
 
 import { nextJob } from '../lib/job-store.js';
 import { requireDeviceToken } from '../lib/auth.js';
-import { setState } from '../lib/state-store.js';
+import { recordDeviceSeen } from '../lib/device-presence.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -14,8 +19,7 @@ export default async function handler(req, res) {
   }
   if (!requireDeviceToken(req, res)) return;
 
-  // Record device contact for the dashboard's "printer online" line.
-  await setState('device', { lastSeenAt: new Date().toISOString() }).catch(() => {});
+  recordDeviceSeen();
 
   const job = await nextJob();
   if (!job) {

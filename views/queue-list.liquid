@@ -1,4 +1,6 @@
-<div id="queue-list" hx-get="/dashboard/fragments/queue" hx-trigger="every 3s" hx-swap="outerHTML">
+{% comment %}Refresh only while the tab is visible — hidden/minimized tabs
+would otherwise keep polling (and hitting the store) forever.{% endcomment %}
+<div id="queue-list" hx-get="/dashboard/fragments/queue" hx-trigger="every 3s [document.visibilityState=='visible']" hx-swap="outerHTML">
   {% if oob %}<span id="queue-count" hx-swap-oob="true">{{ count }} job{% unless count == 1 %}s{% endunless %}</span>{% endif %}
   {% for job in jobs %}
   <div class="card">

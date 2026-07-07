@@ -27,6 +27,9 @@ plugins server-side. No process polls on its own timer except the device.
   `redis` (Upstash + Vercel Blob for job png/bytes). Everything carries
   `ownerId` (single owner `default` for now); all Redis keys namespaced
   `rp:{owner}:...`. Never touch Redis/files outside `lib/`.
+  Upstash bills per command and every hosting service has a meter — read
+  `docs/store-costs.md` (per-path costs, quota math rule, rejected
+  approaches) before adding any polled or timer-driven query.
 - `plugins/` — registry plugins: export `id`, `defaults` (may set
   `enabled: false`), optional `templates`/`configLabels`, and
   `run({config, state, ctx}) -> {state}`. World is reached ONLY via ctx

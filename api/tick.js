@@ -20,11 +20,12 @@ import { fileURLToPath } from 'url';
 import { OWNER_ID, WATCH_TEAMS } from '../config.js';
 import { requireDeviceToken } from '../lib/auth.js';
 import {
-  getPlugin, upsertPlugin, tryAcquireRunLock, releaseRunLock,
+  listPlugins, upsertPlugin, tryAcquireRunLock, releaseRunLock,
 } from '../lib/plugin-registry.js';
+import { recordDeviceSeen } from '../lib/device-presence.js';
 import { createJob } from '../lib/job-store.js';
 import { getTemplates, saveTemplate } from '../lib/store.js';
-import { getState, setState } from '../lib/state-store.js';
+import { getState } from '../lib/state-store.js';
 import { PLUGINS } from '../plugins/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,11 +59,13 @@ async function ensureSeedTemplates() {
   templatesEnsured = true;
 }
 
-// Ensure a registry record exists for a plugin module. First registration of
-// espn-worldcup imports the retired poller's state (state-store key 'espn')
-// so nothing already printed reprints, and its watchTeams from WATCH_TEAMS.
-async function ensureRecord(module) {
-  const existing = await getPlugin(OWNER_ID, module.id);
+// Ensure a registry record exists for a plugin module, consulting the
+// records already fetched for this tick (one batched read for all plugins
+// instead of one read each). First registration of espn-worldcup imports
+// the retired poller's state (state-store key 'espn') so nothing already
+// printed reprints, and its watchTeams from WATCH_TEAMS.
+async function ensureRecord(module, existingRecords) {
+  const existing = existingRecords.find(r => r.id === module.id);
   if (existing) return existing;
 
   const config = { ...module.defaults.config };
@@ -113,16 +116,19 @@ export default async function handler(req, res) {
   }
   if (!requireDeviceToken(req, res)) return;
 
-  // Record device contact for the dashboard's "printer online" line.
-  await setState('device', { lastSeenAt: new Date().toISOString() }).catch(() => {});
+  // Record device contact for the dashboard's "printer online" line
+  // (throttled — /next usually keeps this fresh already).
+  recordDeviceSeen();
 
   const results = [];
+  // One batched read of every plugin's record for this tick.
+  const existingRecords = await listPlugins(OWNER_ID);
 
   for (const module of PLUGINS) {
     const summary = { id: module.id };
     try {
       await ensureSeedTemplates();
-      const record = await ensureRecord(module);
+      const record = await ensureRecord(module, existingRecords);
 
       // Passive plugins (e.g. message-ingest) are push-driven, not polled:
       // registered so they appear on the Plugins page, but never run on a
