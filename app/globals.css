@@ -23,6 +23,40 @@
   --red: #b3261e;
 
   --dither: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect x='50' y='20' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='24' y='39' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='52' y='89' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='18' y='37' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='21' y='76' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='1' y='93' width='2' height='2' fill='%23f3f3f0'/%3E%3Crect x='44' y='62' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='37' y='13' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='28' y='88' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='7' y='64' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='84' y='8' width='1' height='1' fill='%23efefec'/%3E%3Crect x='27' y='63' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='5' y='73' width='1' height='1' fill='%23efefec'/%3E%3Crect x='34' y='69' width='1.5' height='1.5' fill='%23f0f0ed'/%3E%3Crect x='68' y='59' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='70' y='88' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='54' y='26' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='38' y='11' width='1' height='1' fill='%23efefec'/%3E%3Crect x='1' y='13' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='41' y='13' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='14' y='11' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='86' y='57' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='73' y='16' width='1' height='1' fill='%23efefec'/%3E%3Crect x='8' y='45' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='27' y='58' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='62' y='55' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='23' y='11' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='34' y='34' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='79' y='85' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='81' y='88' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='42' y='79' width='1' height='1' fill='%23efefec'/%3E%3Crect x='20' y='47' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='93' y='16' width='1' height='1' fill='%23efefec'/%3E%3Crect x='15' y='84' width='1' height='1' fill='%23a5a5a1'/%3E%3Crect x='15' y='33' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='72' y='11' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='90' y='47' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='47' y='87' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='54' y='34' width='2' height='2' fill='%23efefec'/%3E%3Crect x='7' y='10' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='40' y='36' width='1' height='1' fill='%23efefec'/%3E%3Crect x='88' y='1' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='10' y='22' width='1' height='1' fill='%23efefec'/%3E%3Crect x='79' y='37' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='62' y='79' width='1.5' height='1.5' fill='%23dcdcd9'/%3E%3Crect x='35' y='54' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='52' y='57' width='2' height='2' fill='%23f3f3f0'/%3E%3Crect x='40' y='90' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='67' y='20' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='89' y='20' width='1' height='1' fill='%23a5a5a1'/%3E%3Crect x='22' y='74' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='60' y='36' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='34' y='0' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='23' y='41' width='2' height='2' fill='%23e9e9e6'/%3E%3Crect x='48' y='17' width='1.5' height='1.5' fill='%23f0f0ed'/%3E%3Crect x='1' y='61' width='1' height='1' fill='%23efefec'/%3E%3Crect x='79' y='61' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='64' y='26' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='58' y='71' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='44' y='41' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='12' y='41' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='56' y='88' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='7' y='39' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='86' y='52' width='1' height='1' fill='%23efefec'/%3E%3Crect x='49' y='56' width='1.5' height='1.5' fill='%23f0f0ed'/%3E%3Crect x='86' y='26' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='93' y='10' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='10' y='58' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='3' y='71' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='8' y='65' width='1' height='1' fill='%23efefec'/%3E%3Crect x='92' y='43' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='50' y='74' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='90' y='49' width='1' height='1' fill='%23efefec'/%3E%3Crect x='10' y='83' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='72' y='4' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='2' y='37' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='15' y='54' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='47' y='28' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='70' y='70' width='2' height='2' fill='%23efefec'/%3E%3Crect x='46' y='35' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='34' y='26' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='17' y='60' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='11' y='3' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='42' y='7' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='66' y='19' width='1' height='1' fill='%23efefec'/%3E%3Crect x='25' y='28' width='1' height='1' fill='%23efefec'/%3E%3Crect x='47' y='67' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='24' y='64' width='1' height='1' fill='%23efefec'/%3E%3Crect x='43' y='74' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='66' y='55' width='1' height='1' fill='%23e9e9e6'/%3E%3Crect x='46' y='55' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='5' y='61' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='60' y='48' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='30' y='50' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='88' y='31' width='2' height='2' fill='%23f3f3f0'/%3E%3Crect x='37' y='7' width='2' height='2' fill='%23f3f3f0'/%3E%3Crect x='85' y='46' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='93' y='91' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='74' y='63' width='1' height='1' fill='%23efefec'/%3E%3Crect x='80' y='26' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='77' y='8' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='34' y='77' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='92' y='86' width='2' height='2' fill='%23f3f3f0'/%3E%3Crect x='66' y='15' width='1' height='1' fill='%23a5a5a1'/%3E%3Crect x='60' y='16' width='1.5' height='1.5' fill='%23dcdcd9'/%3E%3Crect x='50' y='80' width='1' height='1' fill='%23f0f0ed'/%3E%3Crect x='69' y='46' width='1' height='1' fill='%23efefec'/%3E%3Crect x='18' y='45' width='2' height='2' fill='%23e9e9e6'/%3E%3Crect x='67' y='90' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='36' y='22' width='1' height='1' fill='%23f3f3f0'/%3E%3Crect x='89' y='52' width='1.5' height='1.5' fill='%23f3f3f0'/%3E%3Crect x='51' y='36' width='1' height='1' fill='%23efefec'/%3E%3Crect x='7' y='93' width='2' height='2' fill='%23f0f0ed'/%3E%3Crect x='1' y='48' width='1' height='1' fill='%23efefec'/%3E%3Crect x='54' y='87' width='1.5' height='1.5' fill='%23e9e9e6'/%3E%3Crect x='5' y='45' width='1' height='1' fill='%23dcdcd9'/%3E%3Crect x='55' y='37' width='1.5' height='1.5' fill='%23f0f0ed'/%3E%3Crect x='80' y='37' width='1' height='1' fill='%23efefec'/%3E%3Crect x='27' y='52' width='1.5' height='1.5' fill='%23efefec'/%3E%3Crect x='51' y='29' width='1' height='1' fill='%23f3f3f0'/%3E%3C/svg%3E");
+
+  /* shadcn semantic tokens, mapped onto the docket ramp above. They
+     reference the docket tokens (not literal colors), so dark mode flips
+     them automatically via html[data-theme="dark"] — there is no separate
+     .dark block. Per the design spec: primary is inverse ink (never a
+     brand fill), destructive is the register red, focus rings are faint
+     ink, radius is 6px. */
+  --radius: 6px;
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--raised);
+  --card-foreground: var(--ink);
+  --popover: var(--raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--page);
+  --secondary: var(--raised);
+  --secondary-foreground: var(--ink);
+  --muted: var(--hairline);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--hairline);
+  --accent-foreground: var(--ink);
+  --destructive: var(--red);
+  --destructive-foreground: #ffffff;
+  --input: var(--border);
+  --ring: var(--ink-faint);
+  --sidebar: var(--page);
+  --sidebar-foreground: var(--ink-muted);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--page);
+  --sidebar-accent: var(--hairline);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ink-faint);
 }
 
 html[data-theme="dark"] {
@@ -52,6 +86,38 @@ html[data-theme="dark"] {
 
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 body {

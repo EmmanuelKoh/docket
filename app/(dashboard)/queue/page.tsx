@@ -1,0 +1,24 @@
+// Queue — title with "refreshes every 3s" subtitle, job count right
+// (mono), then the live list (components/queue-list.tsx).
+
+import { queueData } from '@/app/_lib/queue-data';
+import { QueueList } from '@/components/queue-list';
+
+export default async function QueuePage() {
+  const { jobs, count } = await queueData();
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h1 className="text-base font-medium text-ink">Queue</h1>
+          <p className="mt-0.5 text-xs text-ink-faint">refreshes every 3s</p>
+        </div>
+        <span className="font-mono text-xs text-ink-muted">
+          {count} job{count === 1 ? '' : 's'}
+        </span>
+      </div>
+      <QueueList initial={jobs} />
+    </div>
+  );
+}

@@ -127,10 +127,33 @@ Hovering any list thumbnail floats a 288px-wide peek of the same PNG
 (--raised, 0.5px --border, no shadow). Thumbnails identify; the peek and
 the History expand are where receipts are read.
 
+## Shell (Next.js app, nextjs-shell-rewrite branch)
+
+The Next.js rewrite replaces the top nav with a left sidebar; everything
+else in this spec (tokens, red rules, spacing, components, page specs)
+carries over unchanged. Shell rules:
+
+- Sidebar: DOCKET wordmark at top (links home), then Overview, Queue,
+  History. Collapsible to an icon rail; on phones it becomes a sheet.
+  Items are 13px --ink-muted with 14px outline icons in --ink-faint.
+  Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
+  item's left edge (the vertical form of the old nav underline).
+- The Queue item carries a mono count badge, --red only when nonzero.
+- Header: slim row with the sidebar trigger left and theme toggle plus
+  logout icon right, keeping the full-bleed 1.5px solid --ink bottom rule.
+- Content column: unchanged (max 1120px, gutters per the spacing system).
+- Overview replaces Home: a LATEST PRINT card (the newest history PNG on
+  a white panel, receipts are paper in both themes) above the stat strip,
+  then the system line, dashed divider, and RECENT, all as specced under
+  Home below.
+- Theme: same data-theme mechanism and localStorage key (docket-theme) as
+  the legacy dashboard, so the choice carries across both apps.
+
 ## Pages
 
-Header (all pages): DOCKET wordmark left; nav right: Home, Templates,
-Photo, Plugins, Queue, History, then theme-toggle icon, logout icon.
+Header (legacy app, all pages): DOCKET wordmark left; nav right: Home,
+Templates, Photo, Plugins, Queue, History, then theme-toggle icon, logout
+icon.
 
 ### Home
 1. Stat strip: ONE bordered container split into 4 cells by 0.5px --hairline
