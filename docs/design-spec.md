@@ -232,10 +232,17 @@ dashed rule; below it, PER-FIELD config editing in a label/value grid
 config key, derived from the config's shape — arrays edit as
 one-item-per-line textareas (also accept commas), numbers are validated
 (types come from the plugin's defaults.config), long values wrap at full
-width, never overflow the card. Interval first, template names last.
-Invalid input → red inline error spanning the grid, nothing saved.
+width, never overflow the card. Schedule first, then a read-only "next
+run" line, config fields, template names last. The schedule row's shape is
+fixed by the plugin's kind: "every [N]s" for watchers, "at [HH:MM] [tz]"
+for fixed-time plugins; passive (push-driven) plugins show neither and
+"next run" reads "on message". Edits persist only via an explicit Save
+button (right-aligned below the grid) — saving also recomputes the
+plugin's next-due time; there is no save-on-change. The enable toggle
+remains immediate (the click is the action) and recomputes the due time
+itself. Invalid input → red inline error spanning the grid, nothing saved.
 Never a raw-JSON blob input. Disabled plugin: text drops one step
-(--ink → --ink-muted).
+(--ink → --ink-muted), "next run" shows "—".
 
 ### Queue
 Title "Queue" with "refreshes every 3s" subtitle; job count right (mono).

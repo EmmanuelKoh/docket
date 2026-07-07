@@ -31,9 +31,12 @@ plugins server-side. No process polls on its own timer except the device.
   `docs/store-costs.md` (per-path costs, quota math rule, rejected
   approaches) before adding any polled or timer-driven query.
 - `plugins/` — registry plugins: export `id`, `defaults` (may set
-  `enabled: false`), optional `templates`/`configLabels`, and
-  `run({config, state, ctx}) -> {state}`. World is reached ONLY via ctx
-  (`createJob`, `getTemplate`, `log`). Registered on first tick.
+  `enabled: false`; `schedule` is `{every: seconds}` or
+  `{at: "HH:MM", timezone}` — see `lib/schedule.js`), optional
+  `templates`/`configLabels`, and `run({config, state, ctx}) -> {state}`.
+  Push-driven plugins export `passive: true` and no schedule. World is
+  reached ONLY via ctx (`createJob`, `getTemplate`, `log`). Registered on
+  first tick or Plugins-page view; the tick runs only what's due.
 - `views/` — LiquidJS pages + htmx fragments for the dashboard;
   `views/studio.html` is the template editor (served behind auth at
   `/studio`). `public/docket.css` is the design system.

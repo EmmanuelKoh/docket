@@ -19,7 +19,9 @@ import {
 import { renderView, renderPage } from '../lib/views.js';
 import { getTemplates, deleteTemplate } from '../lib/store.js';
 import { listJobs, getJob, cancelJob, createJob } from '../lib/job-store.js';
-import { listPlugins, getPlugin, setEnabled, upsertPlugin } from '../lib/plugin-registry.js';
+import { listPlugins, getPlugin, setEnabled, upsertPlugin, reschedule } from '../lib/plugin-registry.js';
+import { ensureRegistered } from '../lib/plugin-setup.js';
+import { validateSchedule } from '../lib/schedule.js';
 import { getState } from '../lib/state-store.js';
 import { PLUGINS } from '../plugins/index.js';
 import { renderToPreview } from '../render/render-core.js';
@@ -121,43 +123,42 @@ function parseConfigField(original, raw) {
   return { value: s };
 }
 
-// List plugin records, seeding a default record for any installed plugin
-// that has none yet — so a newly added plugin appears on the Plugins page
-// immediately instead of only after the first /tick registers it. Ordered
-// to match the PLUGINS list. (tick.js does the authoritative registration,
-// including espn's state import; this just ensures visibility.)
+// Plugin records for the Plugins page — registration/migration is shared
+// with /tick (lib/plugin-setup.js), so a newly deployed plugin appears (and
+// old records migrate) on first page view, not only on first tick. Ordered
+// to match the PLUGINS list.
 async function ensurePluginRecords() {
-  const records = await listPlugins(OWNER_ID);
-  const have = new Set(records.map(r => r.id));
-  for (const module of PLUGINS) {
-    if (have.has(module.id)) continue;
-    const record = {
-      id: module.id,
-      ownerId: OWNER_ID,
-      enabled: module.defaults?.enabled !== false,
-      intervalSeconds: module.defaults?.intervalSeconds ?? null,
-      lastRunAt: null,
-      config: { ...(module.defaults?.config || {}) },
-      state: {},
-      lastError: null,
-      lastErrorAt: null,
-    };
-    await upsertPlugin(record);
-    records.push(record);
-  }
+  const records = await ensureRegistered();
   const order = new Map(PLUGINS.map((m, i) => [m.id, i]));
   return records.sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
+// "in 42s" / "in 3m" / "in 5h" / "in 2d" for the card's next-run line.
+function untilText(ms) {
+  const s = Math.max(0, Math.round((ms - Date.now()) / 1000));
+  if (s < 60) return `in ${s}s`;
+  if (s < 3600) return `in ${Math.round(s / 60)}m`;
+  if (s < 48 * 3600) return `in ${Math.round(s / 3600)}h`;
+  return `in ${Math.round(s / 86400)}d`;
 }
 
 async function pluginCardData(record, error) {
   const module = PLUGINS.find(m => m.id === record.id);
   const passive = !!module?.passive;
+  const schedule = record.schedule || {};
   return {
     id: record.id,
     encoded: encodeURIComponent(record.id),
     enabled: !!record.enabled,
-    passive, // push-driven: no interval, hide the interval editor
-    intervalSeconds: record.intervalSeconds,
+    passive, // push-driven: no schedule editor
+    // The schedule *type* is fixed by the plugin author; users edit values.
+    scheduleType: passive ? null : (schedule.at ? 'at' : 'every'),
+    scheduleEvery: schedule.every ?? '',
+    scheduleAt: schedule.at ?? '',
+    scheduleTz: schedule.timezone ?? '',
+    nextRunText: !record.enabled ? '—'
+      : passive ? 'on message'
+        : Number.isFinite(record.nextDueAt) ? untilText(record.nextDueAt) : '—',
     fields: configFields(record.config, module?.configLabels),
     templates: (module?.templates || []).join(', ') || '—',
     lastRunText: record.lastError
@@ -350,18 +351,27 @@ export default async function handler(req, res) {
   if (p === '/dashboard/plugins/config' && req.method === 'POST') {
     const record = await getPlugin(OWNER_ID, q.id);
     if (!record) return res.status(404).send('');
-    // Passive (push-driven) plugins have no interval to edit — keep their
-    // stored value and don't require the field the card never rendered.
-    const passive = !!PLUGINS.find(m => m.id === record.id)?.passive;
-    const interval = passive ? record.intervalSeconds : parseInt(req.body?.intervalSeconds, 10);
+    const module = PLUGINS.find(m => m.id === record.id);
+    const passive = !!module?.passive;
     let error = '';
+
+    // Schedule: type is fixed by the plugin (every vs at); the user edits
+    // its values. Passive plugins have no schedule fields on the card.
+    let schedule = record.schedule || null;
+    if (!passive) {
+      const raw = (record.schedule || {}).at
+        ? { at: req.body?.sched_at, timezone: req.body?.sched_tz }
+        : { every: req.body?.sched_every };
+      const v = validateSchedule(raw);
+      if (v.error) error = `schedule: ${v.error} — not saved`;
+      else schedule = v.schedule;
+    }
+
     const config = { ...(record.config || {}) };
-    if (!passive && (!Number.isFinite(interval) || interval < 1)) {
-      error = 'interval must be a positive number of seconds — not saved';
-    } else {
+    if (!error) {
       // Types come from the plugin's defaults.config (canonical), not the
       // stored value — a previously mistyped value must not weaken parsing.
-      const defaultsCfg = PLUGINS.find(m => m.id === record.id)?.defaults?.config || {};
+      const defaultsCfg = module?.defaults?.config || {};
       for (const key of Object.keys(config)) {
         const raw = req.body?.[`cfg_${key}`];
         if (raw === undefined) continue; // field not submitted — keep as is
@@ -375,8 +385,10 @@ export default async function handler(req, res) {
       }
     }
     if (!error) {
-      const updated = { ...record, intervalSeconds: interval, config };
-      await upsertPlugin(updated);
+      const updated = { ...record, schedule, config };
+      // One save updates everything: record, next-due time, due-index.
+      if (!passive && updated.enabled) reschedule(updated);
+      await upsertPlugin(updated, { create: false });
       return html(res, await renderView('plugin-card', { p: await pluginCardData(updated) }));
     }
     return html(res, await renderView('plugin-card', { p: await pluginCardData(record, error) }));

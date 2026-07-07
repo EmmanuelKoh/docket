@@ -2,21 +2,25 @@
 // morning: today's meetings merged from one or more calendar ICS feeds,
 // the day's weather (Open-Meteo, no API key), and a focus line.
 //
+// When it runs: the schedule ({ at: "06:30", timezone }) — the runner fires
+// this plugin once per day at that wall-clock time (edit on the Plugins
+// page). run() no longer watches the clock itself.
+//
 // Config (all editable from the Plugins page):
 //   icsUrls    array of secret iCal addresses. Google Calendar: Settings →
 //              [calendar] → "Secret address in iCal format" — one per
 //              calendar (work, personal, family, ...). Treat as secrets.
 //   latitude / longitude   coordinates for the weather forecast
-//   timezone   IANA zone that defines "today" and printAt (e.g.
-//              "America/Los_Angeles")
-//   printAt    "HH:MM" local time after which the brief prints (default
-//              06:30)
+//   timezone   IANA zone that defines "today" for the calendar (usually
+//              matches the schedule's timezone)
 //   temperatureUnit  "fahrenheit" (default) or "celsius"
 //   focus      focus line text; empty hides the focus bar
 //
-// State: { lastPrintedDate: "2026-Jul-03" } — one print per local day,
-// fired on the first due tick at/after printAt. A late heartbeat prints
-// late, same day; it never double-prints and never back-fills.
+// State: { lastPrintedDate: "2026-Jul-03" } — one print per local day.
+// This guard stays even though the schedule fires once daily: a crashed
+// run re-becomes due after its lease and re-runs, and the guard makes that
+// re-run harmless. A printer offline at 06:30 prints late, same day; it
+// never double-prints and never back-fills.
 //
 // Failure policy: if ANY calendar feed fails, the run throws — the tick
 // runner records lastError (red on the plugin card) and retries at the
@@ -29,13 +33,12 @@ export const id = 'morning-brief';
 
 export const defaults = {
   enabled: false, // enable from the dashboard once config is set
-  intervalSeconds: 300,
+  schedule: { at: '06:30', timezone: 'America/New_York' },
   config: {
     icsUrls: [],
     latitude: null,
     longitude: null,
     timezone: 'America/New_York',
-    printAt: '06:30',
     temperatureUnit: 'fahrenheit',
     focus: '',
   },
@@ -47,7 +50,6 @@ export const templates = ['Daily Brief'];
 // Friendly labels for the dashboard's per-field config editor.
 export const configLabels = {
   icsUrls: 'calendar feeds',
-  printAt: 'print at',
   temperatureUnit: 'unit',
 };
 
@@ -192,8 +194,8 @@ export async function run({ config, state, ctx }) {
   const todayKey = dateKey(p);
   const hm = `${p.hour}:${p.minute}`;
 
+  // Once per local day — makes a crash-recovery re-run harmless.
   if (state.lastPrintedDate === todayKey) return { state };
-  if (hm < (cfg.printAt || '06:30')) return { state };
 
   // All feeds must succeed — throws surface as lastError and retry next tick.
   const feeds = await Promise.all(urls.map(fetchFeed));

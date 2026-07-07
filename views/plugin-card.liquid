@@ -9,13 +9,22 @@
     <span class="chip{% unless p.enabled %} off{% endunless %}">{% if p.enabled %}Enabled{% else %}Off{% endif %}</span>
     <span class="mono" style="margin-left:auto; font-size:12px; color:{% if p.lastRunRed %}var(--red){% else %}var(--ink-muted){% endif %};">{{ p.lastRunText }}</span>
   </div>
+  {% comment %}Edits persist only on Save — a save also recomputes the
+  plugin's next-due time, so it is a deliberate action, not a per-field
+  side effect.{% endcomment %}
   <form class="card-detail cfg{% unless p.enabled %} dim{% endunless %}"
         hx-post="/dashboard/plugins/config?id={{ p.encoded }}"
-        hx-trigger="change" hx-target="closest .card" hx-swap="outerHTML">
-    {% unless p.passive %}
-    <span class="cfg-label">interval</span>
-    <span class="cfg-value"><input class="editable" name="intervalSeconds" value="{{ p.intervalSeconds }}" size="5">s</span>
-    {% endunless %}
+        hx-trigger="submit" hx-target="closest .card" hx-swap="outerHTML">
+    {% if p.scheduleType == 'every' %}
+    <span class="cfg-label">every</span>
+    <span class="cfg-value"><input class="editable" name="sched_every" value="{{ p.scheduleEvery }}" size="5">s</span>
+    {% elsif p.scheduleType == 'at' %}
+    <span class="cfg-label">at</span>
+    <span class="cfg-value"><input class="editable" name="sched_at" value="{{ p.scheduleAt }}" size="5">
+      <input class="editable" name="sched_tz" value="{{ p.scheduleTz }}" size="18" spellcheck="false"></span>
+    {% endif %}
+    <span class="cfg-label">next run</span>
+    <span class="cfg-value mono" style="font-size:12px">{{ p.nextRunText }}</span>
     {% for f in p.fields %}
     <span class="cfg-label">{{ f.label }}</span>
     {% if f.multiline %}
@@ -29,5 +38,8 @@
     <span class="cfg-label">templates</span>
     <span class="cfg-value mono" style="font-size:12px">{{ p.templates }}</span>
     {% if p.error %}<div class="field-error cfg-span">{{ p.error }}</div>{% endif %}
+    <div class="cfg-span" style="display:flex; justify-content:flex-end; margin-top:6px;">
+      <button class="btn small" type="submit">Save</button>
+    </div>
   </form>
 </div>

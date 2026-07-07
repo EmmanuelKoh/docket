@@ -41,7 +41,11 @@ const uint32_t PRINTER_BAUD = 115200;
 const int PIN_TX = 17;
 const int PIN_RX = 16;
 
-const uint32_t POLL_MS = 3000;   // how often to ask /next for a job
+// Poll cadence is a cost dial, not just a latency one: every /next is a
+// Vercel function call and a Redis command (docs/store-costs.md). 5s keeps
+// worst-case print latency at 5s and stays well inside the free quotas;
+// 3s brushed Vercel's 1M invocations/month cap.
+const uint32_t POLL_MS = 5000;   // how often to ask /next for a job
 const uint32_t TICK_MS = 30000;  // how often to POST /tick (heartbeat)
 
 // Generic "ESP32 Dev Module" boards don't define LED_BUILTIN even though
