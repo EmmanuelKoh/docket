@@ -1,30 +1,33 @@
 // api/tick.js — POST /tick
-// The heartbeat endpoint that replaces standalone pollers. Nothing in the
-// system polls on its own timer: a heartbeat (agent/heartbeat.js now, an
-// ESP32 later) POSTs here, and this handler runs whichever registered
-// plugins are enabled and due (now - lastRunAt >= intervalSeconds).
+// The heartbeat endpoint. Nothing in the system polls on its own timer: the
+// ESP32 POSTs here every TICK_MS, and this handler runs whichever plugins
+// are due. Requires Authorization: Bearer <DEVICE_TOKEN>.
 //
-// Per plugin: sequential execution, a Redis-backed run lock as an overlap
-// guard (a tick arriving while a plugin is still mid-run skips it), and
-// error isolation — a failing plugin records lastError/lastErrorAt on its
-// registry record and never stops the others. lastRunAt advances on both
-// success and failure so a broken plugin retries at its own interval, not
-// at heartbeat rate.
+// Scheduling (docs/store-costs.md): every plugin record carries a schedule
+// ({ every: seconds } or { at: "HH:MM", timezone }) and a derived nextDueAt
+// kept in a sorted due-index by the store layer. An idle tick is ONE store
+// command: an atomic claim of everything due, which also bumps claimed
+// scores by a lease so concurrent ticks can't double-run a plugin and a
+// crashed run re-becomes due after the lease (one late re-run, never a
+// silently stopped plugin — plugins keep their own idempotence guards).
 //
-// Requires Authorization: Bearer <DEVICE_TOKEN>, like all device-facing
-// endpoints.
+// Failure policy: a plugin that throws records lastError on its record and
+// retries when its claim lease expires (~RUN_LEASE_SECONDS), not at its
+// normal schedule — so a 06:30 brief whose calendar fetch failed retries
+// within minutes, same day. lastRunAt advances on success and failure.
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { OWNER_ID, WATCH_TEAMS } from '../config.js';
+import { OWNER_ID } from '../config.js';
 import { requireDeviceToken } from '../lib/auth.js';
 import {
-  getPlugin, upsertPlugin, tryAcquireRunLock, releaseRunLock,
+  upsertPlugin, claimDuePlugins, getPlugin, reschedule,
 } from '../lib/plugin-registry.js';
+import { ensureRegistered } from '../lib/plugin-setup.js';
+import { recordDeviceSeen } from '../lib/device-presence.js';
 import { createJob } from '../lib/job-store.js';
 import { getTemplates, saveTemplate } from '../lib/store.js';
-import { getState, setState } from '../lib/state-store.js';
 import { PLUGINS } from '../plugins/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,14 +38,14 @@ const SEED_TEMPLATE_FILES = [
   path.join(__dirname, '..', 'reference', 'task-templates.json'),
 ];
 
-// Generous upper bound on one poll cycle; the lock expiry means a crashed
-// run can never wedge a plugin permanently (same idea as the job lease).
-const RUN_LOCK_SECONDS = 60;
+// A claimed plugin must finish (or fail) within this lease; afterwards it
+// re-becomes due. Also the retry cadence for failed runs.
+const RUN_LEASE_SECONDS = 90;
 
 // ---- seeding ----
 
 // Seed plugin templates into the template store if they don't already
-// exist (WC templates + Daily Brief); runs once per process.
+// exist; runs once per process, and only on ticks that run something.
 let templatesEnsured = false;
 async function ensureSeedTemplates() {
   if (templatesEnsured) return;
@@ -56,37 +59,6 @@ async function ensureSeedTemplates() {
     }
   }
   templatesEnsured = true;
-}
-
-// Ensure a registry record exists for a plugin module. First registration of
-// espn-worldcup imports the retired poller's state (state-store key 'espn')
-// so nothing already printed reprints, and its watchTeams from WATCH_TEAMS.
-async function ensureRecord(module) {
-  const existing = await getPlugin(OWNER_ID, module.id);
-  if (existing) return existing;
-
-  const config = { ...module.defaults.config };
-  let state = {};
-  if (module.id === 'espn-worldcup') {
-    state = (await getState('espn')) || {};
-    if (WATCH_TEAMS.length) config.watchTeams = WATCH_TEAMS;
-  }
-
-  const record = {
-    id: module.id,
-    ownerId: OWNER_ID,
-    // a plugin may declare it needs configuration before it can run
-    enabled: module.defaults.enabled !== false,
-    intervalSeconds: module.defaults.intervalSeconds,
-    lastRunAt: null,
-    config,
-    state,
-    lastError: null,
-    lastErrorAt: null,
-  };
-  await upsertPlugin(record);
-  console.log(`  registered plugin "${module.id}" (every ${record.intervalSeconds}s)`);
-  return record;
 }
 
 // ---- plugin context ----
@@ -113,42 +85,31 @@ export default async function handler(req, res) {
   }
   if (!requireDeviceToken(req, res)) return;
 
-  // Record device contact for the dashboard's "printer online" line.
-  await setState('device', { lastSeenAt: new Date().toISOString() }).catch(() => {});
+  recordDeviceSeen();
+  await ensureRegistered();
 
+  const nowMs = Date.now();
+  const dueIds = await claimDuePlugins(OWNER_ID, nowMs, RUN_LEASE_SECONDS);
+  if (!dueIds.length) {
+    return res.status(200).json({ results: [], idle: true });
+  }
+
+  await ensureSeedTemplates();
   const results = [];
 
-  for (const module of PLUGINS) {
-    const summary = { id: module.id };
+  for (const id of dueIds) {
+    const summary = { id };
     try {
-      await ensureSeedTemplates();
-      const record = await ensureRecord(module);
+      const record = await getPlugin(OWNER_ID, id);
+      const module = PLUGINS.find(m => m.id === id);
 
-      // Passive plugins (e.g. message-ingest) are push-driven, not polled:
-      // registered so they appear on the Plugins page, but never run on a
-      // timer. The endpoint that feeds them reads their record directly.
-      if (module.passive) {
-        summary.status = 'passive';
-        results.push(summary);
-        continue;
-      }
-
-      if (!record.enabled) {
-        summary.status = 'disabled';
-        results.push(summary);
-        continue;
-      }
-
-      const intervalMs = (record.intervalSeconds || module.defaults.intervalSeconds) * 1000;
-      const lastRun = record.lastRunAt ? Date.parse(record.lastRunAt) : 0;
-      if (Date.now() - lastRun < intervalMs) {
-        summary.status = 'not-due';
-        results.push(summary);
-        continue;
-      }
-
-      if (!(await tryAcquireRunLock(OWNER_ID, module.id, RUN_LOCK_SECONDS))) {
-        summary.status = 'running';
+      if (!record || !module || module.passive || !record.enabled) {
+        // Orphaned due entry (uninstalled/disabled plugin) — drop it.
+        if (record) {
+          record.nextDueAt = null;
+          await upsertPlugin(record, { create: false });
+        }
+        summary.status = 'dropped';
         results.push(summary);
         continue;
       }
@@ -157,26 +118,26 @@ export default async function handler(req, res) {
         const { state } = await module.run({
           config: record.config || {},
           state: record.state || {},
-          ctx: makeCtx(module.id),
+          ctx: makeCtx(id),
         });
         record.state = state;
         record.lastRunAt = new Date().toISOString();
         record.lastError = null;
         record.lastErrorAt = null;
-        await upsertPlugin(record);
+        reschedule(record); // next due computed from now — run late, once
         summary.status = 'ran';
       } catch (err) {
         record.lastRunAt = new Date().toISOString();
         record.lastError = err.message;
         record.lastErrorAt = record.lastRunAt;
-        await upsertPlugin(record);
+        // Keep the claim's retry moment as the visible next-due time.
+        record.nextDueAt = nowMs + RUN_LEASE_SECONDS * 1000;
         summary.status = 'error';
         summary.error = err.message;
-      } finally {
-        await releaseRunLock(OWNER_ID, module.id);
       }
+      await upsertPlugin(record, { create: false });
     } catch (err) {
-      // Registry/seeding failure for this plugin — report it, run the rest.
+      // Store failure for this plugin — report it, run the rest.
       summary.status = 'error';
       summary.error = err.message;
     }

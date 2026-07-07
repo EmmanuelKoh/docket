@@ -7,7 +7,7 @@
 // VAR handling) is ported as-is from the retired agent/espn-poller.js — it
 // is live-tested; do not rewrite it.
 //
-// Contract: export id, defaults { intervalSeconds, config }, and
+// Contract: export id, defaults { schedule, config }, and
 // async run({ config, state, ctx }) -> { state }. The world is reached only
 // through ctx: createJob (job store, renders via render-core), getTemplate
 // (template store, by name), and log.
@@ -15,7 +15,7 @@
 export const id = 'espn-worldcup';
 
 export const defaults = {
-  intervalSeconds: 60,
+  schedule: { every: 60 }, // watcher: checks ESPN on each due run
   config: { watchTeams: [] }, // team abbreviations to filter; empty = all
 };
 
