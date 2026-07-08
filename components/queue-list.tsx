@@ -52,7 +52,7 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
   if (!jobs.length) {
     return (
       <div className="rounded-md border-[0.5px] border-border bg-raised px-5 py-8 text-center text-sm text-ink-faint">
-        No jobs waiting — print something from Templates
+        No jobs waiting.
       </div>
     );
   }

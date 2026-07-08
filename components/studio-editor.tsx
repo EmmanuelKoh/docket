@@ -190,14 +190,12 @@ export function StudioEditor() {
   const [modalName, setModalName] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [printing, setPrinting] = useState(false);
-  const [rollScale, setRollScale] = useState(1);
 
   const abortRef = useRef<AbortController | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const trackingJobId = useRef<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const booted = useRef(false);
 
   function showToast(msg: string) {
@@ -306,7 +304,7 @@ export function StudioEditor() {
           return url;
         });
         setPreviewSize([w, h]);
-        setStatus({ cls: 'active', text: `${w} x ${h}px — 1-bit` });
+        setStatus({ cls: 'active', text: `${w} x ${h}px · 1-bit` });
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         setStatus({ cls: 'error', text: (err as Error).message });
@@ -314,18 +312,6 @@ export function StudioEditor() {
     }, 400);
     return () => clearTimeout(timer);
   }, [tplSrc, dataSrc]);
-
-  // ---- scale the roll to fit its column ----
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const measure = () =>
-      setRollScale(Math.min(1, (el.clientWidth - 32) / 624));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // ---- recent jobs: poll every 3s while the tab is visible ----
   const refreshJobs = useCallback(async () => {
@@ -448,7 +434,7 @@ export function StudioEditor() {
       const body = await resp.json();
       if (resp.ok) {
         trackingJobId.current = body.id;
-        showToast(`Queued ${body.id} — ${body.width}x${body.height}px`);
+        showToast(`Queued ${body.id} · ${body.width}x${body.height}px`);
         refreshJobs();
       } else {
         showToast(body.error || 'Queue failed');
@@ -581,24 +567,15 @@ export function StudioEditor() {
             />
             <span>{status.text}</span>
           </div>
-          <div
-            ref={scrollRef}
-            className="flex flex-1 justify-center overflow-auto bg-page px-4 pt-6 pb-14"
-          >
-            <div
-              className="relative h-fit w-[624px] shrink-0 border-[0.5px] border-border bg-white px-6"
-              style={{
-                transform: `scale(${rollScale})`,
-                transformOrigin: 'top center',
-              }}
-            >
+          <div className="flex flex-1 justify-center overflow-auto bg-page px-4 pt-6 pb-14">
+            <div className="h-fit w-full max-w-[400px] shrink-0 overflow-hidden rounded-sm border-[0.5px] border-border bg-white">
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt="preview"
                   width={previewSize?.[0]}
                   height={previewSize?.[1]}
-                  className="block w-full [image-rendering:pixelated]"
+                  className="mx-auto mt-[3.75%] block w-[92.3%]"
                 />
               ) : (
                 <div className="px-5 py-10 text-center text-xs text-ink-faint">
@@ -640,7 +617,7 @@ export function StudioEditor() {
               ))
             ) : (
               <div className="px-4 py-2 font-mono text-xs text-ink-faint">
-                No jobs yet — hit Print to queue one
+                No jobs yet. Hit Print to queue one.
               </div>
             )}
           </div>

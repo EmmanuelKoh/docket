@@ -37,8 +37,7 @@ export default async function PrinterPage() {
       <div>
         <h1 className="text-base font-medium text-ink">Printer</h1>
         <p className="mt-0.5 text-xs text-ink-muted">
-          the appliance polls /next and posts /tick; nothing runs on a server
-          timer
+          Status and settings of the connected printer.
         </p>
       </div>
 
@@ -67,12 +66,6 @@ export default async function PrinterPage() {
           ))}
         </div>
       </section>
-
-      <p className="text-xs text-ink-faint">
-        Hardware behavior (status bytes, dot gain, the mute-after-flash quirk)
-        is documented in docs/rp850-field-notes.md; the firmware lives in
-        firmware/docket-agent.
-      </p>
     </div>
   );
 }

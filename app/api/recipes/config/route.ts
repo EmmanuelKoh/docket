@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       ? { at: body.sched_at, timezone: body.sched_tz }
       : { every: body.sched_every };
     const v = validateSchedule(raw);
-    if (v.error) error = `schedule: ${v.error} — not saved`;
+    if (v.error) error = `schedule: ${v.error} (not saved)`;
     else schedule = v.schedule;
   }
 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       const typeRef = key in defaultsCfg ? defaultsCfg[key] : config[key];
       const parsed = parseConfigField(typeRef, raw);
       if (parsed.error) {
-        error = `${key} ${parsed.error} — not saved`;
+        error = `${key} ${parsed.error} (not saved)`;
         break;
       }
       config[key] = parsed.value;

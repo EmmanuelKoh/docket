@@ -245,7 +245,7 @@ export function PhotoTool() {
       <div className="photo-stage">
         <div className="photo-roll" id="photoRoll">
           <div className="empty" id="photoEmpty">
-            The dithered preview appears here — exactly what will print
+            Choose a photo to see the print preview
           </div>
         </div>
         <div className="photo-actions">

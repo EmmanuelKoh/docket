@@ -17,7 +17,7 @@ export default function StudioPage() {
         <div className="mt-1 flex items-baseline gap-3">
           <h1 className="text-base font-medium text-ink">Studio</h1>
           <p className="text-xs text-ink-muted">
-            edit a template and its data; the preview is the real render
+            Edit a template and preview it.
           </p>
         </div>
       </div>

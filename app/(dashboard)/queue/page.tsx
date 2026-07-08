@@ -12,7 +12,9 @@ export default async function QueuePage() {
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-base font-medium text-ink">Queue</h1>
-          <p className="mt-0.5 text-xs text-ink-muted">refreshes every 3s</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Updates every 3 seconds.
+          </p>
         </div>
         <span className="font-mono text-xs text-ink-muted">
           {count} job{count === 1 ? '' : 's'}

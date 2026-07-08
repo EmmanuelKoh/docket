@@ -261,14 +261,13 @@ export function initPhotoTool() {
     camFrames = 0;
     camWidthIdx = 0;
     var camSeconds = 0;
+    // Watches the frame rate to step the dither width down on slow devices.
+    // No UI readout: the count is only used for the ladder decision below.
     camFpsTimer = setInterval(function () {
-      statusEl.textContent = camFrames + ' fps \u00b7 dithered viewfinder';
-      console.log('[viewfinder] ' + camFrames + ' fps @ ' + CAM_WIDTHS[camWidthIdx] + 'px');
       camSeconds++;
       // give the pipeline a settling second, then step down if struggling
       if (camSeconds > 1 && camFrames < 18 && camWidthIdx < CAM_WIDTHS.length - 1) {
         camWidthIdx++;
-        console.log('[viewfinder] slow — dropping dither width to ' + CAM_WIDTHS[camWidthIdx] + 'px');
       }
       camFrames = 0;
     }, 1000);

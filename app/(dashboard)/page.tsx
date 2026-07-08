@@ -6,6 +6,7 @@
 // legacy homePage() in api/dashboard.js.
 
 import Link from 'next/link';
+import { ReceiptPreview } from '@/components/receipt-preview';
 import { HEARTBEAT_SECONDS, OWNER_ID, STORE_DRIVER } from '@/config.js';
 import { listJobs } from '@/lib/job-store.js';
 import { listPlugins } from '@/lib/plugin-registry.js';
@@ -76,13 +77,11 @@ export default async function OverviewPage() {
         </div>
         {last ? (
           <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-start">
-            <div className="rounded-sm border-[0.5px] border-border bg-white p-3">
-              <img
-                src={`/api/jobs/png?job=${encodeURIComponent(last.id)}`}
-                alt={last.name || last.id}
-                className="max-h-64 w-auto max-w-full"
-              />
-            </div>
+            <ReceiptPreview
+              src={`/api/jobs/png?job=${encodeURIComponent(last.id)}`}
+              alt={last.name || last.id}
+              className="sm:w-[400px] sm:shrink-0"
+            />
             <div className="min-w-0 pt-1">
               <div className="truncate font-mono text-[13px] text-ink">
                 {last.name || last.id}
@@ -99,9 +98,7 @@ export default async function OverviewPage() {
             </div>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-ink-faint">
-            No prints yet — the first receipt lands here.
-          </p>
+          <p className="mt-3 text-sm text-ink-faint">Nothing printed yet.</p>
         )}
       </section>
 

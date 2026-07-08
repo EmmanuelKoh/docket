@@ -435,6 +435,69 @@
   margin-top: 14px;
 }
 
+/* ---- balanced two columns (desktop, both states) ---- */
+/* The left column (dropzone, or the editor once a photo loads) is a fixed
+   400px. Left on its own the right stage would stretch to fill the row and
+   the preview would hug its left edge, leaving a gap on the far right. So
+   size the stage to the preview and center the whole pair in the card, and
+   center the roll + Print within the stage so the button sits directly
+   under the preview. Below 720px the phone stack further down takes over. */
+@media (min-width: 721px) {
+  .photo-tool {
+    justify-content: center;
+  }
+  .photo-stage {
+    flex: 0 1 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* ---- empty state (no photo chosen yet) ---- */
+/* the engine adds .has-photo once an image loads; before that, keep the
+   two-up simple: dropzone + blank white paper, each the same height, with
+   its button below. Caption styling is premature with no photo, so it
+   stays hidden until the editor appears. */
+#photoTool:not(.has-photo) .photo-field {
+  display: none;
+}
+#photoTool:not(.has-photo) .dropzone {
+  min-height: 280px;
+}
+/* the preview stays white like paper (a blank slip), hint centered on it in
+   dark text since paper is white in both themes */
+#photoTool:not(.has-photo) .photo-roll {
+  width: 100%; /* fills the 400px stage on desktop; full width on phones */
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#photoTool:not(.has-photo) .photo-roll .empty {
+  max-width: 220px;
+  padding: 24px;
+  text-align: center;
+  color: #737373;
+  font-size: 13px;
+}
+
+/* ---- camera mode (viewfinder open) ---- */
+/* the viewfinder is the input now, so it stands alone: hide the dropzone,
+   the take-photo button, and the empty preview, and center the viewfinder
+   + shutter. The engine toggles .camera on #photoEditor; capturing or
+   cancelling removes it and the two-up above returns. */
+#photoTool:has(.photo-editor.camera) .dropzone,
+#photoTool:has(.photo-editor.camera) .photo-take,
+#photoTool:has(.photo-editor.camera) .photo-stage {
+  display: none;
+}
+@media (min-width: 721px) {
+  #photoTool:has(.photo-editor.camera) .photo-controls {
+    width: 480px;
+  }
+}
+
 /* phone tool dock: a row of tool names styled like the header nav —
    quiet text, the active tool inked with the red underline */
 .tool-dock {
@@ -482,9 +545,10 @@
   }
   .photo-tool.has-photo .photo-roll {
     order: -1;
-    width: 240px;
-    margin: 0 auto;
-    max-height: 44vh;
+    width: 100%; /* the preview is the hero on phones — full width */
+    max-width: none;
+    margin: 0;
+    max-height: 60vh;
     overflow-y: auto; /* very tall slips scroll inside */
   }
   .photo-tool.has-photo .photo-actions {

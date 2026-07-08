@@ -12,7 +12,7 @@ export default function PhotoPage() {
       <div>
         <h1 className="text-base font-medium text-ink">Photo</h1>
         <p className="mt-0.5 text-xs text-ink-muted">
-          print a picture — dithered like everything else
+          Print a photo on receipt paper.
         </p>
       </div>
       <div className="rounded-md border-[0.5px] border-border bg-raised p-4 sm:p-5">

@@ -8,6 +8,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { DeleteTemplateButton } from '@/components/delete-template-button';
 import { PrintTestButton } from '@/components/print-test-button';
+import {
+  ReceiptPreview,
+  ReceiptPreviewEmpty,
+} from '@/components/receipt-preview';
 import { RecipeSystemPanel } from '@/components/recipe-system-panel';
 import { getRecipe } from '../../../_lib/recipe-data';
 
@@ -58,17 +62,16 @@ export default async function RecipePage({
           <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
             Preview
           </div>
-          <div className="mt-3 flex justify-center rounded-sm border-[0.5px] border-border bg-white p-4">
+          <div className="mt-3">
             {recipe.primaryTemplate ? (
-              <img
+              <ReceiptPreview
                 src={`/api/templates/thumb?name=${encodeURIComponent(recipe.primaryTemplate)}`}
                 alt={recipe.primaryTemplate}
-                className="w-full max-w-[420px]"
               />
             ) : (
-              <p className="py-10 text-sm text-ink-faint">
-                No template in the store yet — it seeds on the first tick.
-              </p>
+              <ReceiptPreviewEmpty>
+                No template to preview yet.
+              </ReceiptPreviewEmpty>
             )}
           </div>
           <div className="mt-3 flex justify-center">
