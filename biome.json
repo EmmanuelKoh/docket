@@ -1,7 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "files": {
-    "includes": ["app/**", "components/**"]
+    "includes": [
+      "app/**",
+      "components/**",
+      "!components/photo-engine.js",
+      "!app/(dashboard)/photo/photo-tool.css"
+    ]
   },
   "formatter": {
     "enabled": true,

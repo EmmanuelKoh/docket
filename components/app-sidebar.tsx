@@ -6,7 +6,14 @@
 // vertical cousin of the legacy nav's red underline). The queue item
 // carries a count badge, red only when nonzero (red-usage rule 4).
 
-import { History, House, Layers, NotebookText } from 'lucide-react';
+import {
+  Camera,
+  History,
+  House,
+  Layers,
+  NotebookText,
+  Printer,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -25,8 +32,10 @@ import {
 const NAV = [
   { title: 'Overview', url: '/', icon: House },
   { title: 'Recipes', url: '/recipes', icon: NotebookText },
+  { title: 'Photo', url: '/photo', icon: Camera },
   { title: 'Queue', url: '/queue', icon: Layers },
   { title: 'History', url: '/history', icon: History },
+  { title: 'Printer', url: '/printer', icon: Printer },
 ];
 
 const ACTIVE_BAR =

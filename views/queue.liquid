@@ -1,9 +1,0 @@
-<div class="title-row">
-  <div>
-    <h1>Queue</h1>
-    <div class="subtitle">refreshes every 3s</div>
-  </div>
-  <span class="right mono" id="queue-count">{{ count }} job{% unless count == 1 %}s{% endunless %}</span>
-</div>
-
-{% render 'queue-list', jobs: jobs, count: count, oob: false %}

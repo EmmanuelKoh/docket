@@ -6,6 +6,7 @@
 import { LogOut } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/app-sidebar';
+import { ContentColumn } from '@/components/content-column';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
   SidebarInset,
@@ -43,9 +44,7 @@ export default async function DashboardLayout({
             </a>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-12">
-          {children}
-        </main>
+        <ContentColumn>{children}</ContentColumn>
       </SidebarInset>
     </SidebarProvider>
   );

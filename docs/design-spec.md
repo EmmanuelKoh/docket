@@ -134,8 +134,8 @@ else in this spec (tokens, red rules, spacing, components, page specs)
 carries over unchanged. Shell rules:
 
 - Sidebar: DOCKET wordmark at top (links home), then Overview, Recipes,
-  Queue, History. Collapsible to an icon rail; on phones it becomes a
-  sheet.
+  Photo, Queue, History, Printer. Collapsible to an icon rail; on phones
+  it becomes a sheet.
   Items are 13px --ink-muted with 14px outline icons in --ink-faint.
   Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
   item's left edge (the vertical form of the old nav underline).
@@ -165,12 +165,24 @@ carries over unchanged. Shell rules:
   as textareas), template names, one explicit Save. Below: TEMPLATES
   rows, each "Open in Studio", and the STATE debug record (system only).
   The Studio remains the template editor, served at /studio.
+- Printer page: online dot per the 90-second rule, then a read-only
+  label/value grid (device seen, store driver, tick, print width, job
+  cap, version) and a quiet pointer to the hardware docs.
+- Studio page: toolbar card (template select mono, New/Save/Delete,
+  Print right with the shortcut hint), then a two-column pair of equal
+  cards: editors (Template / Data tabs with the red active underline,
+  syntax-highlighted source over the mono editor, JSON error line in
+  --red) and the stage (status dot + mono size line, the 624px paper
+  roll scaled to fit, RECENT JOBS strip with thumbnails). Toasts are a
+  small centered raised chip. Keyboard: Cmd/Ctrl+S save, +P print.
+- Photo page: the workbench per the Photo spec below, unchanged in
+  behavior (its engine carried over verbatim); it now sits inside the
+  shell as a card under the standard title block.
 
 ## Pages
 
-Header (legacy app, all pages): DOCKET wordmark left; nav right: Home,
-Templates, Photo, Plugins, Queue, History, then theme-toggle icon, logout
-icon.
+Every page lives in the sidebar shell above. The specs below describe
+each page's content zone.
 
 ### Home
 1. Stat strip: ONE bordered container split into 4 cells by 0.5px --hairline

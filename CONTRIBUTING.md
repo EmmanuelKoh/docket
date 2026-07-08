@@ -41,7 +41,7 @@ git clone https://github.com/EmmanuelKoh/docket.git
 cd docket
 npm install
 cp .env.example .env   # set DASHBOARD_PASSWORD and SESSION_SECRET
-npm start              # http://localhost:3000
+npm run dev            # http://localhost:3000
 ```
 
 The default `STORE_DRIVER=json` keeps all state in local files under
@@ -53,8 +53,9 @@ node agent/printer-agent.js   # fake printer: polls /next, sends to TCP
 node agent/heartbeat.js       # POSTs /tick to drive plugin runs
 ```
 
-Note: restart the server after editing files in `views/` (LiquidJS caches
-compiled templates). CSS changes only need a browser refresh.
+Note: app code hot-reloads, but restart the server after editing files in
+`views/` (LiquidJS caches compiled templates). CSS changes only need a
+browser refresh.
 
 ## Code Guidelines
 

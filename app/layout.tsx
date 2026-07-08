@@ -6,9 +6,8 @@ export const metadata: Metadata = {
   description: 'Thermal-receipt platform',
 };
 
-// Same theme mechanism as the legacy dashboard (views/layout.liquid):
-// localStorage key "docket-theme", data-theme="dark" stamped on <html>
-// before first paint so there is no flash.
+// Theme bootstrap: localStorage key "docket-theme", data-theme="dark"
+// stamped on <html> before first paint so there is no flash.
 const themeInit = `
   if (localStorage.getItem('docket-theme') === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');

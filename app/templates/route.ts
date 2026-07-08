@@ -1,5 +1,5 @@
-// /templates — CRUD for saved templates, ported from api/templates.js at
-// the same path so views/studio.html works unchanged against this app.
+// /templates — CRUD for saved templates, used by the Studio
+// (components/studio-editor.tsx) and the Photo tool.
 
 import {
   requestSessionValid,

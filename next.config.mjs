@@ -28,10 +28,17 @@ const nextConfig = {
     '/ingest': ['./reference/**', './render/fonts/**'],
     '/preview': ['./render/fonts/**'],
     '/jobs': ['./render/fonts/**'],
-    '/studio': ['./views/studio.html'],
     '/api/templates/thumb': ['./render/fonts/**'],
     '/api/jobs/reprint': ['./render/fonts/**'],
     '/api/recipes/print-test': ['./render/fonts/**'],
+  },
+  // Muscle memory from the legacy app: the dashboard used to live under
+  // /dashboard/*; send old bookmarks to the shell.
+  async redirects() {
+    return [
+      { source: '/dashboard', destination: '/', permanent: false },
+      { source: '/dashboard/:path*', destination: '/', permanent: false },
+    ];
   },
 };
 

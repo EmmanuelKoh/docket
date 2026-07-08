@@ -1,9 +1,7 @@
-/* app/globals.css — docket theme for the Next.js shell.
-   Tokens are copied from public/docket.css (the legacy dashboard) and stay
-   byte-identical until the old views are deleted; docs/design-spec.md is
-   the source of truth for how they may be used. The --dither values are
-   spliced in from public/docket.css by design (thermal-paper grain tile,
-   one per theme) — see that file for how to regenerate them. */
+/* app/globals.css — the docket theme. Tokens per docs/design-spec.md
+   (the source of truth for how they may be used). The --dither values are
+   the thermal-paper grain tiles, one per theme — the spec describes how
+   to regenerate them if they ever need tuning. */
 
 @import "tailwindcss";
 

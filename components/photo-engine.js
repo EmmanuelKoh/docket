@@ -1,123 +1,17 @@
-<div class="title-row">
-  <div>
-    <h1>Photo</h1>
-    <div class="subtitle">print a picture — dithered like everything else</div>
-  </div>
-</div>
+// components/photo-engine.js — the Photo tool's engine, extracted VERBATIM
+// from the retired views/photo.liquid (its inline script, wrapped in an
+// init/dispose lifecycle for React). This code is live-tested against the
+// physical printer: the calibration CURVE (keep in sync with
+// scripts/print-calibration.js), the worker viewfinder protocol
+// (public/dither-worker.js), and the crop/levels pointer math must not be
+// 'cleaned up' — see docs/rp850-field-notes.md for why the curve looks
+// the way it does. The markup it drives is components/photo-tool.tsx;
+// element ids and class names are the contract between the two.
+//
+// Mounted once per page visit by photo-tool.tsx; dispose stops the
+// camera, terminates the worker, and clears timers/listeners.
 
-<div class="card">
-  <div class="photo-tool" id="photoTool">
-    <div class="photo-controls">
-      <label class="dropzone pnl" id="dropzone" data-panel="source">
-        <input type="file" id="photoInput" accept="image/*" hidden>
-        <span id="dropHint">Choose a photo<br><span class="sub">or drop one here</span></span>
-      </label>
-      <label class="btn photo-take pnl" id="takeBtn" data-panel="source">
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
-        Take a photo
-      </label>
-      <div class="photo-editor" id="photoEditor" hidden>
-        <video id="cameraFeed" autoplay playsinline muted></video>
-        <canvas id="camDither" class="cam-dither"></canvas>
-        <canvas class="pnl" id="editCanvas" data-panel="crop"></canvas>
-        <div class="camera-tools">
-          <button type="button" class="shutter" id="captureBtn" title="Capture"></button>
-          <button type="button" class="camera-cancel" id="cameraCancelBtn">cancel</button>
-        </div>
-        <div class="edit-tools pnl" data-panel="crop">
-          <div class="seg" id="cropPresets">
-            <button type="button" data-a="" class="on">Full</button>
-            <button type="button" data-a="1">1:1</button>
-            <button type="button" data-a="1.3333">4:3</button>
-            <button type="button" data-a="1.5">3:2</button>
-          </div>
-          <button type="button" class="btn small" id="rotateBtn">Rotate 90°</button>
-        </div>
-        <div class="tone-group">
-          <button type="button" class="tone-toggle" id="toneToggle">
-            <span class="label">Adjustments</span>
-            <span class="tone-val" id="toneSummary"></span>
-            <span class="tone-chev" id="toneChev">&#9656;</span>
-          </button>
-          <div class="tone-body" id="toneBody" hidden>
-            <div class="tone-head pnl" data-panel="levels">
-              <span class="label" id="levelsLabel">Levels</span>
-              <button type="button" class="auto-toggle on" id="autoBtn">auto</button>
-              <span class="tone-val" id="levelsVal">0 · 255</span>
-            </div>
-            <canvas class="hist-canvas pnl" id="histCanvas" data-panel="levels"></canvas>
-            <div class="level-track pnl" id="levelTrack" data-panel="levels">
-              <div class="level-handle black" id="handleBlack"></div>
-              <div class="level-handle white" id="handleWhite"></div>
-            </div>
-            <div class="tone-row pnl" data-panel="mid">
-              <span class="label" id="midLabel">Midtone</span>
-              <input type="range" id="midSlider" min="-100" max="100" value="0">
-              <span class="tone-val" id="midVal">0</span>
-            </div>
-            <div class="tone-row pnl" data-panel="shadow">
-              <span class="label" id="shadowLabel">Shadows</span>
-              <input type="range" id="shadowSlider" min="-100" max="100" value="0">
-              <span class="tone-val" id="shadowVal">0</span>
-            </div>
-            <div class="tone-row pnl" data-panel="bright">
-              <span class="label" id="brightLabel">Brightness</span>
-              <input type="range" id="brightSlider" min="-100" max="100" value="0">
-              <span class="tone-val" id="brightVal">0</span>
-            </div>
-            <div class="tone-row pnl" data-panel="contrast">
-              <span class="label" id="contrastLabel">Contrast</span>
-              <input type="range" id="contrastSlider" min="-100" max="100" value="0">
-              <span class="tone-val" id="contrastVal">0</span>
-            </div>
-            <div class="tone-row pnl" data-panel="sharp">
-              <span class="label" id="sharpLabel">Sharpen</span>
-              <input type="range" id="sharpSlider" min="0" max="200" value="0">
-              <span class="tone-val" id="sharpVal">0</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="photo-field">
-        <span class="label">Caption</span>
-        <input class="editable" id="captionInput" placeholder="optional" spellcheck="false" maxlength="120">
-        <div class="caption-tools">
-          <div class="seg" id="capSize">
-            <button type="button" data-v="28">S</button>
-            <button type="button" data-v="36" class="on">M</button>
-            <button type="button" data-v="48">L</button>
-          </div>
-          <div class="seg" id="capWeight">
-            <button type="button" data-v="400" class="on">Regular</button>
-            <button type="button" data-v="700">Bold</button>
-          </div>
-        </div>
-      </div>
-      <div class="tool-dock" id="toolDock">
-        <button type="button" data-panel="source">Photo</button>
-        <button type="button" data-panel="crop" class="on">Crop</button>
-        <button type="button" data-panel="levels">Levels</button>
-        <button type="button" data-panel="mid">Midtone</button>
-        <button type="button" data-panel="shadow">Shadows</button>
-        <button type="button" data-panel="bright">Brightness</button>
-        <button type="button" data-panel="contrast">Contrast</button>
-        <button type="button" data-panel="sharp">Sharpen</button>
-      </div>
-    </div>
-    <div class="photo-stage">
-      <div class="photo-roll" id="photoRoll">
-        <div class="empty" id="photoEmpty">The dithered preview appears here — exactly what will print</div>
-      </div>
-      <div class="photo-actions">
-        <span class="status" id="photoStatus"></span>
-        <button class="btn" id="printBtn" disabled>Print</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-(function () {
+export function initPhotoTool() {
   var TPL = null;
   var previewData = null;   // uncompensated — what the paper will LOOK like
                             // (the compensated print version is built once,
@@ -619,9 +513,10 @@
   editCanvas.addEventListener('pointerup', endDrag);
   editCanvas.addEventListener('pointercancel', endDrag);
 
-  window.addEventListener('resize', function () {
+  var onWinResize = function () {
     if (oriented) { drawEditor(); drawHist(); }
-  });
+  };
+  window.addEventListener('resize', onWinResize);
 
   // ---- rotate/crop -> the two data URIs the rest of the flow uses ----
 
@@ -990,5 +885,12 @@
       printBtn.textContent = 'Print';
     });
   });
-})();
-</script>
+  // ---- dispose (React unmount) ----
+  return function dispose() {
+    closeCamera();
+    if (camWorker) { camWorker.terminate(); camWorker = null; }
+    clearTimeout(debounceTimer);
+    clearTimeout(toneTimer);
+    window.removeEventListener('resize', onWinResize);
+  };
+}

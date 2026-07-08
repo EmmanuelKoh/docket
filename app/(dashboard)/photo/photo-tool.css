@@ -1,0 +1,563 @@
+/* Photo tool styles, extracted verbatim from the retired public/docket.css
+   (the .photo-* block plus the generic classes the tool's markup uses:
+   .btn, .label, .editable, .status, .seg). The engine
+   (components/photo-engine.js) toggles the same class names the legacy
+   page used — do not rename classes here without updating it. Tokens come
+   from app/globals.css. */
+
+.btn {
+  display: inline-block;
+  background: var(--raised);
+  color: var(--ink);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--ink-faint);
+}
+.btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.btn:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.btn:disabled:hover {
+  border-color: var(--border);
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.editable {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--ink-faint);
+  padding: 0 0 1px;
+  outline: none;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.status {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* ---- photo tool ---- */
+
+.photo-tool {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.photo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 400px;
+  flex-shrink: 0;
+}
+.dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 110px;
+  border: 1px dashed var(--dash);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 12px;
+}
+.dropzone:hover {
+  border-color: var(--ink-faint);
+}
+.dropzone .sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+/* once a photo exists the editor is the hero — the dropzone slims down */
+.photo-tool.has-photo .dropzone {
+  min-height: 0;
+  padding: 8px 12px;
+}
+
+.photo-take {
+  text-align: center;
+}
+.photo-take input {
+  display: none;
+}
+
+/* the viewfinder shares the editor stage: camera mode shows the live
+   DITHERED feed (the <video> is only a hidden frame source for the
+   dither worker; mirroring happens in the frame capture) */
+.photo-editor video {
+  display: none;
+}
+.photo-editor .cam-dither {
+  display: block;
+  width: 100%;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  background: #000;
+  /* NO image-rendering: pixelated — the canvas holds a 576-dot dither
+     shown smaller, smooth-scaled just like the rendered preview img, so
+     the two read as the same texture */
+}
+.photo-editor:not(.camera) .cam-dither,
+.photo-editor:not(.camera) .camera-tools {
+  display: none;
+}
+.photo-editor.camera canvas.pnl,
+.photo-editor.camera .edit-tools {
+  display: none;
+}
+.camera-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+/* camera-app shutter: a ring with an inner disc that grows on hover */
+.shutter {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  background-clip: content-box;
+  padding: 4px;
+  cursor: pointer;
+}
+.shutter:hover {
+  padding: 3px;
+}
+.shutter:active {
+  padding: 6px;
+}
+.camera-cancel {
+  position: absolute;
+  right: 0;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.camera-cancel:hover {
+  color: var(--ink);
+}
+
+.photo-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.photo-editor[hidden] {
+  display: none;
+}
+.photo-editor canvas {
+  display: block;
+  max-width: 100%;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  touch-action: none; /* the canvas owns drags — don't scroll the page */
+  cursor: crosshair;
+}
+.edit-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* segmented control: one choice lit, inverse mono like .toggle.on */
+.seg {
+  display: inline-flex;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  background: var(--raised);
+  color: var(--ink);
+  border: 0;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg button + button {
+  border-left: 0.5px solid var(--border);
+}
+.seg:hover {
+  border-color: var(--ink-faint);
+}
+.seg button.on {
+  background: var(--ink);
+  color: var(--page);
+}
+
+/* ---- tone controls (levels histogram + sliders) ---- */
+
+.tone-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.tone-group .label {
+  user-select: none;
+  -webkit-user-select: none;
+} /* labels reset on dblclick */
+.photo-editor.camera .tone-group {
+  display: none;
+}
+.tone-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-top: 1px dashed var(--dash);
+  padding: 10px 0 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.tone-toggle .label {
+  cursor: pointer;
+}
+.tone-toggle .tone-val {
+  margin-left: auto;
+}
+.tone-chev {
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+.tone-toggle:hover .tone-chev {
+  color: var(--ink);
+}
+.tone-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tone-body[hidden] {
+  display: none;
+}
+.tone-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tone-head .tone-val {
+  margin-left: auto;
+}
+.tone-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.auto-toggle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--raised);
+  color: var(--ink-muted);
+  border: 0.5px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.auto-toggle:hover {
+  border-color: var(--ink-faint);
+}
+.auto-toggle.on {
+  background: var(--ink);
+  color: var(--page);
+  border-color: var(--ink);
+}
+
+.hist-canvas {
+  display: block;
+  width: 100%;
+  height: 40px;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+}
+.level-track {
+  position: relative;
+  height: 14px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.level-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--border);
+}
+.level-handle {
+  position: absolute;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  pointer-events: none; /* the track owns the drag */
+}
+.level-handle.black {
+  background: var(--ink);
+}
+.level-handle.white {
+  background: var(--raised);
+  border: 1px solid var(--ink);
+}
+
+.tone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tone-row .label {
+  width: 88px;
+  flex-shrink: 0;
+}
+.tone-row .tone-val {
+  width: 34px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.tone-row input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: transparent;
+  margin: 0;
+  cursor: ew-resize;
+}
+.tone-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--border);
+}
+.tone-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--ink);
+  margin-top: -4.5px;
+}
+.tone-row input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: var(--border);
+}
+.tone-row input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.photo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.photo-field .editable {
+  width: 100%;
+}
+.caption-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.photo-stage {
+  flex: 1;
+  min-width: 0;
+}
+.photo-roll {
+  background: #ffffff;
+  border: 0.5px solid var(--border);
+  border-radius: 2px;
+  max-width: 400px;
+}
+/* physical paper: the printable 576 dots sit inside 80mm stock (624) with
+   ~3mm unprintable sides and ~3mm cut-edge top. Sizing the IMAGE at
+   576/624 = 92.3% with auto side margins keeps the ratios anchored to the
+   box itself (percentage padding on the box would resolve against the
+   PARENT's width and render ~double — a real CSS gotcha). */
+.photo-roll img {
+  display: block;
+  width: 92.3%;
+  margin: 3.75% auto 0;
+}
+.photo-roll .empty {
+  color: var(--ink-faint);
+}
+/* the commit action lives with the result it commits */
+.photo-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: 400px; /* centers under the roll */
+  margin-top: 14px;
+}
+
+/* phone tool dock: a row of tool names styled like the header nav —
+   quiet text, the active tool inked with the red underline */
+.tool-dock {
+  display: none;
+}
+.tool-dock button {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+  background: none;
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  color: var(--ink-muted);
+  padding: 4px 0 3px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tool-dock button.on {
+  color: var(--ink);
+  border-bottom-color: var(--red);
+}
+
+/* iPhone-editor layout on phones once a photo exists: the preview on top
+   (Print like iOS Done above it), a chip dock of tools at the bottom
+   showing one control at a time. Empty state stays a simple stack. */
+@media (max-width: 720px) {
+  /* stretch, not flex-start: in column direction flex-start would
+     shrink-wrap the stage to its content and pin it left */
+  .photo-tool {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+  .photo-controls {
+    width: 100%;
+    gap: 20px;
+  }
+
+  /* dissolve the stage box so the preview and the actions can order
+     independently: preview on top, Print at the very bottom */
+  .photo-tool.has-photo .photo-stage {
+    display: contents;
+  }
+  .photo-tool.has-photo .photo-roll {
+    order: -1;
+    width: 240px;
+    margin: 0 auto;
+    max-height: 44vh;
+    overflow-y: auto; /* very tall slips scroll inside */
+  }
+  .photo-tool.has-photo .photo-actions {
+    order: 9;
+    flex-direction: column; /* status above a full-width Print */
+    gap: 10px;
+    margin: 0;
+    max-width: none;
+  }
+  .photo-tool.has-photo .photo-actions .btn {
+    width: 100%;
+  }
+  /* crop takes the stage: hide the roll so the canvas can go big */
+  .photo-tool.has-photo.crop-mode .photo-roll {
+    display: none;
+  }
+
+  /* the dock shows exactly one panel; the caption field stays out of the
+     dock — always visible between the chips and Print */
+  .photo-tool.has-photo .pnl {
+    display: none;
+  }
+  .photo-tool.has-photo .pnl.pnl-on {
+    display: flex;
+  }
+  .photo-tool.has-photo canvas.pnl.pnl-on {
+    display: block;
+  }
+  .photo-tool.has-photo .level-track.pnl-on {
+    display: block;
+  }
+  .photo-tool.has-photo .photo-take.pnl-on {
+    display: block;
+  }
+  .photo-tool.has-photo .tone-toggle {
+    display: none;
+  } /* chips replace the collapse */
+  .photo-tool.has-photo .tone-body[hidden] {
+    display: flex;
+  }
+  .photo-tool.has-photo .photo-field {
+    order: 5;
+  } /* after the chip row */
+
+  /* keep the dock from jumping between tools: the tone zone gets one
+     fixed height whatever it holds, and containers left with no visible
+     panel are removed so their flex gaps don't add offsets */
+  .photo-tool.has-photo .tone-body {
+    min-height: 96px;
+    justify-content: center;
+  }
+  .photo-tool.has-photo .photo-editor:not(:has(.pnl-on)),
+  .photo-tool.has-photo .tone-group:not(:has(.pnl-on)) {
+    display: none;
+  }
+  /* camera mode survives the one-panel rule: the viewfinder and shutter
+     aren't panels, so the editor must show even with no panel active */
+  .photo-tool.has-photo .photo-editor.camera {
+    display: flex;
+  }
+
+  .photo-tool.has-photo .tool-dock {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 0 6px;
+  }
+}
+
+/* phones: big tap target while empty (from the old 640px block) */
+@media (max-width: 640px) {
+  .dropzone {
+    min-height: 140px;
+  }
+}

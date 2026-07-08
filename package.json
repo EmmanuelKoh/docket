@@ -6,9 +6,9 @@
   "description": "Thermal-receipt platform: Liquid+HTML templates rendered to ESC/POS, printed by an ESP32 appliance — with plugins, a dashboard, and SMS-to-task capture",
   "main": "render/render-core.js",
   "scripts": {
-    "start": "node server.js",
     "dev": "next dev",
     "build": "next build",
+    "start": "next start",
     "lint": "biome check app components",
     "migrate": "node scripts/migrate-json-to-redis.js"
   },
