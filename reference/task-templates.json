@@ -1,15 +1,21 @@
 [
   {
     "name": "Task",
-    "template": "<div style=\"display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:24px\">\n  <div style=\"display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #000;padding-bottom:8px\">\n    <div style=\"display:flex;font-size:46px;font-weight:700\">TASK</div>\n    <div style=\"display:flex;flex-direction:column;align-items:flex-end;font-family:Mono;font-size:18px\">\n      <div style=\"display:flex\">{{ date }}</div>\n      <div style=\"display:flex\">{{ time }}</div>\n    </div>\n  </div>\n  <div style=\"display:flex;flex-direction:row;align-items:flex-start;margin-top:18px\">\n    <div style=\"display:flex;width:26px;height:26px;border:3px solid #000;margin-top:5px\"></div>\n    <div style=\"display:flex;flex:1;font-size:30px;font-weight:700;line-height:1.15;margin-left:14px\">{{ title }}</div>\n  </div>\n  <div style=\"display:flex;flex-direction:column;font-family:Mono;font-size:20px;margin-top:16px\">\n    <div style=\"display:flex;justify-content:space-between;margin-top:4px\">\n      <div style=\"display:flex\">FROM</div>\n      <div style=\"display:flex\">{{ sender }}</div>\n    </div>\n    {% if due != \"\" %}\n    <div style=\"display:flex;justify-content:space-between;margin-top:4px\">\n      <div style=\"display:flex\">DUE</div>\n      <div style=\"display:flex;font-weight:700\">{{ due }}</div>\n    </div>\n    {% endif %}\n  </div>\n  {% if priority == \"high\" %}\n  <div style=\"display:flex;background:#000;color:#fff;font-size:18px;font-weight:700;padding:4px 10px;margin-top:14px\">PRIORITY HIGH</div>\n  {% endif %}\n  {% if quote != \"\" %}\n  <div style=\"display:flex;border-left:4px solid #000;padding-left:12px;margin-top:16px;font-size:20px;color:#222\">“{{ quote }}”</div>\n  {% endif %}\n</div>",
+    "template": "<div style=\"display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:24px\">\n  <div style=\"display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #000;padding-bottom:8px\">\n    <div style=\"display:flex;font-size:46px;font-weight:700\">TASK</div>\n    <div style=\"display:flex;flex-direction:column;align-items:flex-end;font-family:Mono;font-size:18px\">\n      <div style=\"display:flex\">{{ date }}</div>\n      <div style=\"display:flex\">{{ time }}</div>\n    </div>\n  </div>\n  {% if items and items.size > 0 %}\n  <div style=\"display:flex;font-size:30px;font-weight:700;line-height:1.15;margin-top:18px\">{{ title }}</div>\n  <div style=\"display:flex;flex-direction:column;margin-top:12px\">\n    {% for item in items %}\n    <div style=\"display:flex;flex-direction:row;align-items:flex-start;margin-top:10px\">\n      {% if ordered %}\n      <div style=\"display:flex;font-family:Mono;font-size:24px;font-weight:700;width:40px\">{{ forloop.index }}.</div>\n      {% else %}\n      <div style=\"display:flex;width:24px;height:24px;border:3px solid #000;margin-top:3px;margin-right:14px\"></div>\n      {% endif %}\n      <div style=\"display:flex;flex:1;font-size:24px;line-height:1.2\">{{ item }}</div>\n    </div>\n    {% endfor %}\n  </div>\n  {% else %}\n  <div style=\"display:flex;flex-direction:row;align-items:flex-start;margin-top:18px\">\n    <div style=\"display:flex;width:26px;height:26px;border:3px solid #000;margin-top:5px\"></div>\n    <div style=\"display:flex;flex:1;font-size:30px;font-weight:700;line-height:1.15;margin-left:14px\">{{ title }}</div>\n  </div>\n  {% endif %}\n  <div style=\"display:flex;flex-direction:column;font-family:Mono;font-size:20px;margin-top:16px\">\n    <div style=\"display:flex;justify-content:space-between;margin-top:4px\">\n      <div style=\"display:flex\">FROM</div>\n      <div style=\"display:flex\">{{ sender }}</div>\n    </div>\n    {% if due != \"\" %}\n    <div style=\"display:flex;justify-content:space-between;margin-top:4px\">\n      <div style=\"display:flex\">DUE</div>\n      <div style=\"display:flex;font-weight:700\">{{ due }}</div>\n    </div>\n    {% endif %}\n  </div>\n  {% if priority == \"high\" %}\n  <div style=\"display:flex;background:#000;color:#fff;font-size:18px;font-weight:700;padding:4px 10px;margin-top:14px\">PRIORITY HIGH</div>\n  {% endif %}\n  {% if quote != \"\" %}\n  <div style=\"display:flex;border-left:4px solid #000;padding-left:12px;margin-top:16px;font-size:20px;color:#222\">“{{ quote }}”</div>\n  {% endif %}\n</div>",
     "data": {
-      "title": "Renew car insurance",
-      "sender": "+1 555 0142",
-      "date": "Jul 4 2026",
-      "time": "14:32",
-      "due": "2026-07-10",
-      "priority": "high",
-      "quote": "don't forget the insurance is due next week"
+      "title": "Before leaving",
+      "items": [
+        "Take out the trash",
+        "Turn off the devices",
+        "Lock the doors"
+      ],
+      "ordered": false,
+      "sender": "Alice",
+      "date": "Jul 8 2026",
+      "time": "17:30",
+      "due": "",
+      "priority": "normal",
+      "quote": "before you leave remember to do these things"
     }
   }
 ]

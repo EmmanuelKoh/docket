@@ -1,9 +1,10 @@
 // app/ingest/route.ts — POST /ingest
-// Receives messages forwarded from a phone, asks Gemini whether the message
-// contains a task, and if so prints a task receipt immediately via
-// createJob. Ported from api/ingest.js; see that file for the full
-// commentary on auth (a dedicated INGEST_TOKEN, rotatable without touching
-// the printer), the message-ingest plugin record, and the "task:" override.
+// Receives messages forwarded from a phone, asks Gemini what tasks the
+// message contains, and prints a slip for each. Gemini groups related
+// items onto one task and splits unrelated tasks apart, so one message can
+// print several slips. See api/ingest.js for the full commentary on auth
+// (a dedicated INGEST_TOKEN, rotatable without touching the printer), the
+// message-ingest plugin record, and the "task:" override.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,6 +16,17 @@ import { classifyMessage } from '@/lib/task-classifier.js';
 import * as messageIngest from '@/plugins/message-ingest.js';
 
 export const maxDuration = 60;
+
+// One task from the classifier: a single action (items empty) or a group of
+// related items/steps that print together on one slip.
+type TaskGroup = {
+  title?: string;
+  items?: string[];
+  ordered?: boolean;
+  due?: string;
+  priority?: string;
+  quote?: string;
+};
 
 const TASK_TEMPLATE_FILE = path.join(
   process.cwd(),
@@ -140,11 +152,8 @@ export async function POST(req: Request) {
 
   let verdict: {
     is_task?: boolean;
-    title?: string;
     confidence?: number;
-    due?: string;
-    priority?: string;
-    quote?: string;
+    tasks?: TaskGroup[];
   };
   try {
     verdict = await classifyMessage(
@@ -163,40 +172,55 @@ export async function POST(req: Request) {
   if (forced) {
     verdict.is_task = true;
     verdict.confidence = 1;
-    // Keep Gemini's cleaned-up title; fall back to the raw text only if it
-    // gave none (e.g. trivial content, or the classifier was down).
-    if (!verdict.title) verdict.title = classifyText || text.trim();
+    // Keep whatever Gemini grouped; if it gave nothing (trivial content, or
+    // the classifier was down), fall back to one slip from the raw text.
+    if (!verdict.tasks || verdict.tasks.length === 0) {
+      verdict.tasks = [{ title: classifyText || text.trim() }];
+    }
   }
+
+  const tasks = verdict.tasks || [];
 
   // A forced ("task:") message always prints — skip the classifier gate
   // entirely rather than relying on its confidence beating the threshold.
   if (
     !forced &&
-    (!verdict.is_task || (verdict.confidence ?? 0) < minConfidence)
+    (!verdict.is_task ||
+      (verdict.confidence ?? 0) < minConfidence ||
+      tasks.length === 0)
   ) {
     await markActivity(record);
     return Response.json({ task: false, confidence: verdict.confidence ?? 0 });
   }
 
+  // One slip per task: Gemini has already grouped related items together and
+  // split unrelated tasks apart, so each entry prints on its own.
   const tpl = await getTaskTemplate();
   const { date, time } = receivedParts(receivedAt, cfg.timezone);
-  const data = {
-    title: verdict.title || text.slice(0, 80),
-    sender: sender || 'unknown',
-    date,
-    time,
-    due: verdict.due || '',
-    priority: verdict.priority || 'normal',
-    quote: verdict.quote || '',
-  };
-
-  const job = await createJob({
-    template: tpl.template,
-    data,
-    name: `Task: ${data.title}`,
-    source: source || 'sms',
-  });
+  const printed: { id: string; title: string }[] = [];
+  for (const t of tasks) {
+    const title = t.title || text.slice(0, 80);
+    const items = Array.isArray(t.items) ? t.items.filter(Boolean) : [];
+    const data = {
+      title,
+      items,
+      ordered: !!t.ordered,
+      sender: sender || 'unknown',
+      date,
+      time,
+      due: t.due || '',
+      priority: t.priority || 'normal',
+      quote: t.quote || '',
+    };
+    const job = await createJob({
+      template: tpl.template,
+      data,
+      name: `Task: ${title}`,
+      source: source || 'sms',
+    });
+    printed.push({ id: job.id, title });
+  }
 
   await markActivity(record);
-  return Response.json({ task: true, jobId: job.id, title: data.title });
+  return Response.json({ task: true, printed: printed.length, jobs: printed });
 }

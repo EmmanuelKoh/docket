@@ -367,13 +367,18 @@ scheduling logic.
 
 ### SMS/RCS task capture (`message-ingest`)
 
-Forward incoming texts to `POST /ingest`. Gemini decides whether each one
-contains a task; tasks print immediately as a "Task" receipt with the title
-worded from the recipient's perspective and the due date resolved from
-phrases like "by friday". A message starting with `task:` always prints,
-regardless of the classifier. The plugin is *passive* (push-driven, never
-run on a timer) but appears on the Plugins page with an enable toggle and
-config for min confidence, timezone, and Gemini model.
+Forward incoming texts to `POST /ingest`. Gemini extracts the tasks in each
+message and prints a "Task" slip for each. Related actions or items are
+grouped onto one slip as a list (a shopping list, or the steps of a
+routine, numbered when they must be done in order); unrelated tasks each
+get their own slip. So "Get milk and eggs, and wish your dad happy
+birthday" prints two slips: a grocery checklist and a "Wish Dad happy
+birthday" task. Titles and items are worded from the recipient's
+perspective and due dates are resolved from phrases like "by friday". A
+message starting with `task:` always prints, regardless of the classifier.
+The plugin is *passive* (push-driven, never run on a timer) but appears on
+the Slips page with an enable toggle and config for min confidence,
+timezone, and Gemini model.
 
 The endpoint is authenticated by `INGEST_TOKEN` (Bearer header or `?token=`)
 and accepts `{ text, sender, source?, receivedAt? }`, so anything that can
