@@ -7,7 +7,7 @@
 // Read the print: pick the row where the wedge steps are all DISTINCT and
 // look evenly spaced (especially 70-100% — dark steps must not fuse into
 // black), and the ramp looks smooth. Set that row's gamma as GAMMA in
-// views/photo.liquid.
+// components/photo-engine.js.
 //
 //   node scripts/print-calibration.js                 -> production (PRINT_SERVER)
 //   node scripts/print-calibration.js http://localhost:3000
@@ -28,7 +28,7 @@ if (!PASSWORD) {
 // Tone-dependent transfer curve (from reading the 7-gamma calibration print):
 // highlights need no lift, shadows need a lot. Anchors are [brightness,
 // gamma], interpolated linearly between; output = b^gamma(b). Keep in sync
-// with the copy in views/photo.liquid.
+// with the copy in components/photo-engine.js.
 const CURVE = [
   [0.0, 0.50], [0.1, 0.53], [0.2, 0.53], [0.3, 0.58], [0.4, 0.63],
   [0.5, 0.70], [0.6, 0.78], [0.7, 0.88], [0.8, 0.96], [1.0, 1.00],
@@ -123,4 +123,4 @@ if (!resp.ok) {
   process.exit(1);
 }
 console.log(`queued ${body.id} (${body.width}x${body.height}) on ${SERVER}`);
-console.log('read the print, then set the winning gamma as GAMMA in views/photo.liquid');
+console.log('read the print, then set the winning gamma as GAMMA in components/photo-engine.js');

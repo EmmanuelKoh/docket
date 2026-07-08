@@ -127,10 +127,62 @@ Hovering any list thumbnail floats a 288px-wide peek of the same PNG
 (--raised, 0.5px --border, no shadow). Thumbnails identify; the peek and
 the History expand are where receipts are read.
 
+## Shell (Next.js app, nextjs-shell-rewrite branch)
+
+The Next.js rewrite replaces the top nav with a left sidebar; everything
+else in this spec (tokens, red rules, spacing, components, page specs)
+carries over unchanged. Shell rules:
+
+- Sidebar: DOCKET wordmark at top (links home), then Overview, Recipes,
+  Photo, Queue, History, Printer. Collapsible to an icon rail; on phones
+  it becomes a sheet.
+  Items are 13px --ink-muted with 14px outline icons in --ink-faint.
+  Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
+  item's left edge (the vertical form of the old nav underline).
+- The Queue item carries a mono count badge, --red only when nonzero.
+- Header: slim row with the sidebar trigger left and theme toggle plus
+  logout icon right, keeping the full-bleed 1.5px solid --ink bottom rule.
+- Content column: unchanged (max 1120px, gutters per the spacing system).
+- Overview replaces Home: a LATEST PRINT card (the newest history PNG on
+  a white panel, receipts are paper in both themes) above the stat strip,
+  then the system line, dashed divider, and RECENT, all as specced under
+  Home below.
+- Theme: same data-theme mechanism and localStorage key (docket-theme) as
+  the legacy dashboard, so the choice carries across both apps.
+- Recipes index: replaces Templates + Plugins. Cards grouped by category
+  (11px caps label + mono count), following the Templates card grammar
+  below: rendered receipt hero on white, mono name, ENABLED/OFF chip for
+  system recipes, quiet description. The card is the button. "New
+  template" opens the Studio blank.
+- Recipe page: breadcrumb, mono title + description, SYSTEM/TEMPLATE and
+  LIQUID chips (Delete, two-step, for template recipes only, neutral
+  outline per the red rules). Left: PREVIEW stage, the primary template
+  rendered on white, Print test + mono status beneath. Right (system
+  recipes): status row (toggle, chip, last-run line, errors in --red)
+  and a PARAMETERS card in the plugin-card grammar: schedule row first
+  (shape fixed by the plugin's kind), read-only next-run line, per-field
+  config grid (110px caps labels, dotted-underline mono inputs, arrays
+  as textareas), template names, one explicit Save. Below: TEMPLATES
+  rows, each "Open in Studio", and the STATE debug record (system only).
+  The Studio remains the template editor, served at /studio.
+- Printer page: online dot per the 90-second rule, then a read-only
+  label/value grid (device seen, store driver, tick, print width, job
+  cap, version) and a quiet pointer to the hardware docs.
+- Studio page: toolbar card (template select mono, New/Save/Delete,
+  Print right with the shortcut hint), then a two-column pair of equal
+  cards: editors (Template / Data tabs with the red active underline,
+  syntax-highlighted source over the mono editor, JSON error line in
+  --red) and the stage (status dot + mono size line, the 624px paper
+  roll scaled to fit, RECENT JOBS strip with thumbnails). Toasts are a
+  small centered raised chip. Keyboard: Cmd/Ctrl+S save, +P print.
+- Photo page: the workbench per the Photo spec below, unchanged in
+  behavior (its engine carried over verbatim); it now sits inside the
+  shell as a card under the standard title block.
+
 ## Pages
 
-Header (all pages): DOCKET wordmark left; nav right: Home, Templates,
-Photo, Plugins, Queue, History, then theme-toggle icon, logout icon.
+Every page lives in the sidebar shell above. The specs below describe
+each page's content zone.
 
 ### Home
 1. Stat strip: ONE bordered container split into 4 cells by 0.5px --hairline

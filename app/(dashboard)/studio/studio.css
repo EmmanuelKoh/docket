@@ -1,0 +1,84 @@
+/* Studio editor: the transparent-textarea-over-highlighted-pre trick from
+   the legacy studio. The textarea owns editing, selection, and scrolling;
+   the pre mirrors its content with color and follows its scroll position.
+   wrap="off" on the textarea keeps line geometry identical between the
+   two layers. Token colors are the only place the studio needs literal
+   colors beyond the docket tokens. */
+
+.code-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  display: flex;
+}
+.code-wrap textarea,
+.code-wrap .code-hl {
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+.code-wrap textarea {
+  flex: 1;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  display: block;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  white-space: pre;
+  overflow: auto;
+}
+.code-wrap textarea::placeholder {
+  color: var(--ink-faint);
+}
+.code-wrap textarea::selection {
+  background: rgba(127, 127, 127, 0.25);
+}
+.code-wrap .code-hl {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--raised);
+  color: var(--ink-muted);
+  white-space: pre;
+}
+.tok-tag {
+  color: var(--ink);
+}
+.tok-liquid {
+  color: var(--red);
+}
+.tok-comment {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+.tok-string {
+  color: #9c6b30;
+}
+html[data-theme="dark"] .tok-string {
+  color: #c9975c;
+}
+.tok-num {
+  color: #3f6e8e;
+}
+html[data-theme="dark"] .tok-num {
+  color: #7aa7c7;
+}
+.tok-key {
+  color: var(--ink);
+}
+.tok-lit {
+  color: #3f6e8e;
+}
+html[data-theme="dark"] .tok-lit {
+  color: #7aa7c7;
+}

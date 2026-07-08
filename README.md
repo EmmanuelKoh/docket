@@ -183,12 +183,12 @@ same Liquid → Satori → resvg → Floyd-Steinberg pipeline that produces the
 print bytes, so the preview matches the printed output.
 
 ```
-npm start
+npm run dev
 ```
 
 Opens at `http://localhost:3000`. Sign in and open `/studio` (or any
-template's Open button in the dashboard's Templates section). Select a
-starter template, edit the HTML/Liquid and the JSON data, and see the 1-bit
+recipe's Open in Studio link on the Recipes page). Select a starter
+template, edit the HTML/Liquid and the JSON data, and see the 1-bit
 dithered preview update live.
 
 - **Preview**: `POST /preview` runs the render core and returns the 1-bit PNG.
@@ -336,7 +336,7 @@ detection logic was ported as-is.
 poller process):
 
 ```
-npm start                       # server
+npm run dev                     # server
 node agent/printer-agent.js     # printer agent
 node agent/heartbeat.js         # heartbeat -> POST /tick
 ```
@@ -403,20 +403,18 @@ previews.
 
 ```
 config.js                  Environment config (reads .env)
-server.js                  Local dev server for studio + print queue
-vercel.json                Vercel routing config
+next.config.mjs            Next.js config (externals, file tracing, redirects)
 render/
   render-core.js           Liquid -> Satori -> resvg -> dither -> ESC/POS
-api/
-  preview.js               POST /preview — render template to 1-bit PNG
-  jobs.js                  GET/POST /jobs — create + list print jobs
-  next.js                  GET /next — device endpoint, fetch queued job
-  ack.js                   POST /ack — device endpoint, mark job done
-  nack.js                  POST /nack — device endpoint, requeue job
-  tick.js                  POST /tick — atomic due-claim, run due plugins
-  ingest.js                POST /ingest — classify forwarded messages, print tasks
-  dashboard.js             Dashboard pages + fragments (LiquidJS + htmx)
-  templates.js             GET/POST/DELETE /templates — template CRUD
+app/                       The Next.js app (dashboard pages + all endpoints)
+  (dashboard)/             Overview, Recipes, Queue, History, Printer pages
+  next/ ack/ nack/ tick/   Device endpoints (Bearer DEVICE_TOKEN)
+  ingest/                  POST /ingest — classify forwarded messages, print tasks
+  templates/ preview/ jobs/  Studio-facing JSON APIs (session cookie)
+  (dashboard)/studio/      Template editor (React, highlight-overlay editors)
+  (dashboard)/photo/       Photo tool (React shell; verbatim print engine)
+  api/                     Dashboard JSON routes (queue poll, job actions, recipes)
+components/                React components (shadcn kit in ui/, app components)
 plugins/
   index.js                 Explicit list of installed plugin modules
   espn-worldcup.js         World Cup plugin (kickoff/goal/full-time)
@@ -433,7 +431,6 @@ lib/
   device-presence.js       Throttled "printer online" bookkeeping
   task-classifier.js       Gemini call: does this message contain a task?
   session.js               Stateless HMAC session cookie for the dashboard
-  views.js                 LiquidJS renderer for views/
   auth.js                  Device token check for /next, /ack, /nack
   redis.js                 Upstash Redis client + owner-namespaced keys
   blob.js                  Vercel Blob helpers (job png + bytes)
@@ -452,10 +449,9 @@ agent/
   printer-agent.js         Local printer agent (polls /next, prints, acks)
   heartbeat.js             Local heartbeat (POSTs /tick, drives plugins)
 public/
-  index.html               Design studio frontend (preview + print + jobs panel)
+  dither-worker.js         Web Worker: live dither for the Photo viewfinder
 transport/
   print-net.js             TCP sender (printToNetwork)
-views/                     Dashboard pages + fragments (LiquidJS)
 firmware/
   docket-agent/            ESP32 sketch: polls /next, prints, POSTs /tick
 android-forwarder/         Android app: SMS/RCS -> POST /ingest

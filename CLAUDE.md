@@ -14,9 +14,18 @@ plugins server-side. No process polls on its own timer except the device.
 
 ## Layout
 
-- `server.js`: local dev server; on Vercel, `api/*.js` are functions and
-  `vercel.json` maps routes (incl. `/dashboard/:path*` → `api/dashboard.js`,
-  which needs `includeFiles: views/**`)
+- `app/`: the Next.js App Router application (TypeScript + Tailwind 4 +
+  the shadcn kit in `components/ui/`). Dashboard pages live in the
+  `(dashboard)/` route group behind the session; device endpoints are
+  `app/{next,ack,nack,tick}/route.ts`; `/ingest`, the studio-facing JSON
+  APIs (`/templates`, `/preview`, `/jobs`) are route handlers importing
+  `lib/` directly; the Studio (`/studio`) and Photo (`/photo`) pages are
+  React like everything else. `next.config.mjs` keeps the render/plugin
+  deps in `serverExternalPackages` (Turbopack breaks node-ical and the
+  resvg native module otherwise) and traces `reference/**` and
+  `render/fonts/**` into the deployed functions. `/next` MUST send an
+  explicit Content-Length: the ESP32 reads it via `http.getSize()` and
+  nacks forever on a chunked response.
 - `render/render-core.js`: Liquid → Satori → resvg → Floyd-Steinberg
   (serpentine + midtone anti-checkerboard noise) → ESC/POS. Dithered jobs
   (auto-detected by tone transitions >0.2/px; text is ~0.01-0.12) are
@@ -37,9 +46,14 @@ plugins server-side. No process polls on its own timer except the device.
   Push-driven plugins export `passive: true` and no schedule. World is
   reached ONLY via ctx (`createJob`, `getTemplate`, `log`). Registered on
   first tick or Plugins-page view; the tick runs only what's due.
-- `views/`: LiquidJS pages + htmx fragments for the dashboard;
-  `views/studio.html` is the template editor (served behind auth at
-  `/studio`). `public/docket.css` is the design system.
+- `components/photo-engine.js`: the Photo tool's imperative engine,
+  carried VERBATIM from the pre-rewrite page because it is live-tested
+  against the printer: the calibrated tone curve (keep-in-sync copy in
+  `scripts/print-calibration.js`), the dither-worker viewfinder protocol
+  (`public/dither-worker.js`), and the crop/levels pointer math. Its
+  markup is `components/photo-tool.tsx` and its styles
+  `app/(dashboard)/photo/photo-tool.css`; ids and class names are the
+  contract between the three. Do not "modernize" the engine.
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.
@@ -70,15 +84,16 @@ for active nav / printing / failures / nonzero queue count.
 status bytes, the mute-after-flash quirk, the 800-row GS* ceiling, dot
 gain). `docs/receipt-printer-build-guide.md` is the generic staged
 bring-up. Photo tone compensation (the calibrated curve) lives in
-`views/photo.liquid` with a keep-in-sync copy in the calibration script.
+`components/photo-engine.js` with a keep-in-sync copy in the calibration
+script.
 
 ## Workflows
 
-- Local dev: `npm start` (+ `node agent/heartbeat.js` and
+- Local dev: `npm run dev` (+ `node agent/heartbeat.js` and
   `node agent/printer-agent.js` only if the ESP32 isn't covering those).
   Login needs `DASHBOARD_PASSWORD`/`SESSION_SECRET` in `.env`.
-- **Restart the server after editing views/**: LiquidJS caches compiled
-  templates in-process. CSS only needs a browser refresh.
+- Everything hot-reloads under `npm run dev` (LiquidJS now runs only
+  inside the render core, per render).
 - Templates seed **only if missing** (from `reference/*-templates.json` on
   tick). Editing a seeded template's reference file requires syncing the
   stored copy (local `data/templates.json`, hosted via studio or a POST).
