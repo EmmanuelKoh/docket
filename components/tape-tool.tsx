@@ -121,8 +121,8 @@ export function TapeTool() {
             id="tapeNoteDots"
             label="Note width"
             min={4}
-            max={24}
-            def={10}
+            max={28}
+            def={16}
           />
           <Slider
             id="tapeGlyphScale"

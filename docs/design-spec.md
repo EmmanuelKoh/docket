@@ -312,7 +312,10 @@ a toggle that's on, never red.
 ### Tape
 
 Full-bleed workbench at /tape (sidebar collapses on entry, like the
-Studio). Live monophonic transcription: the mic feeds a pitch detector,
+Studio). Notation glyphs (treble clef, key signature, accidentals,
+breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
+sized to the staff; the take opens with bare paper, then the clef and
+key signature before the first note. Live monophonic transcription: the mic feeds a pitch detector,
 note events render onto a 5-line staff as a piano roll, and the preview
 canvas shows the exact raster rows the printer would receive, in reading
 orientation (staff horizontal, time flowing left to right, new tape

@@ -96,40 +96,197 @@ export function noteLabel(midi, sharps) {
   return `${s.letter}${mark}${s.octave}`;
 }
 
-// ---- glyphs (authored in reading space: rows top->bottom = pitch
-// high->low, columns left->right = time) ----
-function bitmap(rows) {
-  return {
-    w: rows[0].length,
-    h: rows.length,
-    bits: rows.map((r) => [...r].map((c) => (c === '#' ? 1 : 0))),
+// ---- glyphs: engraved shapes, not pixel art. Rasterized offline from
+// Bravura (c) Steinberg Media Technologies, SIL Open Font License 1.1 —
+// the reference engraving font used by professional notation software —
+// at 40 source px per staff space, trimmed to the ink box, packed as
+// 1-bit base64 rows (reading space: rows top->bottom = pitch high->low).
+// originFromTop is where the note line the glyph attaches to crosses the
+// bitmap (the font's baseline): sharp/natural center on it, the flat's
+// bowl wraps it, the G clef's curl winds around it, the breath comma
+// sits fully above it. Regenerate with scripts in the session notes if
+// the set ever grows. ----
+const GLYPH_SPACE_SRC = 40; // source px per staff space
+const GLYPHS_PACKED = {
+  clef: {
+    w: 107,
+    h: 281,
+    originFromTop: 176,
+    data:
+      'AAAAAAAAAAAAgAAAAAAAAAAAAAAAAAPgAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAf' +
+      '+AAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAf/4AAAAAAAAAAAAAAAD//wAAAAAAAAAA' +
+      'AAAAAf//gAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAf//8AAAAAAAAAAAAAAD///4AAA' +
+      'AAAAAAAAAAAP///gAAAAAAAAAAAAAB////AAAAAAAAAAAAAAP///8AAAAAAAAAAAAAA/' +
+      '///4AAAAAAAAAAAAAH////gAAAAAAAAAAAAA/////AAAAAAAAAAAAAD////8AAAAAAAA' +
+      'AAAAAf////wAAAAAAAAAAAAB/////gAAAAAAAAAAAAP////+AAAAAAAAAAAAA/////8A' +
+      'AAAAAAAAAAAH/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/////+AAAAAAAAAAAAP' +
+      '//+D/4AAAAAAAAAAAA///AD/gAAAAAAAAAAAH//wAH+AAAAAAAAAAAAf/+AAP8AAAAAA' +
+      'AAAAAB//wAAfwAAAAAAAAAAAP/+AAB/AAAAAAAAAAAA//wAAD8AAAAAAAAAAAD/+AAAP' +
+      'wAAAAAAAAAAAP/4AAA/gAAAAAAAAAAB//AAAD+AAAAAAAAAAAH/4AAAH4AAAAAAAAAAA' +
+      'f/gAAAfgAAAAAAAAAAB/8AAAB+AAAAAAAAAAAP/wAAAH4AAAAAAAAAAA/+AAAAfgAAAA' +
+      'AAAAAAD/4AAAB+AAAAAAAAAAAP/AAAAH4AAAAAAAAAAA/8AAAA/wAAAAAAAAAAD/gAAA' +
+      'D/AAAAAAAAAAAf+AAAAP8AAAAAAAAAAB/4AAAA/wAAAAAAAAAAH/AAAAD/AAAAAAAAAA' +
+      'Af8AAAAf8AAAAAAAAAAB/wAAAB/wAAAAAAAAAAH/AAAAH+AAAAAAAAAAAf8AAAA/4AAA' +
+      'AAAAAAAB/gAAAD/gAAAAAAAAAAH+AAAAf+AAAAAAAAAAAf4AAAB/4AAAAAAAAAAB/gAA' +
+      'AH/gAAAAAAAAAAH+AAAA/+AAAAAAAAAAAf4AAAH/4AAAAAAAAAAB/AAAAf/AAAAAAAAA' +
+      'AAH8AAAD/8AAAAAAAAAAAfwAAAP/wAAAAAAAAAAB/AAAB//AAAAAAAAAAAH8AAAP/8AA' +
+      'AAAAAAAAAfwAAB//gAAAAAAAAAAB/AAAH/+AAAAAAAAAAAH8AAA//4AAAAAAAAAAAfwA' +
+      'AH//gAAAAAAAAAAB/AAA//8AAAAAAAAAAAH8AAH//wAAAAAAAAAAAfwAA///AAAAAAAA' +
+      'AAAB/AAD//4AAAAAAAAAAAH8AAf//gAAAAAAAAAAAfwAD//8AAAAAAAAAAAB/AAf//wA' +
+      'AAAAAAAAAAH8AD///AAAAAAAAAAAAPwAf//4AAAAAAAAAAAA/AD///gAAAAAAAAAAAD+' +
+      'A///8AAAAAAAAAAAAP4H///wAAAAAAAAAAAA/g///+AAAAAAAAAAAAD+H///4AAAAAAA' +
+      'AAAAAP4////AAAAAAAAAAAAA/n///8AAAAAAAAAAAAB/////gAAAAAAAAAAAAH////8A' +
+      'AAAAAAAAAAAAf////wAAAAAAAAAAAAB////+AAAAAAAAAAAAAH////wAAAAAAAAAAAAA' +
+      '/////AAAAAAAAAAAAAH////4AAAAAAAAAAAAA/////AAAAAAAAAAAAAP////8AAAAAAA' +
+      'AAAAAB/////gAAAAAAAAAAAAP////8AAAAAAAAAAAAB/////gAAAAAAAAAAAAP////8A' +
+      'AAAAAAAAAAAB/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf' +
+      '////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAA' +
+      'AAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wA' +
+      'AAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/' +
+      '////8AAAAAAAAAAAAf/////wAAAAAAAAAAAD//////gAAAAAAAAAAAf////7+AAAAAAA' +
+      'AAAAD/////P4AAAAAAAAAAAf////w/gAAAAAAAAAAB////+B+AAAAAAAAAAAP////wH4' +
+      'AAAAAAAAAAB////+AfwAAAAAAAAAAP////gB/AAAAAAAAAAB////8AH8AAAAAAAAAAH/' +
+      '///gAfwAAAAAAAAAA////8AA/AAAAAAAAAAH////gAD8AAAAAAAAAAf///8AAP4AAAAA' +
+      'AAAAD////gAA/gAAAAAAAAAf///8AAD+AAAAAAAAAB////gAAP4AAAAAAAAAP///4AAA' +
+      'fgAAAAAAAAB////AAAB+AAAAAAAAAH///4AAAH8AAAAAAAAA////gAAAfwAAAAAAAAD/' +
+      '//8AAAB/AAAAAAAAAf///gAAAH8AAAAAAAAB///8AAAAPwAAAAAAAAP///gAAAA/gAAA' +
+      'AAAAA///8AAAAD/AAAAAAAAH///gAAAAP//4AAAAAAf//8AAAAB///+AAAAAB///gAAA' +
+      'A/////AAAAAP//+AAAAP/////AAAAA///wAAAD//////AAAAD//+AAAA///////AAAAf' +
+      '//wAAAP//////+AAAB///AAAB///////+AAAH//4AAAP///////8AAA///AAAB//////' +
+      '//4AAD//8AAAP////////wAAP//gAAB/////////gAA//+AAAP/////////AAH//wAAB' +
+      '/////////+AAf//AAAP/////////8AB//4AAA//////////wAH//gAAH//////////gA' +
+      'f/8AAA///////////AD//wAAD//////////8AP//AAAf//////////4A//4AAB//////' +
+      '/////gD//gAAP/////j/////AP/+AAA////n+A////8A//wAAD///wP4Af///4D//AAA' +
+      'f//8A/gAf///gP/8AAB///AD+AA///+A//wAAH//4AP4AA///8D//AAAf/+AAfwAB///' +
+      'wP/4AAD//wAB/AAD///A//gAAP/+AAH8AAH//8D/+AAA//4AAfwAAP//4P/4AAD//AAB' +
+      '/AAAf//g//gAAP/4AAH8AAA//+D/+AAA//gAAP4AAD//4H/4AAD/8AAA/gAAH//gf/gA' +
+      'AP/wAAD+AAAf/+B/+AAA//AAAP4AAA//4H/4AAD/4AAA/gAAD//gf/gAAH/gAAD+AAAH' +
+      '/+A/+AAAf+AAAH8AAAf/4D/4AAB/4AAAfwAAB//gP/gAAH/gAAB/AAAD/+A/+AAAf+AA' +
+      'AH8AAAP/4B/4AAA/4AAAfwAAA//gH/wAAD/gAAB/AAAD/+Af/AAAP+AAAD+AAAP/4A/8' +
+      'AAAf8AAAP4AAA//gD/wAAB/wAAA/gAAD/8AP/gAAD/gAAD+AAAP/wAf+AAAP+AAAP4AA' +
+      'A//AB/4AAAf8AAA/gAAD/8AD/wAAA/wAAB/AAAP/gAP/AAAD/gAAH8AAA/+AAf+AAAH/' +
+      'AAAfwAAH/wAB/4AAAP+AAB/AAAf/AAD/wAAAf8AAH8AAB/8AAH/gAAA/4AAf4AAP/gAA' +
+      'f+AAAB/4AA/gAA/+AAA/8AAAB/4AD+AAH/wAAB/4AAAD/wAP4AAf+AAAD/wAAAB/gA/g' +
+      'AD/4AAAH/gAAAB8AD+AAP/AAAAf/AAAAAAAH8AB/4AAAA/+AAAAAAAfwAP/gAAAB/8AA' +
+      'AAAAB/AB/8AAAAD/4AAAAAAH8AP/gAAAAH/4AAAAAAfwB/8AAAAAH/wAAAAAB/Af/gAA' +
+      'AAAP/wAAAAAD+D/8AAAAAAf/wAAAAAP4//AAAAAAAf/wAAAAA/v/4AAAAAAA//4AAAAD' +
+      '///AAAAAAAA//8AAAAP//wAAAAAAAA///gAAB//8AAAAAAAAA////AH///gAAAAAAAAA' +
+      '////////wAAAAAAAAAAf//////8AAAAAAAAAAAP//////AAAAAAAAAAAAD/////8AAAA' +
+      'AAAAAAAAAf//+f4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAA' +
+      'AP4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP8AAAAAAAAA' +
+      'AAAAAAAAfwAAAAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAA' +
+      'AAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAA' +
+      'AAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAAAAA/gAAAAAAA' +
+      'AAAAAAAAAD/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAAAAAAAAAAAAAAAAB/A' +
+      'AAAAAAAAAH/gAAAAH8AAAAAAAAAB//gAAAAfwAAAAAAAAAf//gAAAB/AAAAAAAAAD///' +
+      'AAAAH+AAAAAAAAAf//+AAAAf4AAAAAAAAH///8AAAA/gAAAAAAAAf///4AAAD+AAAAAA' +
+      'AAD////wAAAP4AAAAAAAAf////AAAA/gAAAAAAAB////8AAAD+AAAAAAAAH////4AAAP' +
+      '4AAAAAAAA/////gAAA/gAAAAAAAD////+AAAD+AAAAAAAAP////4AAAP4AAAAAAAB///' +
+      '//wAAA/gAAAAAAAH/////AAAD+AAAAAAAAf////8AAAP4AAAAAAAB/////wAAA/gAAAA' +
+      'AAAH/////AAAH+AAAAAAAAf////4AAAfwAAAAAAAB/////gAAB/AAAAAAAAH////+AAA' +
+      'H8AAAAAAAAf////4AAAfwAAAAAAAA/////AAAD/AAAAAAAAD////8AAAP4AAAAAAAAP/' +
+      '///gAAA/gAAAAAAAA////8AAAH+AAAAAAAAB////gAAAfwAAAAAAAAH///8AAAD/AAAA' +
+      'AAAAAP///gAAAf4AAAAAAAAA///4AAAB/gAAAAAAAAB//8AAAAP8AAAAAAAAAH/+AAAA' +
+      'B/gAAAAAAAAAP/wAAAAP+AAAAAAAAAAf/AAAAD/wAAAAAAAAAA/+AAAAf+AAAAAAAAAA' +
+      'B/8AAAP/wAAAAAAAAAAD/8AAH/+AAAAAAAAAAAH//wP//gAAAAAAAAAAAP/////8AAAA' +
+      'AAAAAAAAP/////AAAAAAAAAAAAAP////wAAAAAAAAAAAAAH///4AAAAAAAAAAAAAAB//' +
+      '4AAAAAAAAA==',
+  },
+  sharp: {
+    w: 40,
+    h: 112,
+    originFromTop: 56,
+    data:
+      'AAAADgAAAAAfAAAAAB8AAAAAHwAAAAAfAAAAAB8AAAAAHwAAcAAfAAD4AB8AAPgAHwAA' +
+      '+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4' +
+      'AB8AAPgAHwAA+AAfDwD4AB//APgAP/8A+AA//wD4AH//APgA//8A+AP//wD4D///APx/' +
+      '//8A/////wD/////Af////8D/////w//////P/////5/////+P/////A/////4D/////' +
+      'AP////8A/////wD///gfAP//wB8A//8AHwD//gAfAP/8AB8A//gAHwD/+AAfAPn4AB8A' +
+      'wPgAHwAA+AAfAAD4AB8AAPgAHwAA8AAfAADwAB8AAPAAHwAA8AAfAADwAB8CAPAAH58A' +
+      '8AAf/wDwAB//APAAH/8A8AA//wD4AH//APgA//8A+AP//wD4D///APz///8A/////wH/' +
+      '////A/////8f/////n/////8//////D/////wP////8A/////wD/////AP///j8A///4' +
+      'PwD//+AfAP//AB8A//wAHwD/+AAfAP/4AB8A//gAHwDx+AAfAAD4AB8AAPgAHwAA+AAf' +
+      'AAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8A' +
+      'APgAHwAA+AAeAAD4AAwAAPgAAAAA+AAAAAD4AAAAAPgAAAAA+AAAAAD4AAAAAGAAAAA=',
+  },
+  flat: {
+    w: 36,
+    h: 98,
+    originFromTop: 70,
+    data:
+      'PgAAAAB/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/' +
+      'AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8A' +
+      'AAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP4AAAAA/gAA' +
+      'AAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAA' +
+      'AP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AH/AAP4D//AA/gf//AD/H//+AP////8A' +
+      '/////4D/////wP/////A//8H/+D//AP/4P/wAf/w/+AA//D/wAD/8P+AAH/wfwAAf/B/' +
+      'AAB/8H4AAH/wfgAAf/B+AAB/8H4AAH/wfgAAf+B+AAD/4H4AAP/AfgAA/8B+AAH/wH4A' +
+      'Af+AfgAD/wB+AAP/AH4AB/4AfgAH/AB+AA/8AH4AH/gAfgA/8AB+AH/gAH8A/8AAfwH/' +
+      'gAB/A/8AAH8H/gAAfx/8AAB///AAAH//4AAAf//AAAB//wAAAH/+AAAAf/wAAAB/8AAA' +
+      'AH/gAAAAf8AAAAB/gAAAAD8AAAAAPAAAAAA4AAAAAA==',
+  },
+  natural: {
+    w: 27,
+    h: 108,
+    originFromTop: 54,
+    data:
+      '/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA' +
+      'APwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA4PwA' +
+      'B+D8AD/g/AH/4Pwf/+D////g////4P///+D////g////4P///+D////g////4P///+D/' +
+      '///g////4P///+D//+/g//wH4P/wB+D/wAfg/wAH4P4AB+D8AAfg/AAH4PwAB+D8AAfg' +
+      '/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAP4PwAH+D8AH/g/AH/' +
+      '4PwP/+D////g////4P///+D////g////4P///+D////g////4P///+D////g////4P//' +
+      '/+D////g////4P///+D//g/g/+AH4P8AB+D8AAfg4AAH4AAAB+AAAAfgAAAH4AAAB+AA' +
+      'AAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfg' +
+      'AAAH4AAAB+AAAAfgAAAH4AAAB+AAAAOA',
+  },
+  breath: {
+    w: 24,
+    h: 40,
+    originFromTop: 40,
+    data:
+      'Af8AB//AD//wH//4P//8f//8f//+///+////////////////////f///f///P///H///' +
+      'D///A///AA//AAf/AAf+AAP+AAP+AAP8AAP8AAf4AAf4AA/wAA/wAB/gAD/AAH+AAP8A' +
+      'Af4AA/gAD/AAH8AAH4AADAAA',
+  },
+};
+
+// tiny env-agnostic base64 decoder (no Buffer, no atob — this module
+// runs in the browser and in Node)
+function b64decode(str) {
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lut = {};
+  for (let i = 0; i < 64; i++) lut[chars[i]] = i;
+  const clean = str.replace(/=+$/, '');
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let o = 0;
+  for (let i = 0; i < clean.length; i += 4) {
+    const n =
+      (lut[clean[i]] << 18) |
+      (lut[clean[i + 1]] << 12) |
+      ((lut[clean[i + 2]] || 0) << 6) |
+      (lut[clean[i + 3]] || 0);
+    out[o++] = (n >> 16) & 0xff;
+    if (clean[i + 2] !== undefined) out[o++] = (n >> 8) & 0xff;
+    if (clean[i + 3] !== undefined) out[o++] = n & 0xff;
+  }
+  return out;
+}
+
+const GLYPHS = {};
+for (const name of Object.keys(GLYPHS_PACKED)) {
+  const g = GLYPHS_PACKED[name];
+  GLYPHS[name] = {
+    w: g.w,
+    h: g.h,
+    originFromTop: g.originFromTop,
+    stride: Math.ceil(g.w / 8),
+    bytes: b64decode(g.data),
   };
 }
-const GLYPHS = {
-  sharp: bitmap([
-    '.#.#.',
-    '.#.#.',
-    '#####',
-    '.#.#.',
-    '.#.#.',
-    '#####',
-    '.#.#.',
-    '.#.#.',
-  ]),
-  flat: bitmap(['#....', '#....', '#....', '###..', '#..#.', '#..#.', '###..']),
-  natural: bitmap([
-    '#....',
-    '#....',
-    '#...#',
-    '#####',
-    '#...#',
-    '#####',
-    '#...#',
-    '....#',
-    '....#',
-  ]),
-  breath: bitmap(['.##', '.##', '..#', '.#.', '#..']),
-};
+const glyphBit = (g, x, y) =>
+  (g.bytes[y * g.stride + (x >> 3)] >> (7 - (x & 7))) & 1;
 
 // Where each accidental of a treble key signature sits (staff steps,
 // standard order: F5 C5 G5 D5 A4 E5 B4 for sharps, B4 E5 A4 D5 G4 C5 F4
@@ -144,12 +301,14 @@ export const TAPE_DEFAULTS = {
   msPerRow: 20, // one row of tape per this much SOUNDING time
   staffGap: 28, // dots between adjacent staff lines
   lineDots: 2, // staff/ledger line thickness (dots)
-  noteDots: 10, // note bar thickness (dots)
-  glyphScale: 2, // integer scale of the glyph bitmaps
+  noteDots: 16, // note bar thickness (dots) — most of a space, not all
+  glyphScale: 2, // glyph size multiplier; 2 = engraving-normal
   staffCenter: 288, // dot x of the middle staff line (B4)
   breathGapMs: 350, // a rest at least this long prints a breath mark
-  gapRows: 6, // blank rows between consecutive notes
+  gapRows: 8, // blank rows between consecutive notes
   breathRows: 10, // extra blank rows on each side of a breath mark
+  ledgerPadRows: 4, // ledger lines poke this far past the note (each side)
+  startBlankRows: 24, // bare paper before the staff begins
   leadRows: 32, // blank staff before the first note / after key sig
   tailRows: 32, // blank staff after the last note (before the cut)
   keySig: 0, // sharps count, -7..+7
@@ -248,23 +407,47 @@ export function createTapeRenderer(config) {
     for (let i = 0; i < n; i++) emitRow(false);
   }
 
-  // Blit a reading-space glyph centered (in pitch) on a staff step. Each
-  // glyph column becomes glyphScale printed rows; bitmap row gy maps to
-  // dot x descending from the glyph's top. Ledger lines (if any) continue
-  // through the glyph region so an accidental never floats unanchored.
-  function emitGlyph(name, step, ledgers) {
+  // Rows that carry only the staff plus a note's ledger lines — used to
+  // poke ledgers a little past the note itself on both sides in time,
+  // like engraved ledger lines extending past a notehead. (Ledgers do
+  // not run through the accidental; they hug the note only.)
+  function emitPad(ledgers, n) {
+    for (let i = 0; i < n; i++) {
+      const row = blankRow();
+      for (const s of ledgers) setLine(row, s);
+      rows.push(row);
+    }
+  }
+
+  // Blit an engraved glyph anchored on a staff step: the glyph's origin
+  // line (the note line it attaches to, per the font's baseline) lands
+  // exactly on the step's x. Scaled from the 40px-per-space source by
+  // box-coverage sampling so the curves survive the resize; glyphs track
+  // staffGap automatically (engraving proportions), with the Glyph size
+  // slider as a multiplier on top (2 = normal). Each glyph column is one
+  // tape row.
+  function emitGlyph(name, step) {
     const g = GLYPHS[name];
-    const sc = cfg.glyphScale;
-    const xTop = xOfStep(step) + Math.round((g.h * sc) / 2);
-    for (let gx = 0; gx < g.w; gx++) {
-      for (let r = 0; r < sc; r++) {
-        const row = blankRow();
-        if (ledgers) for (const s of ledgers) setLine(row, s);
-        for (let gy = 0; gy < g.h; gy++) {
-          if (g.bits[gy][gx]) setDots(row, xTop - (gy + 1) * sc, sc);
+    const s = (cfg.staffGap * (cfg.glyphScale / 2)) / GLYPH_SPACE_SRC;
+    const tw = Math.max(1, Math.round(g.w * s));
+    const th = Math.max(1, Math.round(g.h * s));
+    const xTop = xOfStep(step) + Math.round(g.originFromTop * s);
+    for (let gx = 0; gx < tw; gx++) {
+      const row = blankRow();
+      const sx0 = Math.floor((gx * g.w) / tw);
+      const sx1 = Math.max(sx0 + 1, Math.floor(((gx + 1) * g.w) / tw));
+      for (let gy = 0; gy < th; gy++) {
+        const sy0 = Math.floor((gy * g.h) / th);
+        const sy1 = Math.max(sy0 + 1, Math.floor(((gy + 1) * g.h) / th));
+        let ink = 0;
+        for (let sy = sy0; sy < sy1; sy++) {
+          for (let sx = sx0; sx < sx1; sx++) ink += glyphBit(g, sx, sy);
         }
-        rows.push(row);
+        if (ink / ((sx1 - sx0) * (sy1 - sy0)) >= 0.38) {
+          setDots(row, xTop - gy, 1);
+        }
       }
+      rows.push(row);
     }
   }
 
@@ -273,14 +456,23 @@ export function createTapeRenderer(config) {
     const steps = cfg.keySig > 0 ? SIG_STEPS_SHARP : SIG_STEPS_FLAT;
     const glyph = cfg.keySig > 0 ? 'sharp' : 'flat';
     for (let i = 0; i < n; i++) {
-      emitGlyph(glyph, steps[i], null);
-      emitBlank(2);
+      emitGlyph(glyph, steps[i]);
+      emitBlank(3);
     }
+  }
+
+  // Rows of bare paper — no staff — for the lead-in before the staff
+  // begins, like the margin before a printed system.
+  function emitEmpty(n) {
+    for (let i = 0; i < n; i++) rows.push(new Uint8Array(WIDTH_BYTES));
   }
 
   function start() {
     started = true;
+    emitEmpty(cfg.startBlankRows);
     emitBlank(4);
+    emitGlyph('clef', 2); // the G clef winds around the G4 line
+    emitBlank(6);
     emitKeySignature();
     emitBlank(cfg.leadRows);
   }
@@ -293,18 +485,20 @@ export function createTapeRenderer(config) {
     if (lastOffMs !== null) {
       if (tMs - lastOffMs >= cfg.breathGapMs) {
         emitBlank(cfg.breathRows);
-        emitGlyph('breath', 10, null); // above the staff, like on paper
+        emitGlyph('breath', 10); // above the staff, like on paper
         emitBlank(cfg.breathRows);
       } else {
         emitBlank(cfg.gapRows);
       }
     }
     const sp = spellNote(midi, cfg.keySig);
+    const led = ledgerSteps(sp.step);
     cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0 };
     if (sp.glyph) {
-      emitGlyph(sp.glyph, sp.step, ledgerSteps(sp.step));
-      emitBlank(2);
+      emitGlyph(sp.glyph, sp.step);
+      emitBlank(3);
     }
+    if (led.length) emitPad(led, cfg.ledgerPadRows);
     pushSpan(preRow, preT, tMs); // lead/gap/glyph rows cover the silence
     cur.rStart = rows.length;
   }
@@ -324,6 +518,8 @@ export function createTapeRenderer(config) {
     advance(tMs);
     if (cur.rowsEmitted === 0) emitRow(true); // every note gets >= 1 row
     pushSpan(cur.rStart, cur.onMs, tMs);
+    const led = ledgerSteps(cur.step);
+    if (led.length) emitPad(led, cfg.ledgerPadRows);
     cur = null;
     lastOffMs = tMs;
   }
