@@ -65,7 +65,9 @@ artifact).
 ### Red usage rules (strict)
 
 Red appears ONLY as: (1) active nav underline, (2) job status "printing" /
-inflight, (3) failures and error text, (4) queue count when nonzero.
+inflight, (3) failures and error text, (4) queue count when nonzero,
+(5) a live capture in progress (the Tape tool's mic button while
+listening: hardware actively running, the same family as "printing").
 Everything else is gray. Enabled/on states are INK, not red (a working
 plugin is normal, not an alert). Success/"done" is --ink-muted text.
 Green is not used anywhere.
@@ -136,8 +138,8 @@ The identity, tokens, red rules, spacing, and components above apply
 throughout. Shell rules:
 
 - Sidebar: DOCKET wordmark at top (links home), then Overview, Slips,
-  Photo, Queue, History, Printer. Collapsible to an icon rail; on phones
-  it becomes a sheet.
+  Photo, Tape, Queue, History, Printer. Collapsible to an icon rail; on
+  phones it becomes a sheet.
   Items are 13px --ink-muted with 14px outline icons in --ink-faint.
   Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
   item's left edge (the vertical form of the old nav underline).
@@ -167,6 +169,8 @@ throughout. Shell rules:
   Keyboard: Cmd/Ctrl+S save, +P print.
 - Photo page: the workbench per the Photo spec below (its engine carried
   over verbatim), inside the shell as a card under the title block.
+- Tape page: full-bleed workbench like the Studio (the sidebar collapses
+  on entry). Live music transcription; detailed under Tape below.
 - Receipt previews (the render shown on white paper): one canonical width
   everywhere. The paper is 400px wide with the printed image at 92.3% of
   it (the 576 printable dots within the 624-dot / 80mm stock), centered,
@@ -303,6 +307,30 @@ a simple stack: dropzone, Take a photo, empty preview.
 Segmented control (.seg): a bordered pill of flush buttons; the active
 option is inverse mono (--ink background, --page text), the same idiom as
 a toggle that's on, never red.
+
+### Tape
+
+Full-bleed workbench at /tape (sidebar collapses on entry, like the
+Studio). Live monophonic transcription: the mic feeds a pitch detector,
+note events render onto a 5-line staff as a piano roll, and the preview
+canvas shows the exact raster rows the printer would receive, in reading
+orientation (staff horizontal, time flowing left to right, new tape
+entering at the right; the strip auto-follows unless the user scrolls
+back). The tape sits on white in both themes, receipts are paper.
+
+Left column (300px): session buttons (Start mic / Demo phrase / New
+take), key signature select (mono), then DETECTION and LAYOUT slider
+groups (label / native range / mono value, the Photo tool's tone-row
+idiom), a hint line, and CLIP buttons (Replay / Save clip / Load clip).
+The mic button while listening is --red text and border (red rule 5, a
+live capture). Right stage: the tape roll, a PITCH TRACE strip chart
+(ink dots weighted by detector confidence on --raised), then a NOTES
+mono event log beside status text and the Print take button.
+
+Print take queues the rendered rows verbatim through /api/tape/print
+(source "tape"); the job appears in Queue and History like any other,
+but carries no template, so Reprint declines it with a pointer back to
+the tool.
 
 ### Queue
 Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).

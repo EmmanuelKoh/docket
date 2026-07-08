@@ -54,6 +54,14 @@ plugins server-side. No process polls on its own timer except the device.
   markup is `components/photo-tool.tsx` and its styles
   `app/(dashboard)/photo/photo-tool.css`; ids and class names are the
   contract between the three. Do not "modernize" the engine.
+- The Tape tool (`/tape`): live duduk transcription in the browser
+  (mic → `public/pcm-worklet.js` → `public/pitch-worker.js` (MPM) →
+  `components/tape-events.js` note tracker → `components/tape-renderer.js`
+  raster rows). The renderer is pure JS and its rows ARE the print bytes:
+  the preview canvas and `/api/tape/print` (→ `createRawJob`, a job with
+  `template: null` that Reprint refuses) consume the same arrays; never
+  add a second rendering path. Markup/engine follow the Photo tool's
+  id-contract pattern (`components/tape-tool.tsx` + `tape-engine.js`).
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.
