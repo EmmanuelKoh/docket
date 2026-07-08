@@ -1,6 +1,6 @@
 'use client';
 
-// Delete a standalone template recipe (system recipes are code and can
+// Delete a standalone template slip (system slips are code and can
 // only be disabled). Neutral outline per the red-usage rules; asks once.
 
 import { useRouter } from 'next/navigation';
@@ -22,7 +22,7 @@ export function DeleteTemplateButton({ name }: { name: string }) {
         setError(data.error || 'delete failed');
         return;
       }
-      router.push('/recipes');
+      router.push('/slips');
       router.refresh();
     } catch {
       setError('delete failed');

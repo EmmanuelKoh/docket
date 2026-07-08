@@ -1,6 +1,6 @@
 'use client';
 
-// The interactive panel of a system recipe's page: enable toggle (the
+// The interactive panel of a system slip's page: enable toggle (the
 // click is the action, no Save) and the PARAMETERS card, which follows
 // the plugin-card grammar: schedule row first (its shape fixed by the
 // plugin's kind), read-only next-run line, per-field config editing in a
@@ -9,15 +9,15 @@
 // input shows a red inline error and saves nothing.
 
 import { useState } from 'react';
-import type { Recipe } from '@/app/_lib/recipe-data';
+import type { Slip } from '@/app/_lib/slip-data';
 import { Button } from '@/components/ui/button';
 
 const inputCls =
   'w-full border-0 border-b border-dotted border-ink-faint bg-transparent ' +
   'font-mono text-[12.5px] text-ink outline-none focus:border-ink';
 
-export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
-  const [recipe, setRecipe] = useState(initial);
+export function SlipSystemPanel({ initial }: { initial: Slip }) {
+  const [slip, setSlip] = useState(initial);
   const [values, setValues] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {
       sched_every: initial.scheduleEvery || '',
@@ -36,11 +36,11 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
   async function toggle() {
     try {
       const res = await fetch(
-        `/api/recipes/toggle?id=${encodeURIComponent(recipe.slug)}`,
+        `/api/slips/toggle?id=${encodeURIComponent(slip.slug)}`,
         { method: 'POST' },
       );
       const data = await res.json();
-      if (res.ok && data.recipe) setRecipe(data.recipe);
+      if (res.ok && data.slip) setSlip(data.slip);
     } catch {
       // leave state as is
     }
@@ -51,7 +51,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
     setError('');
     try {
       const res = await fetch(
-        `/api/recipes/config?id=${encodeURIComponent(recipe.slug)}`,
+        `/api/slips/config?id=${encodeURIComponent(slip.slug)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -60,7 +60,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
       );
       const data = await res.json();
       if (!res.ok) setError(data.error || 'save failed');
-      else if (data.recipe) setRecipe(data.recipe);
+      else if (data.slip) setSlip(data.slip);
     } catch {
       setError('save failed');
     } finally {
@@ -68,7 +68,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
     }
   }
 
-  const dim = recipe.enabled ? '' : 'opacity-70';
+  const dim = slip.enabled ? '' : 'opacity-70';
 
   return (
     <div className="space-y-3">
@@ -77,22 +77,22 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
         <button
           type="button"
           onClick={toggle}
-          aria-label={recipe.enabled ? 'Disable' : 'Enable'}
-          className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors ${recipe.enabled ? 'bg-ink' : 'bg-border'}`}
+          aria-label={slip.enabled ? 'Disable' : 'Enable'}
+          className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors ${slip.enabled ? 'bg-ink' : 'bg-border'}`}
         >
           <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-raised transition-all ${recipe.enabled ? 'left-[16px] bg-page' : 'left-0.5'}`}
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-raised transition-all ${slip.enabled ? 'left-[16px] bg-page' : 'left-0.5'}`}
           />
         </button>
         <span
-          className={`rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em] ${recipe.enabled ? 'text-ink-muted' : 'text-ink-faint'}`}
+          className={`rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em] ${slip.enabled ? 'text-ink-muted' : 'text-ink-faint'}`}
         >
-          {recipe.enabled ? 'enabled' : 'off'}
+          {slip.enabled ? 'enabled' : 'off'}
         </span>
         <span
-          className={`ml-auto truncate font-mono text-xs ${recipe.lastRunRed ? 'text-red' : 'text-ink-faint'}`}
+          className={`ml-auto truncate font-mono text-xs ${slip.lastRunRed ? 'text-red' : 'text-ink-faint'}`}
         >
-          {recipe.lastRunText}
+          {slip.lastRunText}
         </span>
       </div>
 
@@ -104,7 +104,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
           Parameters
         </div>
         <div className="mt-3 space-y-3">
-          {recipe.scheduleType === 'every' ? (
+          {slip.scheduleType === 'every' ? (
             <Row label="schedule">
               <span className="flex items-baseline gap-1 font-mono text-[12.5px] text-ink">
                 every
@@ -118,7 +118,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
               </span>
             </Row>
           ) : null}
-          {recipe.scheduleType === 'at' ? (
+          {slip.scheduleType === 'at' ? (
             <Row label="schedule">
               <span className="flex items-baseline gap-1 font-mono text-[12.5px] text-ink">
                 at
@@ -139,10 +139,10 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
           ) : null}
           <Row label="next run">
             <span className="font-mono text-[12.5px] text-ink-muted">
-              {recipe.nextRunText}
+              {slip.nextRunText}
             </span>
           </Row>
-          {(recipe.fields || []).map((f) => (
+          {(slip.fields || []).map((f) => (
             <Row key={f.key} label={f.label}>
               {f.multiline ? (
                 <textarea
@@ -162,7 +162,7 @@ export function RecipeSystemPanel({ initial }: { initial: Recipe }) {
           ))}
           <Row label="templates">
             <span className="font-mono text-[12.5px] text-ink-muted">
-              {recipe.templates.join(', ') || '—'}
+              {slip.templates.join(', ') || '—'}
             </span>
           </Row>
         </div>

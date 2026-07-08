@@ -1,6 +1,6 @@
 // Studio — the template editor. A full-bleed workbench (see
 // components/content-column.tsx): the sidebar collapses on entry and the
-// breadcrumb returns to Recipes. The editor itself is
+// breadcrumb returns to Slips. The editor itself is
 // components/studio-editor.tsx; useSearchParams (the ?template= / ?new=1
 // contract) requires the Suspense boundary.
 
@@ -13,7 +13,7 @@ export default function StudioPage() {
   return (
     <div className="space-y-4">
       <div>
-        <BackLink fallback="/recipes" />
+        <BackLink fallback="/slips" />
         <div className="mt-1 flex items-baseline gap-3">
           <h1 className="text-base font-medium text-ink">Studio</h1>
           <p className="text-xs text-ink-muted">

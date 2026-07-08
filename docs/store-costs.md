@@ -76,9 +76,10 @@ enabling a plugin reschedules it from now.
 
 ## Rules that keep costs proportional to activity
 
-- **Dashboard fragments poll only while visible**: `hx-trigger="every 3s
-  [document.visibilityState=='visible']"` (`views/queue-list.liquid`).
-  Hidden tabs cost zero; cost scales with people watching, not tabs open.
+- **Dashboard polls only while visible**: the Queue page re-fetches
+  `/api/queue` every 3s only while `document.visibilityState` is visible
+  (`components/queue-list.tsx`). Hidden tabs cost zero; cost scales with
+  people watching, not tabs open.
 - **Device presence writes are throttled** (`lib/device-presence.js`, 60s).
   The dashboard's online rule is 90s, so the indicator stays correct.
 - **`/tick` claims due plugins in one atomic command** and touches records

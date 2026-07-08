@@ -1,4 +1,4 @@
-// POST /api/recipes/config?id=X — save a system recipe's schedule + config
+// POST /api/slips/config?id=X — save a system slip's schedule + config
 // in one step, ported from the /dashboard/plugins/config handler. One save
 // updates everything: record, next-due time, due-index. Invalid input
 // saves nothing and returns the error for the inline red line.
@@ -7,7 +7,7 @@ import {
   requestSessionValid,
   unauthorizedJson,
 } from '@/app/_lib/dashboard-session';
-import { getRecipe, parseConfigField } from '@/app/_lib/recipe-data';
+import { getSlip, parseConfigField } from '@/app/_lib/slip-data';
 import { OWNER_ID } from '@/config.js';
 import { getPlugin, reschedule, upsertPlugin } from '@/lib/plugin-registry.js';
 import { validateSchedule } from '@/lib/schedule.js';
@@ -67,5 +67,5 @@ export async function POST(req: Request) {
   // One save updates everything: record, next-due time, due-index.
   if (!passive && updated.enabled) reschedule(updated);
   await upsertPlugin(updated, { create: false });
-  return Response.json({ recipe: await getRecipe(id) });
+  return Response.json({ slip: await getSlip(id) });
 }

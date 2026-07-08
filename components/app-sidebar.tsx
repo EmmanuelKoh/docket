@@ -11,8 +11,8 @@ import {
   History,
   House,
   Layers,
-  NotebookText,
   Printer,
+  ReceiptText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -31,7 +31,7 @@ import {
 
 const NAV = [
   { title: 'Overview', url: '/', icon: House },
-  { title: 'Recipes', url: '/recipes', icon: NotebookText },
+  { title: 'Slips', url: '/slips', icon: ReceiptText },
   { title: 'Photo', url: '/photo', icon: Camera },
   { title: 'Queue', url: '/queue', icon: Layers },
   { title: 'History', url: '/history', icon: History },

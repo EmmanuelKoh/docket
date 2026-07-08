@@ -1,5 +1,5 @@
 // GET /api/templates/thumb?name=X — renders a template with its stored
-// default data and returns the PNG, for recipe-card previews. Rendering is
+// default data and returns the PNG, for slip-card previews. Rendering is
 // the expensive part, so responses carry short private caching (same trade
 // as the legacy /dashboard/templates/thumb).
 

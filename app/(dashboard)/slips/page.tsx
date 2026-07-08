@@ -1,4 +1,4 @@
-// Recipes — everything the printer can produce, grouped by category.
+// Slips — everything the printer can produce, grouped by category.
 // Card and section grammar follows byos_next's recipes index (category
 // label + count chip + hairline rule; 1/2/3-column responsive grid;
 // aspect-ratio preview with chips overlaid; name row with the corner
@@ -10,20 +10,20 @@
 
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
-import { groupByCategory, listRecipes } from '../../_lib/recipe-data';
+import { groupByCategory, listSlips } from '../../_lib/slip-data';
 
-export default async function RecipesPage() {
-  const recipes = await listRecipes();
-  const groups = groupByCategory(recipes);
+export default async function SlipsPage() {
+  const slips = await listSlips();
+  const groups = groupByCategory(slips);
 
   return (
     <div className="space-y-10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-base font-medium text-ink">Recipes</h1>
+          <h1 className="text-base font-medium text-ink">Slips</h1>
           <p className="mt-0.5 text-xs text-ink-muted">
-            {recipes.length} recipe{recipes.length === 1 ? '' : 's'} · open one
-            to configure, preview, and print
+            {slips.length} slip{slips.length === 1 ? '' : 's'} · open one to
+            configure, preview, and print
           </p>
         </div>
         <a
@@ -41,7 +41,7 @@ export default async function RecipesPage() {
               {group.category}
             </span>
             <span className="rounded-full border-[0.5px] border-border px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">
-              {group.recipes.length}
+              {group.slips.length}
             </span>
             <span className="h-px flex-1 bg-hairline" />
           </div>
@@ -55,10 +55,10 @@ export default async function RecipesPage() {
                 'repeat(auto-fill, minmax(min(100%, 400px), 400px))',
             }}
           >
-            {group.recipes.map((r) => (
+            {group.slips.map((r) => (
               <Link
                 key={r.slug}
-                href={`/recipes/${encodeURIComponent(r.slug)}`}
+                href={`/slips/${encodeURIComponent(r.slug)}`}
                 className="group flex flex-col overflow-hidden rounded-md border-[0.5px] border-border bg-raised transition-colors hover:border-ink-faint"
               >
                 {/* the full receipt at paper width on white, like every

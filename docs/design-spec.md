@@ -58,9 +58,9 @@ thermal-paper dithering.
 Small uniform tiles read as a lattice; randomness reads as grain. Cards
 and list containers stay solid --raised so they lift off the texture.
 Keep it barely perceptible, so it reads as texture rather than pattern.
-Toggle: moon icon (light) / sun icon (dark) in the nav; persist the
-choice in a cookie or localStorage (this is a normal hosted page, not a
-sandboxed artifact).
+Toggle: moon icon (light) / sun icon (dark) in the header; persist the
+choice in localStorage (this is a normal hosted page, not a sandboxed
+artifact).
 
 ### Red usage rules (strict)
 
@@ -75,16 +75,18 @@ Green is not used anywhere.
 - Content column: max 1120px, centered. Gutters are max(48px, half the
   leftover viewport): never under 48px, growing naturally on wide screens.
   The studio (/studio) stays full-bleed; it is a workbench, not a page.
-- Phones (≤640px): gutters drop to 16px, header and nav wrap, the stat
-  strip becomes a 2×2 grid, history expand stacks its columns without the
-  indent, plugin config labels sit above their values, thumbnails shrink
-  one step (96x64 rows / 110x74 queue), and the Photo tool goes single
-  column with a taller tap target. Same components with denser wrapping,
-  not a separate mobile design.
+- Phones (≤640px): gutters drop to 16px, the sidebar collapses to a sheet,
+  the stat strip becomes a 2×2 grid, history expand stacks its columns
+  without the indent, slip config labels sit above their values,
+  thumbnails shrink one step (96x64 rows / 110x74 queue), and the Photo
+  tool goes single column with a taller tap target. Same components with
+  denser wrapping, not a separate mobile design.
 - Header: 16px vertical padding; bottom rule 1.5px solid --ink, full-bleed,
   with contents aligned to the content column.
-- Nav: 13px text, uniform 20px gap between all items including icons.
-  Active item: --ink text + 1.5px --red underline with 3px padding-bottom.
+- Sidebar and tab rows: 13px text. The active item gets --ink text and a
+  1.5px --red mark: a bar on the item's left edge in the sidebar, an
+  underline in tab rows (the Studio's Template/Data tabs, the Photo tool
+  dock). Everything else is --ink-muted.
 - Major blocks: 20px apart. Section title block: 16px/500 title,
   12px --ink-faint subtitle 3px below.
 - Cards: --raised bg, 0.5px --border, radius 6px, padding 16px 18px,
@@ -127,13 +129,13 @@ Hovering any list thumbnail floats a 288px-wide peek of the same PNG
 (--raised, 0.5px --border, no shadow). Thumbnails identify; the peek and
 the History expand are where receipts are read.
 
-## Shell (Next.js app, nextjs-shell-rewrite branch)
+## Shell
 
-The Next.js rewrite replaces the top nav with a left sidebar; everything
-else in this spec (tokens, red rules, spacing, components, page specs)
-carries over unchanged. Shell rules:
+The app is a Next.js React app with a left sidebar (there is no top nav).
+The identity, tokens, red rules, spacing, and components above apply
+throughout. Shell rules:
 
-- Sidebar: DOCKET wordmark at top (links home), then Overview, Recipes,
+- Sidebar: DOCKET wordmark at top (links home), then Overview, Slips,
   Photo, Queue, History, Printer. Collapsible to an icon rail; on phones
   it becomes a sheet.
   Items are 13px --ink-muted with 14px outline icons in --ink-faint.
@@ -143,48 +145,42 @@ carries over unchanged. Shell rules:
 - Header: slim row with the sidebar trigger left and theme toggle plus
   logout icon right, keeping the full-bleed 1.5px solid --ink bottom rule.
 - Content column: unchanged (max 1120px, gutters per the spacing system).
-- Overview replaces Home: a LATEST PRINT card (the newest history PNG on
-  a white panel, receipts are paper in both themes) above the stat strip,
-  then the system line, dashed divider, and RECENT, all as specced under
-  Home below.
-- Theme: same data-theme mechanism and localStorage key (docket-theme) as
-  the legacy dashboard, so the choice carries across both apps.
-- Recipes index: replaces Templates + Plugins. Cards grouped by category
-  (11px caps label + mono count), following the Templates card grammar
-  below: rendered receipt hero on white, mono name, ENABLED/OFF chip for
-  system recipes, quiet description. The card is the button. "New
-  template" opens the Studio blank.
-- Recipe page: breadcrumb, mono title + description, SYSTEM/TEMPLATE and
-  LIQUID chips (Delete, two-step, for template recipes only, neutral
-  outline per the red rules). Left: PREVIEW stage, the primary template
-  rendered on white, Print test + mono status beneath. Right (system
-  recipes): status row (toggle, chip, last-run line, errors in --red)
-  and a PARAMETERS card in the plugin-card grammar: schedule row first
-  (shape fixed by the plugin's kind), read-only next-run line, per-field
-  config grid (110px caps labels, dotted-underline mono inputs, arrays
-  as textareas), template names, one explicit Save. Below: TEMPLATES
-  rows, each "Open in Studio", and the STATE debug record (system only).
-  The Studio remains the template editor, served at /studio.
+- Overview: a LATEST PRINT card (the newest history PNG on a white panel,
+  receipts are paper in both themes) above the stat strip, then the system
+  line, dashed divider, and RECENT (detailed under Overview below).
+- Theme: data-theme on <html>, persisted under the localStorage key
+  docket-theme, with a no-flash bootstrap so the first paint matches.
+- Slips: category-grouped cards of the slip previews, and a slip
+  page for each (preview + Print test, plus config and schedule for system
+  slips). The Studio (template editor) is served at /studio. Detailed
+  under Slips below.
 - Printer page: online dot per the 90-second rule, then a read-only
   label/value grid (device seen, store driver, tick, print width, job
   cap, version) and a quiet pointer to the hardware docs.
-- Studio page: toolbar card (template select mono, New/Save/Delete,
-  Print right with the shortcut hint), then a two-column pair of equal
-  cards: editors (Template / Data tabs with the red active underline,
+- Studio page: full-bleed workbench (the sidebar collapses on entry, a
+  breadcrumb returns to where you came from). Toolbar card (template
+  select mono, New/Save/Delete, Print right with the shortcut hint), then
+  editors (Template / Data tabs with the red active underline,
   syntax-highlighted source over the mono editor, JSON error line in
-  --red) and the stage (status dot + mono size line, the 624px paper
-  roll scaled to fit, RECENT JOBS strip with thumbnails). Toasts are a
-  small centered raised chip. Keyboard: Cmd/Ctrl+S save, +P print.
-- Photo page: the workbench per the Photo spec below, unchanged in
-  behavior (its engine carried over verbatim); it now sits inside the
-  shell as a card under the standard title block.
+  --red) beside the stage (status dot + mono size line, the receipt
+  preview, RECENT JOBS strip). Toasts are a small centered raised chip.
+  Keyboard: Cmd/Ctrl+S save, +P print.
+- Photo page: the workbench per the Photo spec below (its engine carried
+  over verbatim), inside the shell as a card under the title block.
+- Receipt previews (the render shown on white paper): one canonical width
+  everywhere. The paper is 400px wide with the printed image at 92.3% of
+  it (the 576 printable dots within the 624-dot / 80mm stock), centered,
+  smooth-scaled. Below 400px of available width it goes full width. This
+  is the same on Overview, the slip pages and cards, the Studio, and the
+  Photo tool (`components/receipt-preview.tsx`). Small identifying
+  thumbnails in list rows are a separate element and keep their row sizes.
 
 ## Pages
 
 Every page lives in the sidebar shell above. The specs below describe
 each page's content zone.
 
-### Home
+### Overview
 1. Stat strip: ONE bordered container split into 4 cells by 0.5px --hairline
    verticals (not separate cards). Cell: label / 28px mono number (8px
    below label) / 12px sub (2px below). Queue number is --red when > 0.
@@ -196,22 +192,49 @@ each page's content zone.
    source, status·time in the 92px rail). Same records as History: a
    preview slice, not a separate feature.
 
-### Templates
-Title block + "New template" button right. Templates are visual artifacts,
-so this page is a CARD GRID, not a list: repeat(auto-fill, minmax(240px,
-1fr)), 12px gaps. Each card: the top of the real rendered receipt as the
-hero (170px tall, white, top-cropped, 1px dashed --dash bottom edge), then
-one head line, the name (mono 13px) with a trash icon at right that is
-revealed on card hover, and a quiet sub: "used by <plugin>" or
-"manual only" · edited-ago.
-No Open button: the card IS the button (preview and name both load the
-studio; card border shifts to --ink-faint on hover as the cue). Buttons
-never repeat the default action of an already-clickable object. New opens
-the studio blank. (Lists remain the pattern for records: History, Queue.)
+### Slips
+Everything the printer can produce, grouped by category. One page that
+replaces the earlier Templates and Plugins pages.
+
+Index: title block + "New template" button right. Category groups (11px
+caps label + mono count chip + hairline rule), then a grid of cards each
+fixed at the receipt-paper width (full width when the column is narrower).
+Card: the full rendered receipt on white (inset at the paper width, chips
+overlaid top-left), a mono name with a corner arrow, a two-line
+description, and a footer (engine left, template count right). No Open
+button: the card IS the button, its border shifting to --ink-faint on
+hover. "New template" opens the Studio blank.
+
+Slip page: breadcrumb, mono title + description, kind (SYSTEM / TEMPLATE)
+and LIQUID chips, and for a template slip a two-step Delete (neutral
+outline; the red rules forbid a red button here). Left: the PREVIEW stage
+(the primary template rendered on white at the paper width) with a Print
+test button and mono status beneath. Right, for a system slip: a status
+row (enable toggle, ENABLED/OFF chip, right-aligned last-run in mono, --red
+when it is an error like "calendar 401 · 2d ago") and a PARAMETERS card.
+
+PARAMETERS card (the per-field config grammar): schedule row first, then a
+read-only "next run" line, then per-field config in a label/value grid
+(110px caps label column): one dotted-underline mono input per config key,
+derived from the config's shape. Arrays edit as one-item-per-line
+textareas (also accept commas); numbers are validated (types come from the
+plugin's defaults.config); long values wrap at full width and never
+overflow. Template names last. The schedule row's shape is fixed by the
+plugin's kind: "every [N]s" for watchers, "at [HH:MM] [tz]" for fixed-time;
+passive (push-driven) plugins show no schedule and "next run" reads "on
+message". There is never a raw-JSON blob input. Edits persist only via one
+explicit Save (right of the grid), which also recomputes the next-due time;
+there is no save-on-change. The enable toggle is immediate (the click is
+the action) and recomputes the due time itself. Invalid input shows a red
+inline error spanning the grid and nothing is saved. A disabled slip
+drops its text one step (--ink → --ink-muted) and "next run" shows "—".
+
+Below the two columns: TEMPLATES rows (each "Open in Studio"), and for a
+system slip the STATE debug record (its stored state JSON).
 
 ### Photo
 A print tool, not a registry plugin (no run()/toggle, user-initiated).
-Title block ("print a picture — dithered like everything else"), one card
+Title block ("Print a photo on receipt paper."), one card
 split make/result: the left column shapes the print, the right column IS
 the print (slip preview with the Print button and mono status centered
 directly beneath it, so the commit action lives with the result). Left
@@ -224,8 +247,11 @@ button opens an in-page viewfinder on desktops AND phones (phones use the
 rear camera, unmirrored, since selfie cams mirror) that shares the editor's
 stage, and the viewfinder is LIVE DITHERED: a Web
 Worker runs the print pipeline's serpentine dither on each camera frame
-(mirrored, paced to the camera's ~30fps, image-rendering: pixelated), so
-framing already looks like the print; a camera-app shutter below: a 44px
+(mirrored, paced to the camera's ~30fps, and shown smooth-scaled at the
+print's 576-dot width so it reads as the same texture as the render), so
+framing already looks like the print. In camera mode the viewfinder takes
+the whole stage (the dropzone and preview hide); a camera-app shutter
+below: a 44px
 --ink ring whose inner disc grows on hover, centered, quiet mono "cancel"
 right-aligned; capturing grabs the full-resolution raw frame (mirrored to
 match) but the editor then WEARS IT DITHERED: the crop canvas displays a
@@ -262,7 +288,7 @@ the print image, so what you see is the dithered print, not an
 approximation. Under 720px (phones are the primary use case) the loaded
 state becomes an iPhone-style editor, nothing sticky, 20px air between
 zones,
-top to bottom: the slip preview (roll 240px centered, capped 44vh, taller
+top to bottom: the slip preview (roll full width, capped 60vh, taller
 slips scroll inside), one tool panel in a fixed-height (~96px, centered)
 zone so nothing jumps when switching, a horizontally scrollable tool row
 (Photo · Crop · Levels · Midtone · Shadows · Brightness · Contrast ·
@@ -278,40 +304,21 @@ Segmented control (.seg): a bordered pill of flush buttons; the active
 option is inverse mono (--ink background, --page text), the same idiom as
 a toggle that's on, never red.
 
-### Plugins
-Title block + "Register plugin" button. Per-plugin CARDS (not a list):
-line 1: toggle, id (mono), ENABLED/OFF chip, right-aligned last-run
-(mono, --red if it's an error like "calendar 401 · 2d ago");
-dashed rule; below it, PER-FIELD config editing in a label/value grid
-(110px label column, 11px caps labels): one dotted-underline input per
-config key, derived from the config's shape: arrays edit as
-one-item-per-line textareas (also accept commas), numbers are validated
-(types come from the plugin's defaults.config), long values wrap at full
-width, never overflow the card. Schedule first, then a read-only "next
-run" line, config fields, template names last. The schedule row's shape is
-fixed by the plugin's kind: "every [N]s" for watchers, "at [HH:MM] [tz]"
-for fixed-time plugins; passive (push-driven) plugins show neither and
-"next run" reads "on message". Edits persist only via an explicit Save
-button (right-aligned below the grid). Saving also recomputes the
-plugin's next-due time; there is no save-on-change. The enable toggle
-remains immediate (the click is the action) and recomputes the due time
-itself. Invalid input → red inline error spanning the grid, and nothing
-is saved.
-There is never a raw-JSON blob input. Disabled plugin: text drops one step
-(--ink → --ink-muted), "next run" shows "—".
-
 ### Queue
-Title "Queue" with "refreshes every 3s" subtitle; job count right (mono).
-Job CARDS: thumbnail 38x56, name + "source · created HH:MM:SS" sub,
-status mono ("printing" --red / "queued" --ink-muted), rail = "claimed Ns"
-for inflight or a Cancel button for queued ONLY (inflight cannot be
-canceled because the printer already claimed it). List auto-refreshes (htmx
-polling every 3s on the list fragment).
+Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).
+Job CARDS: receipt thumbnail (110x74 phone / 158x108 desktop), name +
+"source · created HH:MM:SS" sub,
+status mono ("printing" --red / "queued" --ink-muted), rail = a Cancel
+button for a queued job, or "claimed Ns" plus a Requeue button for an
+inflight one (Requeue sends a stuck claim back to queued, from where it
+prints again or can be canceled). The list re-fetches `/api/queue` every
+3s in React, only while the tab is visible.
 
 ### History
 Title + "N jobs · newest first"; filter control right (dotted-underline
-value). One list container; rows like Templates but with status·time in
-the rail ("failed" --red). Row click expands (chevron) an inset panel:
+value). One list container; list rows (receipt thumbnail, name, source)
+with status·time in the rail ("failed" --red). Row click expands (chevron)
+an inset panel:
 --page bg, indented past the thumbnail (padding-left 162px), three columns:
 PRINTED (the receipt PNG at 200px), TEMPLATE (name + truncated source,
 mono 11.5px --ink-muted) and DATA (the JSON), plus a Reprint button
@@ -325,6 +332,6 @@ one outline button "Sign in". There is nothing else on the page.
 ## Voice
 
 Sentence case everywhere except the wordmark and 11px section labels.
-No exclamation marks. Errors say what happened + age ("calendar 401 · 2d
-ago"). Empty states are invitations ("No jobs waiting — print something
-from Templates").
+No exclamation marks, no em dashes, no jargon or file paths in page copy.
+Errors say what happened + age ("calendar 401 · 2d ago"). Empty states are
+short and plain ("No jobs waiting.", "Nothing printed yet.").

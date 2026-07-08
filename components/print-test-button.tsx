@@ -1,6 +1,6 @@
 'use client';
 
-// Print test — queue a real print of the recipe's primary template with
+// Print test — queue a real print of the slip's primary template with
 // its stored default data. Mono status beneath the button, with the
 // result (the commit action lives with the preview it commits).
 
@@ -14,7 +14,7 @@ export function PrintTestButton({ slug }: { slug: string }) {
     setStatus('queueing…');
     try {
       const res = await fetch(
-        `/api/recipes/print-test?slug=${encodeURIComponent(slug)}`,
+        `/api/slips/print-test?slug=${encodeURIComponent(slug)}`,
         { method: 'POST' },
       );
       const data = await res.json();

@@ -30,14 +30,16 @@ const nextConfig = {
     '/jobs': ['./render/fonts/**'],
     '/api/templates/thumb': ['./render/fonts/**'],
     '/api/jobs/reprint': ['./render/fonts/**'],
-    '/api/recipes/print-test': ['./render/fonts/**'],
+    '/api/slips/print-test': ['./render/fonts/**'],
   },
-  // Muscle memory from the legacy app: the dashboard used to live under
-  // /dashboard/*; send old bookmarks to the shell.
+  // Old bookmarks: the dashboard used to live under /dashboard/*, and the
+  // Slips page was briefly at /recipes. Send both to their current homes.
   async redirects() {
     return [
       { source: '/dashboard', destination: '/', permanent: false },
       { source: '/dashboard/:path*', destination: '/', permanent: false },
+      { source: '/recipes', destination: '/slips', permanent: false },
+      { source: '/recipes/:slug', destination: '/slips/:slug', permanent: false },
     ];
   },
 };

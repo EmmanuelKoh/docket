@@ -57,7 +57,7 @@ paper).
 
 Prints run darker than the dither: mildly in highlights, severely in
 shadows (dark grays fuse to black), even on the "light" density DIP
-setting. Compensated by the tone curve in `views/photo.liquid`
+setting. Compensated by the tone curve in `components/photo-engine.js`
 (keep-in-sync copy in `scripts/print-calibration.js`), calibrated over four
 print iterations with `node scripts/print-calibration.js`. Re-run that
 script against any new printer or paper stock.
