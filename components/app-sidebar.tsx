@@ -6,7 +6,7 @@
 // vertical cousin of the legacy nav's red underline). The queue item
 // carries a count badge, red only when nonzero (red-usage rule 4).
 
-import { History, House, Layers } from 'lucide-react';
+import { History, House, Layers, NotebookText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -24,6 +24,7 @@ import {
 
 const NAV = [
   { title: 'Overview', url: '/', icon: House },
+  { title: 'Recipes', url: '/recipes', icon: NotebookText },
   { title: 'Queue', url: '/queue', icon: Layers },
   { title: 'History', url: '/history', icon: History },
 ];
@@ -56,7 +57,10 @@ export function AppSidebar({ queueCount }: { queueCount: number }) {
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === item.url}
+                    isActive={
+                      pathname === item.url ||
+                      (item.url !== '/' && pathname.startsWith(`${item.url}/`))
+                    }
                     tooltip={item.title}
                     className={ACTIVE_BAR}
                   >

@@ -14,6 +14,13 @@
 
 export const id = 'espn-worldcup';
 
+// Card copy for the dashboard's Recipes pages.
+export const meta = {
+  title: 'World Cup watcher',
+  description: 'Prints kickoff, goals, and full-time slips for live FIFA World Cup matches.',
+  category: 'sports',
+};
+
 export const defaults = {
   schedule: { every: 60 }, // watcher: checks ESPN on each due run
   config: { watchTeams: [] }, // team abbreviations to filter; empty = all

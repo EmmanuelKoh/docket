@@ -64,29 +64,53 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
           key={job.id}
           className="rounded-md border-[0.5px] border-border bg-raised px-5 py-4"
         >
-          <div className="flex items-start gap-6">
+          {/* Phones: thumbnail shrinks one step (110x74) and status +
+              action move under the name; the fixed rail columns only
+              exist from sm up, so nothing can push off-screen. */}
+          <div className="flex items-start gap-4 sm:gap-6">
             <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
               <img
                 src={`/api/jobs/png?job=${encodeURIComponent(job.id)}`}
                 alt=""
                 loading="lazy"
-                className="h-[108px] w-[158px] object-contain"
+                className="h-[74px] w-[110px] object-contain sm:h-[108px] sm:w-[158px]"
               />
             </div>
             <div className="min-w-0 grow pt-0.5">
               <div className="truncate font-mono text-[13px] text-ink">
                 {job.name}
               </div>
-              <div className="mt-0.5 text-xs text-ink-faint">
+              <div className="mt-0.5 text-xs text-ink-muted">
                 {job.source} · created {job.createdTime}
+              </div>
+              <div className="mt-2 flex items-center gap-3 sm:hidden">
+                <span
+                  className={`font-mono text-xs ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
+                >
+                  {job.statusText}
+                </span>
+                {job.inflight ? (
+                  <span className="font-mono text-xs text-ink-faint">
+                    claimed {job.claimedAgo}
+                  </span>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-auto px-2.5 py-1 text-xs font-normal"
+                    onClick={() => cancel(job.id)}
+                  >
+                    Cancel
+                  </Button>
+                )}
               </div>
             </div>
             <span
-              className={`pt-0.5 font-mono text-xs ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
+              className={`hidden pt-0.5 font-mono text-xs sm:inline ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
             >
               {job.statusText}
             </span>
-            <div className="w-[118px] shrink-0 pt-0.5 text-right font-mono text-xs text-ink-faint">
+            <div className="hidden w-[118px] shrink-0 pt-0.5 text-right font-mono text-xs text-ink-faint sm:block">
               {job.inflight ? (
                 <>claimed {job.claimedAgo}</>
               ) : (

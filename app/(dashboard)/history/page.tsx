@@ -63,7 +63,7 @@ export default async function HistoryPage({
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-base font-medium text-ink">History</h1>
-          <p className="mt-0.5 text-xs text-ink-faint">
+          <p className="mt-0.5 text-xs text-ink-muted">
             {all.length} job{all.length === 1 ? '' : 's'} · newest first
           </p>
         </div>

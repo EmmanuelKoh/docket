@@ -87,7 +87,7 @@ export default async function OverviewPage() {
               <div className="truncate font-mono text-[13px] text-ink">
                 {last.name || last.id}
               </div>
-              <div className="mt-0.5 text-xs text-ink-faint">
+              <div className="mt-0.5 text-xs text-ink-muted">
                 {last.source || '—'} · {last.status} {agoText(last.createdAt)}
               </div>
               <Link
@@ -162,25 +162,32 @@ export default async function OverviewPage() {
             {history.slice(0, 3).map((j, i) => (
               <div
                 key={j.id}
-                className={`flex items-start gap-6 px-5 py-4 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
+                className={`flex items-start gap-4 px-4 py-4 sm:gap-6 sm:px-5 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
               >
                 <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
                   <img
                     src={`/api/jobs/png?job=${encodeURIComponent(j.id)}`}
                     alt=""
                     loading="lazy"
-                    className="h-[86px] w-[130px] object-contain"
+                    className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"
                   />
                 </div>
                 <div className="min-w-0 grow">
                   <div className="truncate font-mono text-[13px] text-ink">
                     {j.name || j.id}
                   </div>
-                  <div className="mt-0.5 text-xs text-ink-faint">
+                  <div className="mt-0.5 text-xs text-ink-muted">
                     {j.source || '—'}
                   </div>
+                  <div className="mt-2 whitespace-nowrap font-mono text-xs sm:hidden">
+                    <span className={statusColor(j.status)}>{j.status}</span>
+                    <span className="text-ink-faint">
+                      {' '}
+                      · {agoShort(j.createdAt)}
+                    </span>
+                  </div>
                 </div>
-                <div className="w-[118px] shrink-0 whitespace-nowrap text-right font-mono text-xs">
+                <div className="hidden w-[118px] shrink-0 whitespace-nowrap text-right font-mono text-xs sm:block">
                   <span className={statusColor(j.status)}>{j.status}</span>
                   <span className="text-ink-faint">
                     {' '}

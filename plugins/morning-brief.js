@@ -31,6 +31,13 @@ import ical from 'node-ical';
 
 export const id = 'morning-brief';
 
+// Card copy for the dashboard's Recipes pages.
+export const meta = {
+  title: 'Morning brief',
+  description: 'A daily slip with your calendar, weather, and a focus line.',
+  category: 'daily',
+};
+
 export const defaults = {
   enabled: false, // enable from the dashboard once config is set
   schedule: { at: '06:30', timezone: 'America/New_York' },

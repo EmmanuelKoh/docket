@@ -80,26 +80,32 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
             key={row.id}
             className={i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}
           >
+            {/* Phones: thumbnail shrinks one step (96x64) and status·time
+                moves under the name; the fixed rail exists from sm up. */}
             <button
               type="button"
               onClick={() => toggle(row.id)}
-              className="flex w-full items-start gap-6 px-5 py-4 text-left"
+              className="flex w-full items-start gap-4 px-4 py-4 text-left sm:gap-6 sm:px-5"
             >
               <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
                 <img
                   src={`/api/jobs/png?job=${encodeURIComponent(row.id)}`}
                   alt=""
                   loading="lazy"
-                  className="h-[86px] w-[130px] object-contain"
+                  className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"
                 />
               </div>
               <div className="min-w-0 grow pt-0.5">
                 <div className="truncate font-mono text-[13px] text-ink">
                   {row.name}
                 </div>
-                <div className="mt-0.5 text-xs text-ink-faint">{row.sub}</div>
+                <div className="mt-0.5 text-xs text-ink-muted">{row.sub}</div>
+                <div className="mt-2 whitespace-nowrap font-mono text-xs sm:hidden">
+                  <span className={row.statusColor}>{row.statusText}</span>
+                  <span className="text-ink-faint"> · {row.railTime}</span>
+                </div>
               </div>
-              <div className="w-[118px] shrink-0 whitespace-nowrap pt-0.5 text-right font-mono text-xs">
+              <div className="hidden w-[118px] shrink-0 whitespace-nowrap pt-0.5 text-right font-mono text-xs sm:block">
                 <span className={row.statusColor}>{row.statusText}</span>
                 <span className="text-ink-faint"> · {row.railTime}</span>
               </div>

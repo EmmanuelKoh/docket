@@ -26,6 +26,12 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/tick': ['./reference/**', './render/fonts/**'],
     '/ingest': ['./reference/**', './render/fonts/**'],
+    '/preview': ['./render/fonts/**'],
+    '/jobs': ['./render/fonts/**'],
+    '/studio': ['./views/studio.html'],
+    '/api/templates/thumb': ['./render/fonts/**'],
+    '/api/jobs/reprint': ['./render/fonts/**'],
+    '/api/recipes/print-test': ['./render/fonts/**'],
   },
 };
 

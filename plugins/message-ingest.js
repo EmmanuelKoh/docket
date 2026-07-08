@@ -20,6 +20,13 @@
 
 export const id = 'message-ingest';
 
+// Card copy for the dashboard's Recipes pages.
+export const meta = {
+  title: 'Message ingest',
+  description: 'Classifies texts forwarded from your phone and prints task receipts.',
+  category: 'messages',
+};
+
 // Push-driven: /tick registers the record but never runs it on a timer.
 export const passive = true;
 

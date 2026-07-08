@@ -133,8 +133,9 @@ The Next.js rewrite replaces the top nav with a left sidebar; everything
 else in this spec (tokens, red rules, spacing, components, page specs)
 carries over unchanged. Shell rules:
 
-- Sidebar: DOCKET wordmark at top (links home), then Overview, Queue,
-  History. Collapsible to an icon rail; on phones it becomes a sheet.
+- Sidebar: DOCKET wordmark at top (links home), then Overview, Recipes,
+  Queue, History. Collapsible to an icon rail; on phones it becomes a
+  sheet.
   Items are 13px --ink-muted with 14px outline icons in --ink-faint.
   Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
   item's left edge (the vertical form of the old nav underline).
@@ -148,6 +149,22 @@ carries over unchanged. Shell rules:
   Home below.
 - Theme: same data-theme mechanism and localStorage key (docket-theme) as
   the legacy dashboard, so the choice carries across both apps.
+- Recipes index: replaces Templates + Plugins. Cards grouped by category
+  (11px caps label + mono count), following the Templates card grammar
+  below: rendered receipt hero on white, mono name, ENABLED/OFF chip for
+  system recipes, quiet description. The card is the button. "New
+  template" opens the Studio blank.
+- Recipe page: breadcrumb, mono title + description, SYSTEM/TEMPLATE and
+  LIQUID chips (Delete, two-step, for template recipes only, neutral
+  outline per the red rules). Left: PREVIEW stage, the primary template
+  rendered on white, Print test + mono status beneath. Right (system
+  recipes): status row (toggle, chip, last-run line, errors in --red)
+  and a PARAMETERS card in the plugin-card grammar: schedule row first
+  (shape fixed by the plugin's kind), read-only next-run line, per-field
+  config grid (110px caps labels, dotted-underline mono inputs, arrays
+  as textareas), template names, one explicit Save. Below: TEMPLATES
+  rows, each "Open in Studio", and the STATE debug record (system only).
+  The Studio remains the template editor, served at /studio.
 
 ## Pages
 
