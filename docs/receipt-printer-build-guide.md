@@ -260,7 +260,7 @@ is `firmware/docket-agent/docket-agent.ino`, the ESP32 version of the two
 Mac processes. This stage points it at the dev server on your laptop so
 mistakes stay off production.
 
-1. On the laptop: `npm start` in the docket repo. Note the laptop's LAN IP
+1. On the laptop: `npm run dev` in the docket repo. Note the laptop's LAN IP
    (System Settings → Wi-Fi → Details, e.g. `192.168.1.20`).
 2. **Stop the Mac's printer agent if it's pointed anywhere.** During this
    test only the ESP32 should be printing.
@@ -313,7 +313,7 @@ proves the device cooperates. Queue a job for each drill and watch:
   the device nacks or the lease expires; either way the job reprints
   complete. A torn half-receipt in the bin is expected; the complete one
   follows.
-- **Server unreachable after printing** (stop `npm start` right as it
+- **Server unreachable after printing** (stop `npm run dev` right as it
   prints) → Serial Monitor shows `ack failed — will retry`; restart the
   server; the ack lands before any new job is fetched. No double print.
 

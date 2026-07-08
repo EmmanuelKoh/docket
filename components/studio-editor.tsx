@@ -6,7 +6,7 @@
 // over a colored <pre> — see studio.css), a 400ms-debounced abortable
 // /preview render onto the 624px paper roll, a recent-jobs strip that
 // polls every 3s ONLY while the tab is visible, Ctrl/Cmd+S and +P, and
-// the /studio?template=Name / ?new=1 URL contract the recipe pages use.
+// the /studio?template=Name / ?new=1 URL contract the slip pages use.
 
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';

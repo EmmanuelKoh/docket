@@ -1,5 +1,5 @@
-// app/_lib/recipe-data.ts — the unified "recipe" view over the EXISTING
-// stores. A recipe is either a system plugin (plugins/*.js module + its
+// app/_lib/slip-data.ts — the unified "slip" view over the EXISTING
+// stores. A slip is either a system plugin (plugins/*.js module + its
 // registry record) or a standalone template (a stored template no plugin
 // owns). This is deliberately an adapter, not a data migration: preview
 // deployments share production data with the live legacy app, so the
@@ -24,15 +24,15 @@ export type ConfigField = {
   wide?: boolean;
 };
 
-export type Recipe = {
+export type Slip = {
   slug: string;
   kind: 'system' | 'template';
   title: string;
   description: string;
   category: string;
-  templates: string[]; // template-store names this recipe prints with
+  templates: string[]; // template-store names this slip prints with
   primaryTemplate: string | null; // for the preview stage
-  // system recipes only:
+  // system slips only:
   enabled?: boolean;
   passive?: boolean;
   scheduleType?: 'every' | 'at' | null;
@@ -128,9 +128,9 @@ export function parseConfigField(
   return { value: s };
 }
 
-// ---- recipe assembly ----
+// ---- slip assembly ----
 
-function systemRecipe(module: PluginModule, record: PluginRecord): Recipe {
+function systemSlip(module: PluginModule, record: PluginRecord): Slip {
   const passive = !!module.passive;
   const schedule = record.schedule || {};
   const templates = module.templates || [];
@@ -168,7 +168,7 @@ function systemRecipe(module: PluginModule, record: PluginRecord): Recipe {
   };
 }
 
-function templateRecipe(name: string): Recipe {
+function templateSlip(name: string): Slip {
   return {
     slug: name,
     kind: 'template',
@@ -180,9 +180,9 @@ function templateRecipe(name: string): Recipe {
   };
 }
 
-// All recipes: system plugins first (registry order), then standalone
+// All slips: system plugins first (registry order), then standalone
 // templates (every stored template no plugin claims).
-export async function listRecipes(): Promise<Recipe[]> {
+export async function listSlips(): Promise<Slip[]> {
   const [records, templates] = await Promise.all([
     ensureRegistered() as Promise<PluginRecord[]>,
     getTemplates() as Promise<{ name: string }[]>,
@@ -191,35 +191,35 @@ export async function listRecipes(): Promise<Recipe[]> {
   const owned = new Set(
     (PLUGINS as PluginModule[]).flatMap((m) => m.templates || []),
   );
-  const recipes: Recipe[] = [];
+  const slips: Slip[] = [];
 
   for (const module of PLUGINS as PluginModule[]) {
     const record = records.find((r) => r.id === module.id);
-    if (record) recipes.push(systemRecipe(module, record));
+    if (record) slips.push(systemSlip(module, record));
   }
   for (const t of templates) {
-    if (!owned.has(t.name)) recipes.push(templateRecipe(t.name));
+    if (!owned.has(t.name)) slips.push(templateSlip(t.name));
   }
-  return recipes;
+  return slips;
 }
 
-export async function getRecipe(slug: string): Promise<Recipe | null> {
-  const recipes = await listRecipes();
-  return recipes.find((r) => r.slug === slug) || null;
+export async function getSlip(slug: string): Promise<Slip | null> {
+  const slips = await listSlips();
+  return slips.find((r) => r.slug === slug) || null;
 }
 
-// Recipes grouped for the index page, categories in first-seen order.
+// Slips grouped for the index page, categories in first-seen order.
 export function groupByCategory(
-  recipes: Recipe[],
-): { category: string; recipes: Recipe[] }[] {
-  const groups = new Map<string, Recipe[]>();
-  for (const r of recipes) {
+  slips: Slip[],
+): { category: string; slips: Slip[] }[] {
+  const groups = new Map<string, Slip[]>();
+  for (const r of slips) {
     const list = groups.get(r.category) || [];
     list.push(r);
     groups.set(r.category, list);
   }
   return [...groups.entries()].map(([category, list]) => ({
     category,
-    recipes: list,
+    slips: list,
   }));
 }

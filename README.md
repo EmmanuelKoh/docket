@@ -104,46 +104,38 @@ npm run migrate
 
 ## Dashboard
 
-`/dashboard` is the DOCKET management UI: server-rendered LiquidJS pages
-with [htmx](https://htmx.org) for in-place updates, styled per
-`docs/design-spec.md` (monochrome + register red, light "paper" and dark
-"darkroom" themes; the moon/sun toggle in the nav persists via localStorage).
+The dashboard is a Next.js app (React, Tailwind, and a small shadcn-style
+component kit) styled per `docs/design-spec.md` (monochrome + register red,
+light "paper" and dark "darkroom" themes; the moon/sun toggle in the header
+persists via localStorage). A collapsible sidebar holds the pages below.
 
 **Authentication.** Set two env vars (see `.env.example`):
 `DASHBOARD_PASSWORD` (what you type at `/login`) and `SESSION_SECRET`
 (signs the session cookie). The cookie is stateless (an HMAC-signed,
 httpOnly cookie valid for 30 days), so it works across serverless
 invocations with no session storage. `/logout` clears it. The dashboard
-pages, the studio, and the JSON APIs (`/templates`, `/jobs`, `/preview`)
-all require it. The device endpoints (`/next`, `/ack`, `/nack`, `/tick`)
-do not; they keep Bearer `DEVICE_TOKEN` auth only, because the ESP32
-can't log in.
+pages, the Studio, and the JSON routes (`/api/*`, plus `/templates`,
+`/preview`, `/jobs`) all require it. The device endpoints (`/next`,
+`/ack`, `/nack`, `/tick`) do not; they keep Bearer `DEVICE_TOKEN` auth
+only, because the ESP32 can't log in.
 
-**Sections → stores:**
+**Pages → stores:**
 
-| Section | Backed by |
-|---------|-----------|
-| Home | counts from all three stores + device last-contact (state store) |
-| Templates | template store (`lib/store.js`); Open/New load the studio at `/studio` |
-| Photo | print tool: upload a picture, live dithered preview via `/preview`, prints the seeded "Photo Print" template with an optional mono caption |
-| Plugins | plugin registry (`lib/plugin-registry.js`): toggle, schedule (`every Ns` / `at HH:MM`), per-field config with an explicit Save |
-| Queue | job store queued/inflight; Cancel only while still queued (atomic) |
+| Page | Backed by |
+|------|-----------|
+| Overview | counts from all three stores + device last-contact (state store) |
+| Slips | plugin registry + template store, unified: each slip shows a preview, its schedule and per-field config with an explicit Save, and a Print test. Templates are edited in the Studio |
+| Photo | print tool: upload or shoot a picture, live dithered preview via `/preview`, prints the seeded "Photo Print" template with an optional caption |
+| Queue | job store queued/inflight; Cancel a queued job, or Requeue an inflight one whose claim is stuck |
 | History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |
+| Printer | read-only device status and running configuration |
 
-**htmx polling.** The Queue list fragment re-fetches itself every 3 seconds
-while the tab is visible (`hx-trigger="every 3s
-[document.visibilityState=='visible']"` swapping
-`/dashboard/fragments/queue`). Hidden tabs don't poll (see
-`docs/store-costs.md`). Status changes from the printer appear without
-websockets. The
-job count in the title updates out-of-band in the same response. Everything
-else swaps on demand: plugin toggles and config edits swap the card,
-template deletes swap the list, history rows fetch their detail panel on
-first click.
+**Polling.** The Queue page re-fetches `/api/queue` every 3 seconds while
+the tab is visible, so status changes from the printer appear without
+websockets. Hidden tabs do not poll (see `docs/store-costs.md`).
 
-The old studio at `/` now redirects to `/dashboard`; the studio itself
-lives at `/studio` (same editor, restyled to the DOCKET system) and is the
-Templates section's editor.
+The Studio (the template editor) lives at `/studio` and is reached from a
+slip's "Open in Studio" link. Old `/dashboard` URLs redirect to `/`.
 
 ## Usage
 
@@ -187,7 +179,7 @@ npm run dev
 ```
 
 Opens at `http://localhost:3000`. Sign in and open `/studio` (or any
-recipe's Open in Studio link on the Recipes page). Select a starter
+slip's Open in Studio link on the Slips page). Select a starter
 template, edit the HTML/Liquid and the JSON data, and see the 1-bit
 dithered preview update live.
 
@@ -407,13 +399,13 @@ next.config.mjs            Next.js config (externals, file tracing, redirects)
 render/
   render-core.js           Liquid -> Satori -> resvg -> dither -> ESC/POS
 app/                       The Next.js app (dashboard pages + all endpoints)
-  (dashboard)/             Overview, Recipes, Queue, History, Printer pages
+  (dashboard)/             Overview, Slips, Queue, History, Printer pages
   next/ ack/ nack/ tick/   Device endpoints (Bearer DEVICE_TOKEN)
   ingest/                  POST /ingest — classify forwarded messages, print tasks
   templates/ preview/ jobs/  Studio-facing JSON APIs (session cookie)
   (dashboard)/studio/      Template editor (React, highlight-overlay editors)
   (dashboard)/photo/       Photo tool (React shell; verbatim print engine)
-  api/                     Dashboard JSON routes (queue poll, job actions, recipes)
+  api/                     Dashboard JSON routes (queue poll, job actions, slips)
 components/                React components (shadcn kit in ui/, app components)
 plugins/
   index.js                 Explicit list of installed plugin modules
