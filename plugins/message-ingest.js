@@ -1,10 +1,11 @@
 // plugins/message-ingest.js — the SMS/RCS ingestion feature, as a plugin.
 //
 // Unlike the other plugins, this one is PUSH-driven, not polled: messages
-// arrive at the /ingest endpoint (forwarded from a phone), which classifies
-// them with Gemini and prints a task receipt. There is nothing to do on a
-// timer, so this module is marked `passive` — /tick registers it (so it
-// shows on the Plugins page with an enable/disable toggle and editable
+// arrive at the /ingest endpoint (forwarded from a phone), which uses Gemini
+// to extract the tasks in each message and prints a slip for each (related
+// items grouped into a list, unrelated tasks split apart). There is nothing
+// to do on a timer, so this module is marked `passive` — /tick registers it
+// (so it shows on the Slips page with an enable/disable toggle and editable
 // config) but never calls run().
 //
 // The /ingest endpoint reads this plugin's registry record: it does nothing
