@@ -35,12 +35,13 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
     return () => clearInterval(t);
   }, [refresh]);
 
-  async function cancel(id: string) {
+  // cancel a queued job; requeue an inflight one (a stuck claim back to
+  // queued). Both return the fresh list so the row updates in one round trip.
+  async function act(path: string, id: string) {
     try {
-      const res = await fetch(
-        `/api/jobs/cancel?job=${encodeURIComponent(id)}`,
-        { method: 'POST' },
-      );
+      const res = await fetch(`${path}?job=${encodeURIComponent(id)}`, {
+        method: 'POST',
+      });
       if (!res.ok) return;
       const data = await res.json();
       setJobs(data.jobs);
@@ -48,6 +49,8 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
       // leave the list as is; the next poll corrects it
     }
   }
+  const cancel = (id: string) => act('/api/jobs/cancel', id);
+  const requeue = (id: string) => act('/api/jobs/requeue', id);
 
   if (!jobs.length) {
     return (
@@ -90,9 +93,19 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
                   {job.statusText}
                 </span>
                 {job.inflight ? (
-                  <span className="font-mono text-xs text-ink-faint">
-                    claimed {job.claimedAgo}
-                  </span>
+                  <>
+                    <span className="font-mono text-xs text-ink-faint">
+                      claimed {job.claimedAgo}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-auto px-2.5 py-1 text-xs font-normal"
+                      onClick={() => requeue(job.id)}
+                    >
+                      Requeue
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     variant="outline"
@@ -112,7 +125,17 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
             </span>
             <div className="hidden w-[118px] shrink-0 pt-0.5 text-right font-mono text-xs text-ink-faint sm:block">
               {job.inflight ? (
-                <>claimed {job.claimedAgo}</>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span>claimed {job.claimedAgo}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-auto px-2.5 py-1 text-xs font-normal"
+                    onClick={() => requeue(job.id)}
+                  >
+                    Requeue
+                  </Button>
+                </div>
               ) : (
                 <Button
                   variant="outline"
