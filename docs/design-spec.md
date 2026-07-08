@@ -66,8 +66,9 @@ artifact).
 
 Red appears ONLY as: (1) active nav underline, (2) job status "printing" /
 inflight, (3) failures and error text, (4) queue count when nonzero,
-(5) a live capture in progress (the Tape tool's mic button while
-listening: hardware actively running, the same family as "printing").
+(5) live audio actually running (the Tape tool's mic button while
+listening, its Pause button and playhead while a clip plays: hardware or
+transport actively running, the same family as "printing").
 Everything else is gray. Enabled/on states are INK, not red (a working
 plugin is normal, not an alert). Success/"done" is --ink-muted text.
 Green is not used anywhere.
@@ -323,9 +324,31 @@ take), key signature select (mono), then DETECTION and LAYOUT slider
 groups (label / native range / mono value, the Photo tool's tone-row
 idiom), a hint line, and CLIP buttons (Replay / Save clip / Load clip).
 The mic button while listening is --red text and border (red rule 5, a
-live capture). Right stage: the tape roll, a PITCH TRACE strip chart
-(ink dots weighted by detector confidence on --raised), then a NOTES
-mono event log beside status text and the Print take button.
+live capture). Right stage: the tape roll with the raw-pitch trace
+riding inside it (below), a transport row, then a NOTES mono event log
+beside status text and the Print take button.
+
+The pitch trace shares the tape's x-axis and scroll: it sits directly
+under the paper inside the same roll (hairline separator, --raised
+background — instrument panel under paper), one column per tape row, so
+the raw pitch that produced a note bar sits directly below that bar at
+any scroll position. Ink dots weighted by detector confidence, a thin
+--ink-faint line for the committed note, and faint full-width reference
+rows at A3/A4/A5 (the duduk-in-A anchors). Like the tape, its x-axis is
+sounding time — silence compresses.
+
+The player: Play/Pause and Stop (outline .btn.small) with a mono
+"elapsed / total" readout, plus a playhead crossing both the tape and
+the trace — a 1.5px DOM overlay spanning the roll (never drawn into the
+canvases; the tape canvas holds exact print bytes), --ink-muted while
+paused and --red while audio runs (red rule 5; the Play button mirrors
+it as a red Pause). The tape is not linear in time (silence compresses
+to a breath mark, glyphs occupy timeless rows), so the playhead follows
+the renderer's time-to-row timeline: it sweeps steadily through notes
+and skips across breath marks, matching the ear. Both panes are the
+scrub surface (crosshair cursor, hint right-aligned in the transport
+row): dragging pauses and seeks, releasing resumes if it was playing.
+While playing the roll auto-scrolls to keep the bar in view.
 
 Print take queues the rendered rows verbatim through /api/tape/print
 (source "tape"); the job appears in Queue and History like any other,

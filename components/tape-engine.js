@@ -223,36 +223,90 @@ export function initTapeTool() {
 
   function frame() {
     raf = requestAnimationFrame(frame);
-    if (!drawNewRows()) return;
-    paintVisible();
-    if (follow) visWrap.scrollLeft = vis.width;
+    const grew = drawNewRows();
+    if (grew) {
+      paintVisible();
+      if (follow) visWrap.scrollLeft = vis.width;
+    }
+    if (grew || traceDirty) paintTrace();
+    if (playState === 'playing') updatePlayhead();
   }
 
-  // ---- pitch trace: strip chart, one column per analysis frame ----
+  // ---- pitch trace: the raw-pitch pane riding under the tape in the
+  // same scroll container, sharing its x-axis — each detector frame
+  // draws at the tape row the renderer had just emitted, so the pitch
+  // that produced a note bar sits directly below that bar at any scroll
+  // position (and the playhead crosses both panes). Dots accumulate in
+  // an offscreen at 1px per tape row; the visible canvas repaints
+  // scaled to match the tape, with the reference rows drawn full-width.
+  // Like the tape, the x-axis is SOUNDING time: silence doesn't advance,
+  // so low-clarity dots during a rest pile into one column. ----
+  const TRACE_H = 110;
   const traceCtx = trace.getContext('2d');
+  let traceOff = document.createElement('canvas');
+  traceOff.width = 4096;
+  traceOff.height = TRACE_H;
+  let traceOffCtx = traceOff.getContext('2d');
+  let traceDirty = false;
+
   function traceY(midiFloat) {
     // G3 (55) at the bottom .. D6 (86) at the top
-    return trace.height - ((midiFloat - 55) / (86 - 55)) * trace.height;
+    return TRACE_H - ((midiFloat - 55) / (86 - 55)) * TRACE_H;
   }
-  function initTrace() {
-    trace.width = trace.clientWidth || 800;
-    trace.height = trace.clientHeight || 120;
-    traceCtx.clearRect(0, 0, trace.width, trace.height);
+
+  function growTraceOff(need) {
+    if (need <= traceOff.width) return;
+    const bigger = document.createElement('canvas');
+    bigger.width = Math.max(need, traceOff.width * 2);
+    bigger.height = TRACE_H;
+    const c = bigger.getContext('2d');
+    c.drawImage(traceOff, 0, 0);
+    traceOff = bigger;
+    traceOffCtx = c;
   }
+
   function drawTraceFrame(freq, clarity, soundingMidi) {
-    traceCtx.drawImage(trace, -1, 0);
-    traceCtx.clearRect(trace.width - 1, 0, 1, trace.height);
+    if (!renderer) return;
+    const x = Math.max(0, renderer.rows.length - 1);
+    growTraceOff(x + 1);
     if (freq) {
       const mf = 69 + 12 * Math.log2(freq / 440);
-      traceCtx.globalAlpha = Math.max(0.15, clarity * clarity);
-      traceCtx.fillStyle = ink;
-      traceCtx.fillRect(trace.width - 1, traceY(mf) - 1, 1, 3);
-      traceCtx.globalAlpha = 1;
+      traceOffCtx.globalAlpha = Math.max(0.15, clarity * clarity);
+      traceOffCtx.fillStyle = ink;
+      traceOffCtx.fillRect(x, traceY(mf) - 1, 1, 3);
+      traceOffCtx.globalAlpha = 1;
     }
     if (soundingMidi !== null) {
-      traceCtx.fillStyle = inkFaint;
-      traceCtx.fillRect(trace.width - 1, traceY(soundingMidi), 1, 1);
+      traceOffCtx.fillStyle = inkFaint;
+      traceOffCtx.fillRect(x, traceY(soundingMidi), 1, 1);
     }
+    traceDirty = true;
+  }
+
+  function paintTrace() {
+    traceDirty = false;
+    if (trace.width !== vis.width) trace.width = vis.width;
+    if (trace.height !== TRACE_H) trace.height = TRACE_H;
+    traceCtx.clearRect(0, 0, trace.width, trace.height);
+    // faint reference rows at A3 / A4 / A5, the duduk-in-A anchors
+    traceCtx.globalAlpha = 0.3;
+    traceCtx.fillStyle = inkFaint;
+    for (const m of [57, 69, 81]) {
+      traceCtx.fillRect(0, traceY(m), trace.width, 1);
+    }
+    traceCtx.globalAlpha = 1;
+    const cols = Math.max(1, drawnRows);
+    traceCtx.drawImage(
+      traceOff,
+      0,
+      0,
+      cols,
+      TRACE_H,
+      0,
+      0,
+      cols * SCALE,
+      TRACE_H,
+    );
   }
 
   function logLine(text) {
@@ -274,10 +328,12 @@ export function initTapeTool() {
     offCtx.fillRect(0, 0, off.width, off.height);
     logEl.textContent = '';
     noteNowEl.textContent = '—';
-    initTrace();
+    traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
     paintVisible();
+    paintTrace();
     if (clearRecording) recLen = 0;
     printBtn.disabled = true;
+    stopClip(false); // a new take invalidates the old playhead mapping
   }
 
   // ---- analysis plumbing ----
@@ -405,6 +461,7 @@ export function initTapeTool() {
       micOn = true;
       micBtn.textContent = 'Stop';
       micBtn.classList.add('on');
+      syncTransport(); // no playback while the mic is live
       statusEl.textContent = `listening — ${Math.round(effSr)} Hz analysis`;
     } catch (e) {
       statusEl.textContent = `mic failed: ${e.message}`;
@@ -427,6 +484,7 @@ export function initTapeTool() {
     micBtn.textContent = 'Start mic';
     micBtn.classList.remove('on');
     if (tracker) flushTracker();
+    syncTransport(); // the fresh recording is now playable
     statusEl.textContent =
       reason ||
       (recLen
@@ -458,6 +516,7 @@ export function initTapeTool() {
         worker.postMessage({ buf: win.buffer, sr: effSr, t: t }, [win.buffer]);
       });
       applyFrame(m);
+      drawTraceFrame(m.freq, m.clarity, tracker.sounding);
       if (f % 200 === 0) {
         statusEl.textContent = `replaying… ${Math.round((f / total) * 100)}%`;
         await new Promise((r) => {
@@ -474,6 +533,7 @@ export function initTapeTool() {
     };
     inFlight = false;
     replaying = false;
+    syncTransport();
     statusEl.textContent = `replayed ${(recLen / effSr).toFixed(1)}s with current settings`;
   }
   replayBtn.addEventListener('click', replay);
@@ -593,6 +653,160 @@ export function initTapeTool() {
     loadInput.value = '';
   });
 
+  // ---- audio player: hear the recorded clip while a playhead sweeps
+  // the tape. The tape is not linear in time (silence compresses to a
+  // breath mark; glyph rows carry no time), so position comes from the
+  // renderer's timeline (rowForTime / timeForRow) — the bar moves
+  // steadily through notes and skips across breath marks, matching the
+  // ear. The tape itself is the scrub surface: click or drag to seek
+  // (drag pauses, release resumes). AudioBufferSource can't pause, so
+  // pause/seek kill the source and remember the offset; resume starts a
+  // fresh source there. ----
+  const playBtn = $('tapePlayBtn');
+  const stopBtn = $('tapeStopBtn');
+  const timeEl = $('tapeTimeEl');
+  const playhead = $('tapePlayhead');
+
+  let playerCtx = null;
+  let playSource = null;
+  let playState = 'stopped'; // stopped | playing | paused
+  let playOffset = 0; // seconds into the clip
+  let playStartedAt = 0; // playerCtx.currentTime when playback began
+  let playGen = 0; // invalidates onended of killed sources
+
+  const clipDur = () => (recLen ? recLen / effSr : 0);
+  const fmtTime = (sec) => {
+    const s = Math.max(0, sec);
+    const m = Math.floor(s / 60);
+    return `${m}:${(s - m * 60).toFixed(1).padStart(4, '0')}`;
+  };
+  const playPos = () =>
+    playState === 'playing'
+      ? Math.min(
+          playOffset + (playerCtx.currentTime - playStartedAt),
+          clipDur(),
+        )
+      : playOffset;
+
+  function killSource() {
+    if (!playSource) return;
+    playGen++;
+    try {
+      playSource.stop();
+    } catch {
+      /* already ended */
+    }
+    playSource.disconnect();
+    playSource = null;
+  }
+
+  function playClip() {
+    if (micOn || replaying || !recLen) return;
+    if (!playerCtx) playerCtx = new AudioContext();
+    if (playerCtx.state === 'suspended') playerCtx.resume();
+    killSource();
+    if (playOffset >= clipDur()) playOffset = 0;
+    const buf = playerCtx.createBuffer(1, recLen, Math.round(effSr));
+    buf.getChannelData(0).set(recorded.subarray(0, recLen));
+    playSource = playerCtx.createBufferSource();
+    playSource.buffer = buf;
+    playSource.connect(playerCtx.destination);
+    const gen = ++playGen;
+    playSource.onended = () => {
+      if (gen !== playGen || playState !== 'playing') return;
+      playState = 'stopped';
+      playOffset = 0;
+      syncTransport();
+    };
+    playStartedAt = playerCtx.currentTime;
+    playSource.start(0, playOffset);
+    playState = 'playing';
+    syncTransport();
+  }
+
+  function pauseClip() {
+    if (playState !== 'playing') return;
+    playOffset = playPos();
+    killSource();
+    playState = 'paused';
+    syncTransport();
+  }
+
+  function stopClip(keepOffset) {
+    killSource();
+    playState = 'stopped';
+    if (!keepOffset) playOffset = 0;
+    syncTransport();
+  }
+
+  function syncTransport() {
+    const idle = !recLen || micOn || replaying;
+    playBtn.disabled = idle;
+    stopBtn.disabled = idle || (playState === 'stopped' && playOffset === 0);
+    playBtn.textContent = playState === 'playing' ? 'Pause' : 'Play';
+    playBtn.classList.toggle('on', playState === 'playing');
+    playhead.hidden = playState === 'stopped' && playOffset === 0;
+    playhead.classList.toggle('live', playState === 'playing');
+    updatePlayhead();
+  }
+
+  function updatePlayhead() {
+    const t = playPos();
+    timeEl.textContent = `${fmtTime(t)} / ${fmtTime(clipDur())}`;
+    if (!renderer) return;
+    const x = Math.round(renderer.rowForTime(t * 1000) * SCALE);
+    playhead.style.left = `${x}px`;
+    if (playState === 'playing') {
+      // keep the bar in view; center it when it walks off either edge
+      const view = visWrap.clientWidth;
+      if (x < visWrap.scrollLeft + 16 || x > visWrap.scrollLeft + view - 48) {
+        visWrap.scrollLeft = Math.max(0, x - view / 2);
+      }
+    }
+  }
+
+  playBtn.addEventListener('click', () => {
+    if (playState === 'playing') pauseClip();
+    else playClip();
+  });
+  stopBtn.addEventListener('click', () => stopClip(false));
+
+  // scrubbing: the pointer position on the tape maps back to clip time
+  let scrubbing = false;
+  let scrubWasPlaying = false;
+
+  function seekToEvent(e) {
+    const rect = vis.getBoundingClientRect();
+    const row = (e.clientX - rect.left) / SCALE;
+    playOffset = Math.max(
+      0,
+      Math.min(clipDur(), renderer.timeForRow(row) / 1000),
+    );
+    syncTransport();
+  }
+
+  visWrap.addEventListener('pointerdown', (e) => {
+    // both canvases scrub (they share the x-axis); the wrap itself is
+    // only hit via its scrollbar, which must keep scrolling
+    if (e.target === visWrap) return;
+    if (!recLen || micOn || replaying) return;
+    scrubbing = true;
+    scrubWasPlaying = playState === 'playing';
+    if (scrubWasPlaying) pauseClip();
+    visWrap.setPointerCapture(e.pointerId);
+    seekToEvent(e);
+  });
+  visWrap.addEventListener('pointermove', (e) => {
+    if (scrubbing) seekToEvent(e);
+  });
+  const endScrub = () => {
+    if (!scrubbing) return;
+    scrubbing = false;
+    if (scrubWasPlaying) playClip();
+  };
+  visWrap.addEventListener('pointerup', endScrub);
+  visWrap.addEventListener('pointercancel', endScrub);
+
   // ---- print the take: the renderer's exact bytes, plus a PNG of the
   // same rows (printer orientation, like every History thumbnail) ----
   function b64(u8) {
@@ -655,6 +869,11 @@ export function initTapeTool() {
   return function dispose() {
     cancelAnimationFrame(raf);
     if (micOn) stopMic();
+    stopClip(false);
+    if (playerCtx) {
+      playerCtx.close();
+      playerCtx = null;
+    }
     if (worker) {
       worker.terminate();
       worker = null;

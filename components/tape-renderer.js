@@ -159,9 +159,47 @@ export function createTapeRenderer(config) {
   let cfg = { ...TAPE_DEFAULTS, ...config };
   const rows = []; // Uint8Array(WIDTH_BYTES) each, append-only
 
-  let cur = null; // { midi, step, glyphsDone, onMs, rowsEmitted }
+  let cur = null; // { midi, step, onMs, rowsEmitted, rStart }
   let lastOffMs = null; // when the previous note ended
   let started = false;
+
+  // Audio-time ↔ tape-row map for the player's playhead and scrubbing.
+  // The tape is NOT linear in time (silence compresses to a breath mark,
+  // key signatures and accidentals occupy rows that represent no time),
+  // so each emitted span records its row range and the clip time it
+  // covers: note bars span [noteOn, noteOff], the lead/gap/glyph rows
+  // before a note span the silence that preceded it. Both columns are
+  // monotonic, so mapping either way is an interpolating scan.
+  const timeline = []; // { r0, r1, t0, t1 }
+
+  function pushSpan(r0, t0, t1) {
+    if (rows.length > r0 && t1 >= t0)
+      timeline.push({ r0, r1: rows.length, t0, t1 });
+  }
+
+  // clip ms -> tape row (fractional)
+  function rowForTime(ms) {
+    if (!timeline.length) return 0;
+    for (const s of timeline) {
+      if (ms <= s.t1) {
+        if (ms <= s.t0) return s.r0;
+        return s.r0 + ((ms - s.t0) / (s.t1 - s.t0 || 1)) * (s.r1 - s.r0);
+      }
+    }
+    return timeline[timeline.length - 1].r1;
+  }
+
+  // tape row -> clip ms
+  function timeForRow(row) {
+    if (!timeline.length) return 0;
+    for (const s of timeline) {
+      if (row <= s.r1) {
+        if (row <= s.r0) return s.t0;
+        return s.t0 + ((row - s.r0) / (s.r1 - s.r0 || 1)) * (s.t1 - s.t0);
+      }
+    }
+    return timeline[timeline.length - 1].t1;
+  }
 
   // dot x of a staff step (higher step = higher pitch = higher x)
   const xOfStep = (s) =>
@@ -248,8 +286,10 @@ export function createTapeRenderer(config) {
   }
 
   function noteOn(midi, tMs) {
-    if (!started) start();
     if (cur) noteOff(tMs); // defensive: overlapping monophonic events
+    const preRow = rows.length;
+    const preT = lastOffMs === null ? 0 : lastOffMs;
+    if (!started) start();
     if (lastOffMs !== null) {
       if (tMs - lastOffMs >= cfg.breathGapMs) {
         emitBlank(cfg.breathRows);
@@ -265,6 +305,8 @@ export function createTapeRenderer(config) {
       emitGlyph(sp.glyph, sp.step, ledgerSteps(sp.step));
       emitBlank(2);
     }
+    pushSpan(preRow, preT, tMs); // lead/gap/glyph rows cover the silence
+    cur.rStart = rows.length;
   }
 
   // Emit the rows the current note has earned up to tMs. Called every
@@ -281,6 +323,7 @@ export function createTapeRenderer(config) {
     if (!cur) return;
     advance(tMs);
     if (cur.rowsEmitted === 0) emitRow(true); // every note gets >= 1 row
+    pushSpan(cur.rStart, cur.onMs, tMs);
     cur = null;
     lastOffMs = tMs;
   }
@@ -329,10 +372,13 @@ export function createTapeRenderer(config) {
 
   return {
     rows,
+    timeline,
     width: WIDTH,
     noteOn,
     noteOff,
     advance,
+    rowForTime,
+    timeForRow,
     toEscpos,
     setConfig,
     get config() {

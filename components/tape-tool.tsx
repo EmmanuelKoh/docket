@@ -175,9 +175,23 @@ export function TapeTool() {
         </div>
         <div className="tape-roll" id="tapeCanvasWrap">
           <canvas id="tapeCanvas" />
+          <canvas id="tapeTraceCanvas" className="tape-trace" height={110} />
+          <div className="tape-playhead" id="tapePlayhead" hidden />
         </div>
-        <span className="label">Pitch trace</span>
-        <canvas id="tapeTraceCanvas" className="tape-trace" />
+        <div className="tape-transport">
+          <button type="button" className="btn small" id="tapePlayBtn" disabled>
+            Play
+          </button>
+          <button type="button" className="btn small" id="tapeStopBtn" disabled>
+            Stop
+          </button>
+          <span className="tape-val" id="tapeTimeEl">
+            0:00.0 / 0:00.0
+          </span>
+          <span className="tape-hint">
+            click or drag on the tape to seek · raw pitch below the staff
+          </span>
+        </div>
         <div className="tape-bottom">
           <div className="tape-log-wrap">
             <span className="label">Notes</span>

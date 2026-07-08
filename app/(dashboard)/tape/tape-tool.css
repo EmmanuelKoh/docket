@@ -136,8 +136,9 @@
 }
 
 /* the tape itself: simulated paper, so it stays white in both themes
-   like every receipt preview */
+   like every receipt preview. It doubles as the player's scrub surface. */
 .tape-roll {
+  position: relative;
   overflow-x: auto;
   border: 0.5px solid var(--border);
   border-radius: 2px;
@@ -145,13 +146,47 @@
 }
 .tape-roll canvas {
   display: block;
+  touch-action: none; /* pointer drags scrub; the scrollbar still pans */
+  cursor: crosshair;
 }
 
+/* the playhead is a DOM overlay, never drawn into the canvas — the
+   canvas holds exact print bytes. Ink while paused; red while audio is
+   actually running (red rule 5, same family as printing / live mic). */
+.tape-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--ink-muted);
+  pointer-events: none;
+}
+.tape-playhead.live {
+  background: var(--red);
+}
+
+.tape-transport {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tape-transport .tape-val {
+  text-align: left;
+  color: var(--ink-muted);
+}
+.tape-transport .tape-hint {
+  margin-left: auto;
+}
+/* the transport while audio runs mirrors the live mic button */
+.tape-transport .btn.on {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* the raw-pitch pane rides inside the tape roll, sharing its x-axis and
+   scroll; a hairline separates paper from instrument panel */
 .tape-trace {
-  width: 100%;
-  height: 110px;
-  border: 0.5px solid var(--border);
-  border-radius: 2px;
+  border-top: 0.5px solid var(--border);
   background: var(--raised);
 }
 
