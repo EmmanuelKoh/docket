@@ -145,6 +145,47 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     }
   }
 
+  // re-strike heads pass 1 dropped: a same-pitch fragment ending right
+  // at a main note's start, with ornament activity between them, is
+  // the FIRST strike of a quick double — too short for the length gate
+  // on its own, real in context (maintainer-confirmed on the trace)
+  {
+    const events = [...graces, ...excursions];
+    const revived = [];
+    for (const m of skeleton) {
+      const r = sorted.find(
+        (n) =>
+          n.midi === m.midi &&
+          n.amp >= o.candidateAmp &&
+          n.t1 - n.t0 >= 0.05 &&
+          n.t1 <= m.t0 + 1e-9 &&
+          m.t0 - n.t1 <= o.graceNearSec &&
+          !skeleton.some(
+            (s) => n.t0 < s.t1 - 0.02 && n.t1 > s.t0 + 0.02,
+          ),
+      );
+      if (!r) continue;
+      const orn = events.some(
+        (g) => g.t1 >= r.t1 - 0.05 && g.t0 <= m.t0 + 0.05,
+      );
+      // the head must be substantially its own note: a shred that is
+      // mostly covered BY the ornament is transition material wrapped
+      // around the flick, not a first strike (measured: real head 20%
+      // covered, transition shred 78%)
+      const covered = events.reduce(
+        (a, g) =>
+          a + Math.max(0, Math.min(g.t1, r.t1) - Math.max(g.t0, r.t0)),
+        0,
+      );
+      if (orn && covered <= 0.5 * (r.t1 - r.t0)) {
+        revived.push({ ...m, t0: r.t0, t1: Math.min(r.t1, m.t0) });
+      }
+    }
+    if (revived.length) {
+      skeleton = [...skeleton, ...revived].sort((a, b) => a.t0 - b.t0);
+    }
+  }
+
   // ornamented re-strikes revealed by in-note excursions: an excursion
   // past a note's attack with substantial note remaining after it
   // re-strikes the note there — the note splits around the ornament.
