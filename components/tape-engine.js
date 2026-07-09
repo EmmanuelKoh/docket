@@ -23,6 +23,7 @@ import {
   KEY_SIGS,
   noteLabel,
 } from '@/components/tape-renderer.js';
+import { annotate } from '@/scripts/tape-eval/marks.mjs';
 import { decorate, onsetAt } from '@/scripts/tape-eval/ornaments.mjs';
 import { skeletonize } from '@/scripts/tape-eval/skeleton.mjs';
 
@@ -276,9 +277,11 @@ export function initTapeTool() {
     traceOffCtx = c;
   }
 
-  function drawTraceFrame(freq, clarity, soundingMidi) {
+  function drawTraceFrame(freq, clarity, soundingMidi, col = null) {
     if (!renderer) return;
-    const x = Math.max(0, renderer.rows.length - 1);
+    // live mode pins the frame to the newest tape row; a replay passes
+    // the row its timestamp maps to (the tape already exists in full)
+    const x = col !== null ? col : Math.max(0, renderer.rows.length - 1);
     growTraceOff(x + 1);
     if (freq) {
       const mf = 69 + 12 * Math.log2(freq / 440);
@@ -439,7 +442,10 @@ export function initTapeTool() {
       const e = evQueue.shift();
       renderer.advance(e.tMs);
       if (e.type === 'on') {
-        renderer.noteOn(e.midi, e.tMs, e.grace);
+        renderer.noteOn(e.midi, e.tMs, e.grace, {
+          slide: e.slide,
+          ornament: e.ornament,
+        });
         lastOn = { midi: e.midi, tMs: e.tMs, grace: e.grace };
         noteNowEl.textContent = noteLabel(e.midi, renderer.config.keySig);
       } else {
@@ -743,18 +749,19 @@ export function initTapeTool() {
         melodyLoMidi: Math.round(69 + 12 * Math.log2(melodyFloor / 440)),
       };
       // pass 1 (skeleton) + pass 2 (graces as small notes,
-      // rearticulation splits); the timeline is monophonic render-ready
-      const { skeleton, graces, timeline } = decorate(
-        notes,
-        skeletonize(notes, opts),
-        opts,
-      );
+      // rearticulation splits) + pass 3 (slide connectors, approximate-
+      // ornament squiggles); the timeline is monophonic render-ready
+      const decorated = decorate(notes, skeletonize(notes, opts), opts);
+      const { skeleton, graces } = decorated;
+      const timeline = annotate(notes, decorated, opts);
       for (const n of timeline) {
         evQueue.push({
           type: 'on',
           midi: n.midi,
           tMs: n.t0 * 1000,
           grace: n.grace,
+          slide: n.slide,
+          ornament: n.ornament,
         });
         evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
       }
@@ -766,8 +773,68 @@ export function initTapeTool() {
     }
     replaying = false;
     syncTransport();
+    traceReplay(); // fill the raw-pitch trace under the finished tape
   }
   replayBtn.addEventListener('click', neuralReplay);
+
+  // ---- trace backfill: after a neural decode, run the recording
+  // through the v1 detector purely to draw the raw-pitch trace under
+  // the tape (continuous cents — finer than the model's 1/3-semitone
+  // grid, so it answers "did the recording even capture that figure?"
+  // by eye). No note events; the tape itself is the neural decode's.
+  async function traceReplay() {
+    if (micOn || recLen < WINDOW || !renderer) return;
+    ensureWorker();
+    const gen = analysisGen;
+    const trk = createNoteTracker(trackerValues());
+    const total = Math.floor((recLen - WINDOW) / HOP) + 1;
+    const analyzeAt = (f) =>
+      new Promise((resolve) => {
+        const start = f * HOP;
+        const win = new Float32Array(WINDOW);
+        win.set(recorded.subarray(start, start + WINDOW));
+        worker.onmessage = (ev) => resolve(ev.data);
+        worker.postMessage(
+          {
+            buf: win.buffer,
+            sr: effSr,
+            t: ((start + WINDOW) / effSr) * 1000,
+            mode: detectorMode,
+            fMin: melodyFloor,
+            gen: gen,
+            holdF0: holdFreq(trk),
+          },
+          [win.buffer],
+        );
+      });
+    for (let f = 0; f < total; f++) {
+      const m = await analyzeAt(f);
+      // a new take, replay, or live mic invalidates this backfill
+      if (micOn || analysisGen !== gen) break;
+      const p = pickFrame(m, trk);
+      trk.push({
+        tMs: m.t,
+        freq: p.freq,
+        clarity: p.clarity,
+        energy: p.energy,
+      });
+      drawTraceFrame(p.freq, p.clarity, trk.sounding, renderer.rowForTime(m.t));
+      if (f % 400 === 0) {
+        paintTrace();
+        await new Promise((r) => {
+          setTimeout(r, 0);
+        });
+      }
+    }
+    // restore the live handler the backfill hijacked
+    worker.onmessage = (ev) => {
+      inFlight = false;
+      onPitchFrame(ev.data);
+      pumpAnalysis();
+    };
+    inFlight = false;
+    paintTrace();
+  }
 
   // ---- demo phrase: a synthetic duduk-ish take (vibrato, a committed
   // bend, a retreating bend, a fast run, breaths, both ledger regions)
