@@ -43,13 +43,19 @@ export const MARK_DEFAULTS = {
   excFarSec: 0.6, // an excursion further than this after its owner's
   // attack prints at its own moment instead (a mid-hold flick belongs
   // where it happened, not at an attack seconds earlier)
+  excSplitInSec: 0.05, // an excursion past a note's attack by this...
+  excSplitTailSec: 0.3, // ...with this much note still to come after
+  // it is an ornamented RE-STRIKE: the note splits there. A flick with
+  // little note left after it is a transition ornament and only
+  // decorates (maintainer-confirmed on both shapes)
 };
 
 // rawNotes: full Basic Pitch output; decorated: decorate()'s result;
 // fine: optional v1 fine-cents trace frames [{ t (ms), freq, clarity }]
 // — brief upper-neighbor excursions in them mark ornaments the neural
 // model misses entirely (its contour barely registers quiet flicks
-// under a sustained note; the v1 detector resolves them plainly).
+// under a sustained note; the v1 detector resolves them plainly), and
+// an excursion deep inside a note SPLITS it (ornamented re-strike).
 // Returns a new render timeline with { slide, ornament } flags on the
 // main-note events that earn them.
 export function annotate(rawNotes, decorated, opts = {}, fine = []) {
@@ -61,7 +67,8 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
   };
   const sorted = [...rawNotes].sort((a, b) => a.t0 - b.t0);
   const center = bendCenter(sorted, o);
-  const { skeleton, graces, timeline } = decorated;
+  const { graces } = decorated;
+  let { skeleton } = decorated;
 
   // mean bend of the note's first (or last) underlying segment, read in
   // the note's FINAL pitch frame: a re-snapped note's raw bends are
@@ -137,6 +144,38 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
       }
     }
   }
+
+  // ornamented re-strikes revealed by in-note excursions: an excursion
+  // past a note's attack with substantial note remaining after it
+  // re-strikes the note there — the note splits around the ornament.
+  // (A flick with little note left is a transition ornament: no split.)
+  {
+    const split = [];
+    for (const m of skeleton) {
+      const cuts = excursions
+        .filter(
+          (x) =>
+            x.t0 - m.t0 >= o.excSplitInSec &&
+            x.t1 < m.t1 &&
+            m.t1 - x.t1 >= o.excSplitTailSec,
+        )
+        .sort((a, b) => a.t0 - b.t0);
+      let t0 = m.t0;
+      for (const x of cuts) {
+        if (x.t0 - t0 <= 0) continue;
+        split.push({ ...m, t0, t1: x.t0 });
+        t0 = x.t1;
+      }
+      split.push({ ...m, t0 });
+    }
+    skeleton = split;
+  }
+  const timeline = skeleton.map((m) => ({
+    t0: m.t0,
+    t1: m.t1,
+    midi: m.midi,
+    grace: false,
+  }));
 
   // every detected ornament (pass-2 residual or fine-trace excursion)
   // marks a main note with the ornament glyph — attached to the main

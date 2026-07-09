@@ -13,6 +13,17 @@ import vm from 'node:vm';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+// 16-bit mono PCM wav -> { audio: Float32Array, sr } at NATIVE rate,
+// un-normalized — the fine trace analyzes what the mic captured
+export function loadWavRaw(wavPath) {
+  const wav = fs.readFileSync(wavPath);
+  const sr = wav.readUInt32LE(24);
+  const n = (wav.length - 44) / 2;
+  const audio = new Float32Array(n);
+  for (let i = 0; i < n; i++) audio[i] = wav.readInt16LE(44 + i * 2) / 32768;
+  return { audio, sr };
+}
+
 // audio: Float32Array at sr -> [{ t (ms), freq, clarity }]
 export async function fineFrames(audio, sr, { floor = 230 } = {}) {
   const src = fs.readFileSync(

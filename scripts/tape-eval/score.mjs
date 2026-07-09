@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { transcribe } from './transcribe.mjs';
 import { skeletonize, skeletonSequence } from './skeleton.mjs';
 import { decorate } from './ornaments.mjs';
+import { annotate } from './marks.mjs';
+import { fineFrames, loadWavRaw } from './fine.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLIPS = path.join(ROOT, 'data', 'clips');
@@ -82,10 +84,14 @@ async function scoreFixture(truthPath) {
       ? { strength: parseFloat(process.env.TAPE_DRSTRENGTH) }
       : {}),
   });
-  // pass 1 + pass 2's rearticulation splits — double-struck main notes
-  // are part of the scored melody
-  const { skeleton } = decorate(notes, skeletonize(notes));
-  const pred = skeletonSequence(skeleton).map(label);
+  // pass 1 + pass 2's rearticulation splits + pass 3's fine-trace
+  // re-strike splits — double-struck main notes are part of the scored
+  // melody, however they were detected
+  const decorated = decorate(notes, skeletonize(notes));
+  const raw = loadWavRaw(wav);
+  const fine = await fineFrames(raw.audio, raw.sr);
+  const timeline = annotate(notes, decorated, {}, fine);
+  const pred = skeletonSequence(timeline.filter((e) => !e.mark)).map(label);
   const { matches, rows } = align(truth.sequence, pred);
   const precision = pred.length ? matches / pred.length : 0;
   const recall = truth.sequence.length ? matches / truth.sequence.length : 0;
