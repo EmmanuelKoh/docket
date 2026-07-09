@@ -123,6 +123,13 @@ export function decorate(rawNotes, skeleton, opts = {}) {
     for (const g of graces) {
       if (g.midi < m.midi + 2) continue;
       if (!(g.t0 < m.t1 && g.t1 > m.t0)) continue;
+      // an ornament that ends ON another main note's attack is that
+      // note's lead-in, not evidence that THIS note was re-struck
+      if (
+        skeleton.some((m2) => m2 !== m && Math.abs(g.t1 - m2.t0) <= 0.03)
+      ) {
+        continue;
+      }
       let best = null;
       for (const b of bounds) {
         if (best === null || Math.abs(g.t0 - b) < Math.abs(g.t0 - best)) best = b;

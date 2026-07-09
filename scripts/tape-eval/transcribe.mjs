@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { onsetAt } from './ornaments.mjs';
 
 const require = createRequire(import.meta.url);
 const tf = require('@tensorflow/tfjs');
@@ -78,7 +79,7 @@ function loadWav22k(wavPath) {
   return { audio, seconds: outLen / SR };
 }
 
-// wav -> [{ t0, t1, midi, amp, bends }] (seconds, sorted by start)
+// wav -> [{ t0, t1, midi, amp, bends, onset }] (seconds, sorted)
 export async function transcribe(
   wavPath,
   { onsetThresh = 0.4, frameThresh = 0.3, minNoteLenFrames = 5 } = {},
@@ -97,19 +98,19 @@ export async function transcribe(
     },
     () => {},
   );
-  const events = noteFramesToTime(
-    addPitchBendsToNoteEvents(
-      contours,
-      outputToNotesPoly(frames, onsets, onsetThresh, frameThresh, minNoteLenFrames),
-    ),
+  const frameEvents = addPitchBendsToNoteEvents(
+    contours,
+    outputToNotesPoly(frames, onsets, onsetThresh, frameThresh, minNoteLenFrames),
   );
+  const events = noteFramesToTime(frameEvents);
   return events
-    .map((e) => ({
+    .map((e, i) => ({
       t0: e.startTimeSeconds,
       t1: e.startTimeSeconds + e.durationSeconds,
       midi: e.pitchMidi,
       amp: e.amplitude,
       bends: e.pitchBends ?? [],
+      onset: onsetAt(onsets, frameEvents[i].startFrame, e.pitchMidi),
     }))
     .sort((a, b) => a.t0 - b.t0);
 }

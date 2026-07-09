@@ -249,6 +249,24 @@ const GLYPHS_PACKED = {
       'D///A///AA//AAf/AAf+AAP+AAP+AAP8AAP8AAf4AAf4AA/wAA/wAB/gAD/AAH+AAP8A' +
       'Af4AA/gAD/AAH8AAH4AADAAA',
   },
+  ornament: {
+    w: 116,
+    h: 39,
+    originFromTop: 39,
+    data:
+      'AAAAPgAAAAAHgAAAAAPAAAAAfwAAAAAfwAAAAA/gAAAA/4AAAAA/4AAAAB/wAAAB/8AA' +
+      'AAB/8AAAAD/wAAAD/+AAAAD/+AAAAD/gAAAH//AAAAH//AAAAH/AAAAP//AAAAH//gAA' +
+      'AP/AAAAf//gAAAP//wAAAf+AAAA///wAAAf//wAAA/8AAAB///4AAA///4AAB/4AAAB/' +
+      '//8AAB///8AAB/wAAAD///8AAD///+AAD/gAAAH///+AAH////AAH/AAAAP////AAP//' +
+      '//gAP+AAAAf////gAf////gAf8AAAA/////wA/////wA/4AAAB/////4B/////4A/4AA' +
+      'AD/////4D/////8B/wAAAD/////8H/////+D/gAAAH/////+P//////v/AAAAP//////' +
+      'f///////+AAAAf/P//////v/////8AAAA/+H/////+D/////4AAAB/8D/////8D/////' +
+      'wAAAD/4B/////4B/////gAAAH/wA/////wA/////AAAAP/AAf////gAf///+AAAAP+AA' +
+      'P////AAP///8AAAAf8AAH///+AAH///4AAAA/4AAD///8AAD///wAAAA/wAAB///wAAB' +
+      '///wAAAA/gAAA///gAAA///gAAAAMAAAAf//AAAAf//AAAAAAAAAAP/+AAAAP/+AAAAA' +
+      'AAAAAH/8AAAAH/8AAAAAAAAAAD/4AAAAD/4AAAAAAAAAAD/wAAAAB/wAAAAAAAAAAB/g' +
+      'AAAAA/gAAAAAAAAAAA+AAAAAAfAAAAAA',
+  },
 };
 
 // tiny env-agnostic base64 decoder (no Buffer, no atob — this module
@@ -301,7 +319,7 @@ export const TAPE_DEFAULTS = {
   msPerRow: 20, // one row of tape per this much SOUNDING time
   staffGap: 28, // dots between adjacent staff lines
   lineDots: 2, // staff/ledger line thickness (dots)
-  noteDots: 16, // note bar thickness (dots) — most of a space, not all
+  noteDots: 26, // note bar thickness (dots) — nearly a full space
   glyphScale: 2, // glyph size multiplier; 2 = engraving-normal
   staffCenter: 288, // dot x of the middle staff line (B4)
   breathGapMs: 350, // a rest at least this long prints a breath mark
@@ -310,6 +328,7 @@ export const TAPE_DEFAULTS = {
   minNoteRows: 3, // every note prints at least this many rows — a grace
   // note needs a visible head, not a 1-row sliver under a big accidental
   breathRows: 10, // extra blank rows on each side of a breath mark
+  slideRows: 10, // rows a slide connector spans between two notes
   ledgerPadRows: 4, // ledger lines poke this far past the note (each side)
   startBlankRows: 24, // bare paper before the staff begins
   leadRows: 32, // blank staff before the first note / after key sig
@@ -323,6 +342,7 @@ export function createTapeRenderer(config) {
 
   let cur = null; // { midi, step, onMs, rowsEmitted, rStart }
   let lastOffMs = null; // when the previous note ended
+  let lastStep = null; // the previous MAIN note's staff step (slides)
   let started = false;
 
   // Audio-time ↔ tape-row map for the player's playhead and scrubbing.
@@ -429,9 +449,9 @@ export function createTapeRenderer(config) {
   // staffGap automatically (engraving proportions), with the Glyph size
   // slider as a multiplier on top (2 = normal). Each glyph column is one
   // tape row.
-  function emitGlyph(name, step) {
+  function emitGlyph(name, step, mul = 1) {
     const g = GLYPHS[name];
-    const s = (cfg.staffGap * (cfg.glyphScale / 2)) / GLYPH_SPACE_SRC;
+    const s = (cfg.staffGap * (cfg.glyphScale / 2) * mul) / GLYPH_SPACE_SRC;
     const tw = Math.max(1, Math.round(g.w * s));
     const th = Math.max(1, Math.round(g.h * s));
     const xTop = xOfStep(step) + Math.round(g.originFromTop * s);
@@ -450,6 +470,23 @@ export function createTapeRenderer(config) {
           setDots(row, xTop - gy, 1);
         }
       }
+      rows.push(row);
+    }
+  }
+
+  // Slide connector: a thin line carrying the pitch from the previous
+  // note into this one — diagonal between different pitches, a dip
+  // scoop for a same-pitch slide (played through the note below and
+  // back, duduk-style). Drawn in the gap the notes already share.
+  function emitSlide(fromStep, toStep) {
+    for (let i = 0; i < cfg.slideRows; i++) {
+      const f = (i + 0.5) / cfg.slideRows;
+      const s =
+        fromStep === toStep
+          ? fromStep - 2 * Math.sin(Math.PI * f)
+          : fromStep + (toStep - fromStep) * f;
+      const row = blankRow();
+      setDots(row, Math.round(xOfStep(s)) - 1, 3);
       rows.push(row);
     }
   }
@@ -480,27 +517,39 @@ export function createTapeRenderer(config) {
     emitBlank(cfg.leadRows);
   }
 
-  function noteOn(midi, tMs, grace) {
+  // marks: pass-3 annotations — { slide, ornament }. A slide replaces
+  // the inter-note gap with a connector from the previous note; an
+  // ornament prints the trill squiggle above the staff at the attack
+  // (approximate ornament activity the analysis heard but could not
+  // spell out — visible uncertainty, never a confidently wrong note).
+  function noteOn(midi, tMs, grace, marks = {}) {
     if (cur) noteOff(tMs); // defensive: overlapping monophonic events
     const preRow = rows.length;
     const preT = lastOffMs === null ? 0 : lastOffMs;
     if (!started) start();
+    const sp = spellNote(midi, cfg.keySig);
     if (lastOffMs !== null) {
       if (tMs - lastOffMs >= cfg.breathGapMs) {
         emitBlank(cfg.breathRows);
         emitGlyph('breath', 10); // above the staff, like on paper
         emitBlank(cfg.breathRows);
+      } else if (marks.slide && lastStep !== null) {
+        emitSlide(lastStep, sp.step);
       } else if (tMs - lastOffMs <= 40) {
         emitBlank(cfg.graceGapRows); // grace notes hug their neighbors
       } else {
         emitBlank(cfg.gapRows);
       }
     }
-    const sp = spellNote(midi, cfg.keySig);
     const led = ledgerSteps(sp.step);
     cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0, grace: !!grace };
+    if (marks.ornament) {
+      emitGlyph('ornament', 10); // above the staff, over the attack
+      emitBlank(2);
+    }
     if (sp.glyph) {
-      emitGlyph(sp.glyph, sp.step);
+      // grace accidentals shrink with their notehead (same 0.6 ratio)
+      emitGlyph(sp.glyph, sp.step, grace ? 0.6 : 1);
       emitBlank(3);
     }
     if (led.length) emitPad(led, cfg.ledgerPadRows);
@@ -528,6 +577,7 @@ export function createTapeRenderer(config) {
     pushSpan(cur.rStart, cur.onMs, tMs);
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);
+    if (!cur.grace) lastStep = cur.step; // slides connect main notes
     cur = null;
     lastOffMs = tMs;
   }

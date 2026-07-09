@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transcribe } from './transcribe.mjs';
 import { skeletonize, skeletonSequence } from './skeleton.mjs';
+import { decorate } from './ornaments.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLIPS = path.join(ROOT, 'data', 'clips');
@@ -67,7 +68,10 @@ async function scoreFixture(truthPath) {
   const truth = JSON.parse(fs.readFileSync(truthPath, 'utf8'));
   const wav = truthPath.replace(/\.truth\.json$/, '.wav');
   const notes = await transcribe(wav);
-  const pred = skeletonSequence(skeletonize(notes)).map(label);
+  // pass 1 + pass 2's rearticulation splits — double-struck main notes
+  // are part of the scored melody
+  const { skeleton } = decorate(notes, skeletonize(notes));
+  const pred = skeletonSequence(skeleton).map(label);
   const { matches, rows } = align(truth.sequence, pred);
   const precision = pred.length ? matches / pred.length : 0;
   const recall = truth.sequence.length ? matches / truth.sequence.length : 0;

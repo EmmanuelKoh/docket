@@ -320,8 +320,12 @@ regimes: while the mic is live, a lightweight pitch tracker sketches
 the tape and trace in real time; when the take ends (Stop, Replay, or
 Load clip) the recording is transcribed by a neural model (Basic
 Pitch, bundled, in-browser) and decoded into main notes, grace notes
-(smaller noteheads, with accidentals shrunk to match), and
-rearticulation splits — the final tape replaces the sketch. The
+(smaller noteheads, with accidentals shrunk to match), rearticulation
+splits, slide connectors (a thin diagonal between pitches; a dip scoop
+for a same-pitch slide), and approximate-ornament squiggles (the
+Bravura trill squiggle above the staff, marking an ornamented
+re-strike the analysis heard but could not spell out) — the final
+tape replaces the sketch. The
 preview canvas shows the exact raster rows the printer would receive,
 in reading orientation (staff horizontal, time flowing left to right,
 new tape entering at the right; the strip auto-follows unless the user

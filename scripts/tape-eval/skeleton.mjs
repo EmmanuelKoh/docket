@@ -37,8 +37,9 @@ export const SKELETON_DEFAULTS = {
   peakAmp: 0.5, // a skeleton note's peak amplitude must reach this
   mergeGapSec: 0.15, // same-pitch segments this close are one note
   minLenSec: 0.12, // shorter notes belong to the ornament pass
-  crestMaxSec: 0.18, // upward-crest absorption: max crest length —
-  // real crest fragments run <=0.12s; a 0.2s+ upper neighbor is a note
+  crestMaxSec: 0.3, // upward-crest absorption: max crest length (the
+  // bend test below is the primary discriminator; this cap keeps long
+  // between-pitch notes — slid-into targets — out of its reach)
   crestReachSec: 0.25, // ...and max distance from the parent note
   restSec: 0.4, // gaps at least this long are rests
   rescueDipSemis: 2, // alternation rescue: max dip below the neighbors
@@ -47,8 +48,9 @@ export const SKELETON_DEFAULTS = {
   resnapLowBins: 1.25, // re-snap: how far under the take's bend center
   // a segment must sit to count as "low" (bins are 1/3 semitone)
   resnapMaxBins: 2.5, // ...deeper than this is a reverb sag, not a note
-  resnapRunSec: 0.25, // ...low run must sustain this long to re-snap
-  // (a note-length run; sub-0.25s low stretches are approach slides)
+  resnapRunSec: 0.3, // ...low run must sustain this long to re-snap
+  // (a note-length run; shorter low stretches are approach slides or
+  // brief slid-to visits of the note above, which keep their label)
 };
 
 // tuning re-snap (see header). notes must be time-sorted; returns a new
@@ -158,9 +160,13 @@ export function skeletonize(notes, opts = {}) {
   let merged = mergeRuns(mel, o.mergeGapSec);
 
   // absorb upward crests (see header). A crest is the LOWER note's own
-  // material, so its bends sit low against the take's center — that
-  // identifies it directly; length is only the fallback when the take
-  // carries no bend data (a real +1 neighbor's bends sit at the center)
+  // material — its bends sit low against the take's center — and it is
+  // WEAKER than the note it decorates (the amp test in the loop below).
+  // Together those separate a held note's sharp sag (long, weak, low:
+  // absorbed) from a deliberately slid-to upper note (strong as its
+  // neighbors: kept, whatever its bends — a covered-fingering G4 sits
+  // below its grid line for its whole duration). Length is only the
+  // fallback when the take carries no bend data
   const center = bendCenter(sorted, o);
   const crestish = (n) => {
     const mean = meanBend(n);
@@ -180,9 +186,13 @@ export function skeletonize(notes, opts = {}) {
         n.t0 <= nb.t1 + o.crestReachSec &&
         n.t1 >= nb.t0 - o.crestReachSec
       ) {
-        // never drag a note's start backward: a crest BEFORE the note
-        // is a scoop overshoot and is simply dropped
+        // a crest AFTER the note extends its tail. A crest BEFORE it is
+        // the attack's own scoop/sag ONLY when it abuts the onset — the
+        // note then starts there; a fragment separated by a gap is an
+        // ornament flick and is simply dropped (dragging a start across
+        // a gap eats the previous note's territory)
         if (n.t0 >= nb.t0) nb.t1 = Math.max(nb.t1, n.t1);
+        else if (nb.t0 - n.t1 <= 0.05) nb.t0 = Math.min(nb.t0, n.t0);
         nb.parts += n.parts;
         merged[i] = null;
         break;
@@ -243,13 +253,24 @@ export function skeletonize(notes, opts = {}) {
 
   // sequentialize: Basic Pitch is polyphonic, so skeleton notes can
   // still overlap at the edges — a monophonic tape needs strict order
-  // (the later note wins the contested span)
+  // (the later note wins the contested span). A note truncated DOWN TO
+  // A SLIVER was never a melody note: it is a sustained under-voice —
+  // the opening note's resonance ringing for seconds beneath the
+  // melody — surfacing wherever the melody breathes. Drop it entirely,
+  // then re-merge the pieces the drops re-expose
+  const truncated = new Set();
   for (let i = 1; i < skeleton.length; i++) {
     if (skeleton[i].t0 < skeleton[i - 1].t1) {
       skeleton[i - 1].t1 = skeleton[i].t0;
+      truncated.add(skeleton[i - 1]);
     }
   }
-  return skeleton.filter((n) => n.t1 - n.t0 > 0.02);
+  return mergeRuns(
+    skeleton.filter(
+      (n) => n.t1 - n.t0 > (truncated.has(n) ? o.minLenSec - 1e-3 : 0.02),
+    ),
+    o.mergeGapSec,
+  );
 }
 
 // convenience: skeleton + rests as one printable sequence. Rests only

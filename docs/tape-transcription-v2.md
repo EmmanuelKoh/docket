@@ -94,10 +94,28 @@ independently testable:
    before anything else is attempted, and is the bar for "working".
 2. **Ornament pass** — attribute the residual pitch activity around the
    skeleton (fast neighbor visits, dips, alternations) as grace notes
-   where confident, approximate ornament MARKS where not.
+   where confident, approximate ornament MARKS where not. BUILT
+   2026-07-09 (scripts/tape-eval/ornaments.mjs): graces are residual
+   fragments that dip below a nearby main note or sit 2+ semitones
+   above it (exactly +1 is a vibrato crest, never an ornament); a main
+   note re-struck after an ornament splits in two when the ornament
+   OVERLAPS the note's own segments at an internal boundary — sequential
+   flicks (note pauses, flick sounds, note resumes) decorate a single
+   held note and do not split it. Approximate ornament marks still
+   pending (needs a Bravura mordent/turn glyph in the renderer).
 3. **Marking pass** — notation detail: slide connectors on glide
    transitions, vibrato/ornament squiggles, breath commas (already
-   done in rendering).
+   done in rendering). BUILT 2026-07-09 (scripts/tape-eval/marks.mjs):
+   slide connectors fire when a note's opening frames sit about a
+   semitone under the take's bend center (approached from below —
+   the same sub-run-length material the re-snap refuses to relabel);
+   rendered as a diagonal between pitches or a dip scoop for
+   same-pitch slides. Ornament squiggles (Bravura ornamentShortTrill,
+   rasterized like the clef) print above the staff at same-pitch
+   re-strikes whose pre-strike ornament was too quiet to render as a
+   grace — visible uncertainty instead of a confidently wrong note. A
+   re-strike with a shown grace gets neither mark; the grace is the
+   notation.
 
 ## v2 architecture (used only where the bake-off leaves gaps)
 
@@ -179,7 +197,15 @@ Ranked. The first item gates the rest.
 - Passages ~20 dB under the melody's level (measured -26 dB for one
   fast figure) are below any algorithm's reach: mic placement/balance.
 - Sub-60ms ornaments are at the analysis floor; the decoder can place
-  them by context but not conjure their pitch.
+  them by context but not conjure their pitch. Measured case
+  (2026-07-09): the E4-D#4-E4 slide opening take2's first phrase leaves
+  NO trace even in Basic Pitch's raw contour — the salience map is flat
+  on E4 through the whole figure. Fast shallow dips during a quiet
+  attack, under the note's own reverb, sit below the model's
+  time-pitch resolution. Candidate fix if calibration clips show the
+  floor is the model and not the mic: a high-resolution attack
+  resolver over the ~150ms around each note onset (the v1 spectral
+  machinery, repurposed), feeding pass 3.
 
 ## Evaluation
 
