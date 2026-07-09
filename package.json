@@ -10,10 +10,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check app components",
-    "migrate": "node scripts/migrate-json-to-redis.js"
+    "migrate": "node scripts/migrate-json-to-redis.js",
+    "tape:eval": "node scripts/tape-eval/score.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@spotify/basic-pitch": "^1.0.1",
     "@upstash/redis": "^1.34.3",
     "@vercel/blob": "^0.27.0",
     "class-variance-authority": "^0.7.1",

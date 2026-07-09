@@ -67,7 +67,9 @@ plugins server-side. No process polls on its own timer except the device.
   115200 baud.
 - `scripts/`: `migrate-json-to-redis.js` (idempotent), `show-plugin.js`,
   `toggle-plugin.js`, `print-calibration.js` (grayscale wedges through the
-  real pipeline).
+  real pipeline), `tape-eval/` (Tape transcription v2 pipeline + corpus
+  scorer — `npm run tape:eval` scores every `data/clips/*.truth.json`
+  fixture; see docs/tape-transcription-v2.md before touching detection).
 
 ## Auth model
 

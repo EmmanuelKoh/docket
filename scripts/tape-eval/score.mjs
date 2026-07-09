@@ -1,0 +1,98 @@
+// scripts/tape-eval/score.mjs — the Tape corpus scorer. For every
+// data/clips/*.truth.json, transcribe the matching wav, run the
+// skeleton pass, and score the note+rest sequence against the truth by
+// global alignment (Needleman-Wunsch): precision/recall/F over aligned
+// symbols. Robustness is this number, not a vibe.
+//
+//   npm run tape:eval          (all fixtures)
+//   node scripts/tape-eval/score.mjs data/clips/take2.truth.json
+//
+// Truth format: { "provisional": bool, "sequence": ["E4", "F#4:long",
+// "REST", ...] } — ":long" asserts duration >= 0.8s; graces/ornaments
+// are pass-2 and do not belong in skeleton truth.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { transcribe } from './transcribe.mjs';
+import { skeletonize, skeletonSequence } from './skeleton.mjs';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const CLIPS = path.join(ROOT, 'data', 'clips');
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const LONG_SEC = 0.8;
+
+const label = (n) =>
+  n.rest ? 'REST' : `${NAMES[n.midi % 12]}${Math.floor(n.midi / 12) - 1}${n.t1 - n.t0 >= LONG_SEC ? ':long' : ''}`;
+
+// symbols match when pitch+rest agree; the :long assertion must hold
+// when the truth states it
+function symMatch(truth, pred) {
+  const tBase = truth.replace(':long', '');
+  const pBase = pred.replace(':long', '');
+  if (tBase !== pBase) return false;
+  if (truth.endsWith(':long') && !pred.endsWith(':long')) return false;
+  return true;
+}
+
+function align(truth, pred) {
+  const T = truth.length;
+  const P = pred.length;
+  const dp = Array.from({ length: T + 1 }, () => new Array(P + 1).fill(0));
+  for (let i = 1; i <= T; i++) {
+    for (let j = 1; j <= P; j++) {
+      dp[i][j] = Math.max(
+        dp[i - 1][j],
+        dp[i][j - 1],
+        dp[i - 1][j - 1] + (symMatch(truth[i - 1], pred[j - 1]) ? 1 : 0),
+      );
+    }
+  }
+  // traceback for the diff view
+  const rows = [];
+  let i = T;
+  let j = P;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + (symMatch(truth[i - 1], pred[j - 1]) ? 1 : 0) && symMatch(truth[i - 1], pred[j - 1])) {
+      rows.unshift(['  ', truth[--i], pred[--j]]);
+    } else if (j > 0 && dp[i][j] === dp[i][j - 1]) {
+      rows.unshift(['+ ', '', pred[--j]]);
+    } else {
+      rows.unshift(['- ', truth[--i], '']);
+    }
+  }
+  return { matches: dp[T][P], rows };
+}
+
+async function scoreFixture(truthPath) {
+  const truth = JSON.parse(fs.readFileSync(truthPath, 'utf8'));
+  const wav = truthPath.replace(/\.truth\.json$/, '.wav');
+  const notes = await transcribe(wav);
+  const pred = skeletonSequence(skeletonize(notes)).map(label);
+  const { matches, rows } = align(truth.sequence, pred);
+  const precision = pred.length ? matches / pred.length : 0;
+  const recall = truth.sequence.length ? matches / truth.sequence.length : 0;
+  const f = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+  return { name: path.basename(wav), truth, pred, precision, recall, f, rows };
+}
+
+const targets = process.argv[2]
+  ? [process.argv[2]]
+  : fs
+      .readdirSync(CLIPS)
+      .filter((f) => f.endsWith('.truth.json'))
+      .map((f) => path.join(CLIPS, f));
+
+let sumF = 0;
+for (const t of targets) {
+  const r = await scoreFixture(t);
+  sumF += r.f;
+  console.log(
+    `\n${r.name}${r.truth.provisional ? ' (provisional truth)' : ''}: ` +
+      `P=${r.precision.toFixed(2)} R=${r.recall.toFixed(2)} F=${r.f.toFixed(2)}`,
+  );
+  for (const [tag, tr, pr] of r.rows) {
+    console.log(`  ${tag}${(tr || '·').padEnd(10)} ${pr || '·'}`);
+  }
+}
+console.log(`\nmean F over ${targets.length} fixture(s): ${(sumF / targets.length).toFixed(2)}`);
+process.exit(sumF / targets.length >= 0.75 ? 0 : 1);

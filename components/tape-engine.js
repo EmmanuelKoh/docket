@@ -22,6 +22,7 @@ import {
   KEY_SIGS,
   noteLabel,
 } from '@/components/tape-renderer.js';
+import { skeletonize } from '@/scripts/tape-eval/skeleton.mjs';
 
 export function initTapeTool() {
   const WINDOW = 1024; // analysis window (samples at ~22 kHz ≈ 46 ms)
@@ -728,87 +729,101 @@ export function initTapeTool() {
   }
 
   micBtn.addEventListener('click', () => {
-    if (micOn) stopMic();
-    else startMic();
+    if (micOn) {
+      stopMic();
+      // v2: the live tracker is a sketch; the real transcription is the
+      // neural decode of the recording, run when the take ends
+      if (recLen > effSr) neuralReplay();
+    } else {
+      startMic();
+    }
   });
 
-  // ---- replay: identical windows, current slider values, TWO passes.
-  // The first pass runs full tracking with the results discarded, so the
-  // detector's background spectrum, drone memory, and drone scores learn
-  // over the whole clip (held-note protection active via a throwaway
-  // tracker). The second pass renders — starting with a converged model
-  // instead of re-living the learning window, which is where live takes
-  // misbehave. resetTake bumps analysisGen once, so the worker's learned
-  // state carries from pass 1 into pass 2. ----
-  async function replay() {
-    if (micOn || replaying || recLen < WINDOW) return;
-    ensureWorker();
+  // ---- neural replay (transcription v2, see docs/
+  // tape-transcription-v2.md): Basic Pitch (Apache-2.0, model bundled
+  // in public/basic-pitch/) transcribes the recording polyphonically —
+  // melody AND dam as separate note tracks — then the pass-1 skeleton
+  // (scripts/tape-eval/skeleton.mjs, same module the corpus scorer
+  // runs) reduces it to the main melody, fed to the unchanged renderer.
+  // The live mic path above stays on the lightweight v1 tracker for the
+  // real-time trace; this decode runs on Stop, Replay, and Load clip.
+  let neural = null; // cached { bp } after first use (tfjs is lazy-loaded)
+
+  async function resampleTo22050(f32, srcRate) {
+    if (Math.round(srcRate) === 22050) return f32;
+    const oac = new OfflineAudioContext(
+      1,
+      Math.ceil((f32.length * 22050) / srcRate),
+      22050,
+    );
+    const buf = oac.createBuffer(1, f32.length, srcRate);
+    buf.copyToChannel(f32, 0);
+    const src = oac.createBufferSource();
+    src.buffer = buf;
+    src.connect(oac.destination);
+    src.start();
+    return (await oac.startRendering()).getChannelData(0);
+  }
+
+  async function neuralReplay() {
+    if (micOn || replaying || recLen < effSr / 2) return;
     replaying = true;
     resetTake(false);
-    const total = Math.floor((recLen - WINDOW) / HOP) + 1;
-    const analyzeAt = (f, holdF0) =>
-      new Promise((resolve) => {
-        const start = f * HOP;
-        const win = new Float32Array(WINDOW);
-        win.set(recorded.subarray(start, start + WINDOW));
-        worker.onmessage = (ev) => {
-          resolve(ev.data);
+    try {
+      if (!neural) {
+        statusEl.textContent = 'loading transcription model…';
+        const bpModule = await import('@spotify/basic-pitch');
+        neural = {
+          ...bpModule,
+          bp: new bpModule.BasicPitch('/basic-pitch/model.json'),
         };
-        worker.postMessage(
-          {
-            buf: win.buffer,
-            sr: effSr,
-            t: ((start + WINDOW) / effSr) * 1000,
-            mode: detectorMode,
-            fMin: melodyFloor,
-            gen: analysisGen,
-            holdF0: holdF0,
-          },
-          [win.buffer],
-        );
-      });
-
-    const warmTrk = createNoteTracker(trackerValues());
-    for (let f = 0; f < total; f++) {
-      const m = await analyzeAt(f, holdFreq(warmTrk));
-      const p = pickFrame(m, warmTrk);
-      warmTrk.push({
-        tMs: m.t,
-        freq: p.freq,
-        clarity: p.clarity,
-        energy: p.energy,
-      });
-      if (f % 200 === 0) {
-        statusEl.textContent = `learning the room… ${Math.round((f / total) * 100)}%`;
-        await new Promise((r) => {
-          setTimeout(r, 0);
-        });
       }
-    }
-
-    for (let f = 0; f < total; f++) {
-      const m = await analyzeAt(f, analysisParams().holdF0);
-      applyFrame(m);
-      if (f % 200 === 0) {
-        statusEl.textContent = `replaying… ${Math.round((f / total) * 100)}%`;
-        await new Promise((r) => {
-          setTimeout(r, 0);
-        });
+      const audio = await resampleTo22050(recorded.subarray(0, recLen), effSr);
+      const frames = [];
+      const onsets = [];
+      const contours = [];
+      await neural.bp.evaluateModel(
+        audio,
+        (f, o, c) => {
+          frames.push(...f);
+          onsets.push(...o);
+          contours.push(...c);
+        },
+        (pct) => {
+          statusEl.textContent = `transcribing… ${Math.round(pct * 100)}%`;
+        },
+      );
+      const events = neural.noteFramesToTime(
+        neural.addPitchBendsToNoteEvents(
+          contours,
+          neural.outputToNotesPoly(frames, onsets, 0.4, 0.3, 5),
+        ),
+      );
+      const notes = events
+        .map((e) => ({
+          t0: e.startTimeSeconds,
+          t1: e.startTimeSeconds + e.durationSeconds,
+          midi: e.pitchMidi,
+          amp: e.amplitude,
+        }))
+        .sort((a, b) => a.t0 - b.t0);
+      const skeleton = skeletonize(notes, {
+        melodyLoMidi: Math.round(69 + 12 * Math.log2(melodyFloor / 440)),
+      });
+      for (const n of skeleton) {
+        evQueue.push({ type: 'on', midi: n.midi, tMs: n.t0 * 1000 });
+        evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
       }
+      evQueue.sort((a, b) => a.tMs - b.tMs);
+      feedRenderer(Number.MAX_SAFE_INTEGER);
+      statusEl.textContent = `transcribed ${skeleton.length} notes (neural skeleton)`;
+    } catch (e) {
+      statusEl.textContent = `transcription failed: ${e.message}`;
     }
-    flushTracker();
-    // restore the live handler the replay promise hijacked
-    worker.onmessage = (ev) => {
-      inFlight = false;
-      onPitchFrame(ev.data);
-      pumpAnalysis();
-    };
-    inFlight = false;
     replaying = false;
     syncTransport();
-    statusEl.textContent = `replayed ${(recLen / effSr).toFixed(1)}s with current settings`;
   }
-  replayBtn.addEventListener('click', replay);
+  replayBtn.addEventListener('click', neuralReplay);
 
   // ---- demo phrase: a synthetic duduk-ish take (vibrato, a committed
   // bend, a retreating bend, a fast run, breaths, both ledger regions)
@@ -862,7 +877,7 @@ export function initTapeTool() {
           env * (0.22 * Math.sin(phase) + 0.06 * Math.sin(2 * phase));
       }
     });
-    return replay();
+    return neuralReplay();
   }
   demoBtn.addEventListener('click', synthDemo);
   newBtn.addEventListener('click', () => {
@@ -919,7 +934,7 @@ export function initTapeTool() {
       recorded = new Float32Array(Math.ceil(ch.length / factor) + WINDOW);
       recLen = 0;
       appendPcm(ch, factor);
-      await replay();
+      await neuralReplay();
     } catch (e) {
       statusEl.textContent = `clip load failed: ${e.message}`;
     }
