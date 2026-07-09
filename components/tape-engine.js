@@ -301,9 +301,16 @@ export function initTapeTool() {
     return renderer.rowForTime(tMs);
   }
 
-  function drawTraceFrame(tMs, freq, clarity, soundingMidi, liveCol = null) {
+  function drawTraceFrame(
+    tMs,
+    freq,
+    clarity,
+    soundingMidi,
+    energy = 0,
+    liveCol = null,
+  ) {
     if (!renderer) return;
-    traceFrames.push({ t: tMs, freq, clarity, sounding: soundingMidi });
+    traceFrames.push({ t: tMs, freq, clarity, energy, sounding: soundingMidi });
     paintTraceFrame(tMs, freq, clarity, soundingMidi, liveCol);
   }
 
@@ -485,7 +492,9 @@ export function initTapeTool() {
     while (evQueue.length && evQueue[0].tMs <= horizonMs) {
       const e = evQueue.shift();
       renderer.advance(e.tMs);
-      if (e.type === 'on') {
+      if (e.type === 'mark') {
+        renderer.markNow(); // time-anchored ornament arc
+      } else if (e.type === 'on') {
         renderer.noteOn(e.midi, e.tMs, e.grace, {
           slide: e.slide,
           ornament: e.ornament,
@@ -515,6 +524,7 @@ export function initTapeTool() {
         f.freq,
         f.clarity,
         f.sounding,
+        f.energy,
         Math.max(0, renderer.rows.length - 1),
       );
     }
@@ -538,6 +548,7 @@ export function initTapeTool() {
       t: m.t,
       freq: m.freq,
       clarity: m.clarity,
+      energy: m.energy,
       sounding: tracker.sounding,
     });
     feedRenderer(m.t - RENDER_DELAY_MS);
@@ -833,6 +844,11 @@ export function initTapeTool() {
       label = `transcribed ${decorated.skeleton.length} notes + ${decorated.graces.length} ornaments (neural)`;
     }
     for (const n of timeline) {
+      if (n.mark) {
+        // a time-anchored ornament arc, not a note
+        evQueue.push({ type: 'mark', tMs: n.t0 * 1000 });
+        continue;
+      }
       evQueue.push({
         type: 'on',
         midi: n.midi,
@@ -917,7 +933,7 @@ export function initTapeTool() {
         clarity: p.clarity,
         energy: p.energy,
       });
-      drawTraceFrame(m.t, p.freq, p.clarity, trk.sounding);
+      drawTraceFrame(m.t, p.freq, p.clarity, trk.sounding, p.energy);
       if (f % 400 === 0) {
         paintTrace();
         await new Promise((r) => {

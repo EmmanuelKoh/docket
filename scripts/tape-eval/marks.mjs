@@ -35,6 +35,14 @@ export const MARK_DEFAULTS = {
   excMaxSemis: 6, // ...and no further (octave ghosts are artifacts)
   excMinFrames: 2, // consecutive frames — single-frame spikes are junk
   excClarityMin: 0.3, // the v1 detector must actually be confident
+  excEnergyFrac: 0.1, // ...and the frame must carry real signal: this
+  // fraction of the take's voiced-median energy (clarity is a ratio —
+  // meaningless in a fading tail; measured junk sits at 0.01x, real
+  // ornaments at 0.55x and up)
+  excMergeGapSec: 0.06, // one gesture split across runs is one ornament
+  excFarSec: 0.6, // an excursion further than this after its owner's
+  // attack prints at its own moment instead (a mid-hold flick belongs
+  // where it happened, not at an attack seconds earlier)
 };
 
 // rawNotes: full Basic Pitch output; decorated: decorate()'s result;
@@ -76,6 +84,15 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
   // reaching an upper neighbor of the sounding main note
   const excursions = [];
   {
+    // energy floor relative to the take's voiced material — clarity
+    // alone certifies junk in fading tails
+    const voiced = fine
+      .filter((f) => f.freq && f.clarity >= 0.5 && f.energy !== undefined)
+      .map((f) => f.energy)
+      .sort((a, b) => a - b);
+    const eFloor = voiced.length
+      ? o.excEnergyFrac * voiced[Math.floor(voiced.length / 2)]
+      : 0;
     const mainAt = (t) =>
       skeleton.find((m) => t >= m.t0 && t <= m.t1) ||
       skeleton.find((m) => m.t0 >= t && m.t0 - t <= o.graceNearSec);
@@ -87,7 +104,11 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     for (const f of fine) {
       const tSec = f.t / 1000;
       let up = false;
-      if (f.freq && f.clarity >= o.excClarityMin) {
+      if (
+        f.freq &&
+        f.clarity >= o.excClarityMin &&
+        (f.energy === undefined || f.energy >= eFloor)
+      ) {
         const m = mainAt(tSec);
         if (m) {
           const d = 69 + 12 * Math.log2(f.freq / 440) - m.midi;
@@ -106,24 +127,48 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
       }
     }
     flush();
+    // one physical gesture often splits across runs (a frame of the
+    // main note pokes through mid-flick): merge near-adjacent runs
+    for (let i = excursions.length - 1; i > 0; i--) {
+      if (excursions[i].t0 - excursions[i - 1].t1 <= o.excMergeGapSec) {
+        excursions[i - 1].t1 = excursions[i].t1;
+        excursions[i - 1].n += excursions[i].n;
+        excursions.splice(i, 1);
+      }
+    }
   }
 
   // every detected ornament (pass-2 residual or fine-trace excursion)
   // marks a main note with the ornament glyph — attached to the main
   // whose ATTACK it sits nearest, among the mains it overlaps or leads
   // into (the duduk convention: the ornament belongs to the note it
-  // prepares; a mid-hold flick belongs to the note it rides on)
+  // prepares). An excursion far into a long hold instead becomes a
+  // TIME-ANCHORED mark: the arc prints where the flick happened, not
+  // at an attack seconds earlier
   const owned = new Set();
-  for (const g of [...graces, ...excursions]) {
-    let best = null;
+  const timed = [];
+  for (const g of [
+    ...graces,
+    ...excursions.map((x) => ({ ...x, exc: true })),
+  ]) {
+    let bestAny = null;
+    let bestOverlap = null;
     for (const m of skeleton) {
       const overlaps = g.t0 < m.t1 && g.t1 > m.t0;
       const leadsIn = m.t0 - g.t1 >= -0.05 && m.t0 - g.t1 <= o.graceNearSec;
       if (!overlaps && !leadsIn) continue;
       const d = Math.abs(g.t0 - m.t0);
-      if (best === null || d < best.d) best = { m, d };
+      if (bestAny === null || d < bestAny.d) bestAny = { m, d };
+      if (overlaps && (bestOverlap === null || d < bestOverlap.d)) {
+        bestOverlap = { m, d };
+      }
     }
-    if (best) owned.add(best.m.t0);
+    // a fine-trace excursion is heard WHILE a note sounds — it belongs
+    // to that note, not to whichever attack happens to be nearer
+    const best = g.exc ? (bestOverlap ?? bestAny) : bestAny;
+    if (!best) continue;
+    if (g.t0 - best.m.t0 > o.excFarSec) timed.push(g);
+    else owned.add(best.m.t0);
   }
 
   const marks = new Map(); // main-note t0 -> { slide, ornament }
@@ -151,8 +196,16 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     if (slide || ornament) marks.set(b.t0, { slide, ornament });
   }
 
-  return timeline.map((e) => {
+  const flagged = timeline.map((e) => {
     const m = !e.grace && marks.get(e.t0);
     return m ? { ...e, ...m } : e;
   });
+  const timedEvents = timed.map((x) => ({
+    t0: x.t0,
+    t1: x.t0,
+    midi: 0,
+    grace: false,
+    mark: true,
+  }));
+  return [...flagged, ...timedEvents].sort((a, b) => a.t0 - b.t0);
 }

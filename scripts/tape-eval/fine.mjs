@@ -48,7 +48,7 @@ export async function fineFrames(audio, sr, { floor = 230 } = {}) {
         },
       });
     });
-    frames.push({ t: m.t, freq: m.freq, clarity: m.clarity });
+    frames.push({ t: m.t, freq: m.freq, clarity: m.clarity, energy: m.energy });
   }
   return frames;
 }

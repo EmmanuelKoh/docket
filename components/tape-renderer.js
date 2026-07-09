@@ -326,6 +326,7 @@ export function createTapeRenderer(config) {
   let cur = null; // { midi, step, onMs, rowsEmitted, rStart }
   let lastOffMs = null; // when the previous note ended
   let lastStep = null; // the previous MAIN note's staff step (slides)
+  let deferredArcs = []; // time-anchored ornament arcs awaiting rows
   let started = false;
 
   // Audio-time ↔ tape-row map for the player's playhead and scrubbing.
@@ -602,9 +603,21 @@ export function createTapeRenderer(config) {
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);
     if (cur.arc) paintOrnamentArc(cur.arc.center, cur.arc.step);
+    // time-anchored marks queued mid-note: their rows exist now
+    for (const a of deferredArcs) paintOrnamentArc(a.center, a.step);
+    deferredArcs = [];
     if (!cur.grace) lastStep = cur.step; // slides connect main notes
     cur = null;
     lastOffMs = tMs;
+  }
+
+  // A time-anchored ornament mark, independent of note events: printed
+  // where the ornament HAPPENED — a flick in the middle of a long hold
+  // marks that spot, not the note's attack. Painting is deferred until
+  // the surrounding rows exist (the enclosing note's noteOff).
+  function markNow() {
+    const step = (cur ? cur.step : (lastStep ?? 8)) + 2.5;
+    deferredArcs.push({ center: Math.max(0, rows.length - 1), step });
   }
 
   // Full print job: same shape as the render core's text path (ESC @,
@@ -655,6 +668,7 @@ export function createTapeRenderer(config) {
     width: WIDTH,
     noteOn,
     noteOff,
+    markNow,
     advance,
     rowForTime,
     timeForRow,
