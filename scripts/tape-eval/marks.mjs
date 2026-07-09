@@ -208,19 +208,29 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
           n.midi >= o.melodyLoMidi &&
           n.midi <= o.melodyHiMidi &&
           n.amp >= o.candidateAmp &&
+          // the candidate must BE the gap's note — starting at it, not
+          // an under-voice passing through from long before
+          n.t0 >= a.t1 - 0.05 &&
           n.t0 <= a.t1 + 0.05 &&
           n.t1 >= b.t0 - 0.05,
       );
       if (!cand) continue;
-      const span = fine.filter(
-        (f) => f.t / 1000 >= a.t1 && f.t / 1000 <= b.t0,
-      );
-      const agree = span.filter(
-        (f) =>
-          f.freq &&
-          Math.abs(69 + 12 * Math.log2(f.freq / 440) - cand.midi) <= 0.7,
-      );
-      if (span.length >= 4 && agree.length >= span.length * 0.5) {
+      // test the MIDDLE of the gap: its edges are the glides into and
+      // out of the soft note (a slid chain's note fails whole-gap
+      // agreement precisely because it is slid)
+      const lo = a.t1 + 0.2 * gap;
+      const hi = b.t0 - 0.2 * gap;
+      const span = fine.filter((f) => f.t / 1000 >= lo && f.t / 1000 <= hi);
+      // octave-tolerant: a SOFT note's fundamental loses to its second
+      // harmonic and the fine trace tracks an octave up — the neural
+      // candidate anchors the true octave, the trace confirms the
+      // pitch class holds through the gap
+      const agree = span.filter((f) => {
+        if (!f.freq) return false;
+        const d = Math.abs(69 + 12 * Math.log2(f.freq / 440) - cand.midi);
+        return d <= 0.7 || Math.abs(d - 12) <= 0.7;
+      });
+      if (span.length >= 3 && agree.length >= span.length * 0.5) {
         revived.push({ midi: cand.midi, t0: a.t1, t1: b.t0 });
       }
     }
@@ -366,6 +376,14 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
       owned.add(g.forceOwner);
       continue;
     }
+    // a grace now covered by a same-pitch main (bridge revival turned
+    // the fragment INTO that note) is the note itself, not its ornament
+    if (
+      !g.exc &&
+      skeleton.some((m) => m.midi === g.midi && g.t0 < m.t1 && g.t1 > m.t0)
+    ) {
+      continue;
+    }
     let bestAny = null;
     let bestOverlap = null;
     for (const m of skeleton) {
@@ -392,9 +410,8 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     const a = skeleton[i - 1];
     const restrike =
       a !== undefined && b.midi === a.midi && b.t0 - a.t1 <= o.restrikeGapSec;
-    const ornament = restrike || owned.has(b.t0);
     let slide = false;
-    if (a !== undefined && !ornament && b.t0 - a.t1 <= o.slideGapSec) {
+    if (a !== undefined && !restrike && b.t0 - a.t1 <= o.slideGapSec) {
       // approach glide: this note's opening frames sit low (slid into
       // from below) — or departure glide: the PREVIOUS note's closing
       // frames sag toward this one (slid out of, e.g. back down off a
@@ -408,6 +425,9 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
         slide = true;
       }
     }
+    // a slid attack is its own notation — the arc marks only
+    // re-strikes and ornamented attacks that were NOT slid into
+    const ornament = restrike || (owned.has(b.t0) && !slide);
     if (slide || ornament) marks.set(b.t0, { slide, ornament });
   }
 

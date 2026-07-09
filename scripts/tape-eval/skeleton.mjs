@@ -129,7 +129,22 @@ function resnapSharpRuns(notes, o) {
       const coherent = group.every((i) =>
         stats[i].n.bends.every((b) => b >= center - o.resnapMaxBins),
       );
-      if (dur >= o.resnapRunSec || (!adjoinsTarget && coherent)) {
+      // glide guard: a run whose bends RAMP by 1.5+ bins end to end is
+      // a note in transit (a slide), not a sustained note under a
+      // wrong label — slid notes sag far below their intended pitch
+      // and must keep the label the player names (cf. the slid F#4
+      // read as F4)
+      const allBends = group.flatMap((i) => stats[i].n.bends);
+      const third = Math.max(1, Math.floor(allBends.length / 3));
+      const headM =
+        allBends.slice(0, third).reduce((a, b) => a + b, 0) / third;
+      const tailM =
+        allBends.slice(-third).reduce((a, b) => a + b, 0) / third;
+      const gliding = Math.abs(tailM - headM) >= 1.5;
+      if (
+        !gliding &&
+        (dur >= o.resnapRunSec || (!adjoinsTarget && coherent))
+      ) {
         for (const i of group) out[i].midi -= 1;
       }
     }
@@ -149,6 +164,92 @@ function resnapSharpRuns(notes, o) {
     }
   }
   flush();
+  return out;
+}
+
+// wobble merge: WIDE vibrato straddles a semitone grid line, and Basic
+// Pitch emits one sung note as a long alternating spray of two
+// adjacent labels — the upper label with low bends, the lower with
+// high bends, i.e. the SAME absolute pitch seen from both sides. A
+// chain of 4+ such fragments (both labels present twice) with agreeing
+// bend-corrected pitch collapses to one note. Chain length is the
+// guard: a REAL quick neighbor visit (E4-D#4-E4) is three fragments.
+function mergeWobble(mel, o) {
+  const absOf = (n) => {
+    const m = meanBend(n);
+    return m === null ? null : n.midi + m / 3;
+  };
+  const out = [];
+  let i = 0;
+  while (i < mel.length) {
+    const a0 = absOf(mel[i]);
+    if (a0 === null) {
+      out.push(mel[i]);
+      i++;
+      continue;
+    }
+    const chain = [mel[i]];
+    let sum = a0;
+    let j = i + 1;
+    while (j < mel.length) {
+      const n = mel[j];
+      const abs = absOf(n);
+      if (
+        abs === null ||
+        n.t0 - chain[chain.length - 1].t1 > o.mergeGapSec ||
+        Math.abs(n.midi - mel[i].midi) > 1 ||
+        Math.abs(abs - sum / chain.length) > 0.7
+      ) {
+        break;
+      }
+      chain.push(n);
+      sum += abs;
+      j++;
+    }
+    const labels = new Set(chain.map((n) => n.midi));
+    const each = [...labels].every(
+      (L) => chain.filter((n) => n.midi === L).length >= 3,
+    );
+    let switches = 0;
+    for (let k = 1; k < chain.length; k++) {
+      if (chain[k].midi !== chain[k - 1].midi) switches++;
+    }
+    const durs = chain.map((n) => n.t1 - n.t0).sort((a, b) => a - b);
+    const medianDur = durs[Math.floor(durs.length / 2)];
+    // periodic oscillation: many rapid label switches with SHORT
+    // fragments (vibrato half-cycles). Musical figures — even quick
+    // doubles at sharp intonation — switch a couple of times between
+    // longer fragments and must never fuse
+    if (
+      chain.length >= 6 &&
+      labels.size === 2 &&
+      each &&
+      switches >= 5 &&
+      medianDur <= 0.2
+    ) {
+      const dur = chain.reduce((a, n) => a + (n.t1 - n.t0), 0);
+      const wAbs =
+        chain.reduce((a, n) => a + absOf(n) * (n.t1 - n.t0), 0) / dur;
+      const midi = Math.round(wAbs);
+      out.push({
+        midi,
+        t0: chain[0].t0,
+        t1: Math.max(...chain.map((n) => n.t1)),
+        amp: Math.max(...chain.map((n) => n.amp)),
+        parts: chain.reduce((a, n) => a + (n.parts ?? 1), 0),
+        // bends re-expressed against the merged label, preserving each
+        // fragment's absolute pitch (slide detection needs real edges)
+        bends: chain.flatMap((n) =>
+          (n.bends ?? []).map((b) => b + 3 * (n.midi - midi)),
+        ),
+        onset: chain[0].onset,
+      });
+      i = j;
+    } else {
+      out.push(mel[i]);
+      i++;
+    }
+  }
   return out;
 }
 
@@ -182,7 +283,7 @@ export function skeletonize(notes, opts = {}) {
     )
     .sort((a, b) => a.t0 - b.t0);
 
-  let merged = mergeRuns(mel, o.mergeGapSec);
+  let merged = mergeRuns(mergeWobble(mel, o), o.mergeGapSec);
 
   // absorb upward crests (see header). A crest is the LOWER note's own
   // material — its bends sit low against the take's center — and it is
@@ -259,7 +360,10 @@ export function skeletonize(notes, opts = {}) {
 
   // reverb-tail drop (see header): a weaker note that starts while its
   // predecessor sounds and repeats the pitch heard just before that
-  // predecessor is the old note's reverb, not a new note
+  // predecessor is the old note's reverb, not a new note. The pitch
+  // being repeated must have ended RECENTLY — reverb rings for a
+  // fraction of a second, and without a horizon this rule killed a
+  // loud real D4 for repeating a note that ended five seconds earlier
   for (let i = 2; i < skeleton.length; i++) {
     const n = skeleton[i];
     const prev = skeleton[i - 1];
@@ -268,7 +372,8 @@ export function skeletonize(notes, opts = {}) {
       prev &&
       n.t0 < prev.t1 &&
       n.amp < prev.amp &&
-      n.midi === skeleton[i - 2]?.midi
+      n.midi === skeleton[i - 2]?.midi &&
+      n.t0 - skeleton[i - 2].t1 <= 0.5
     ) {
       skeleton[i - 1] = { ...prev, parts: prev.parts + n.parts };
       skeleton.splice(i, 1);
