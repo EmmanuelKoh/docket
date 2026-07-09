@@ -80,6 +80,35 @@ export function TapeTool() {
         </div>
 
         <div className="tape-group">
+          <span className="label">View</span>
+          <div className="tape-field">
+            <span className="label">Notation</span>
+            <select id="tapeView" className="tape-select" defaultValue="full">
+              <option value="full">Full — ornaments + slides</option>
+              <option value="skeleton">Skeleton — main notes only</option>
+            </select>
+          </div>
+          <div className="tape-field">
+            <span className="label">Pitch trace</span>
+            <select
+              id="tapeTraceMode"
+              className="tape-select"
+              defaultValue="aligned"
+            >
+              <option value="aligned">Aligned under the tape</option>
+              <option value="linear">Linear time — continuous</option>
+            </select>
+          </div>
+          <Slider
+            id="tapeTraceZoom"
+            label="Trace stretch"
+            min={20}
+            max={400}
+            def={90}
+          />
+        </div>
+
+        <div className="tape-group">
           <span className="label">Layout</span>
           <Slider
             id="tapeMsPerRow"
@@ -163,8 +192,18 @@ export function TapeTool() {
           <button type="button" className="btn small" id="tapeStopBtn" disabled>
             Stop
           </button>
+          <select
+            id="tapeSpeed"
+            className="tape-select tape-speed"
+            defaultValue="1"
+          >
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1">1×</option>
+          </select>
           <span className="tape-val" id="tapeTimeEl">
-            0:00.0 / 0:00.0
+            0:00.00 / 0:00.00
           </span>
           <span className="tape-hint">
             click or drag on the tape to seek · raw pitch below the staff

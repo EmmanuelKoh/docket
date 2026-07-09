@@ -25,7 +25,6 @@ const GLYPHS = {
   flat: 0xe260, // accidentalFlat
   natural: 0xe261, // accidentalNatural
   breath: 0xe4ce, // breathMarkComma
-  ornament: 0xe56c, // ornamentShortTrill — the approximate-ornament squiggle
 };
 
 const out = {};

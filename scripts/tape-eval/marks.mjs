@@ -11,15 +11,16 @@
 //   off a slid-to top note). Rendered as a connector from the previous
 //   note: diagonal between pitches, a dip scoop when the slide returns
 //   to the same pitch (duduk E4-D#4-E4 figures)
-// - ornament squiggles: a same-pitch re-strike whose pre-strike
-//   ornament was too quiet or too ambiguous to render as a grace note
-//   (onset-head evidence only, or a suppressed junk fragment). The
-//   squiggle says "ornamented re-strike, details unclear" — visible
-//   uncertainty instead of a confidently wrong note. A re-strike WITH
-//   a shown grace needs no squiggle: the grace is the notation
+// - ornament marks (the small backwards-"c" arc): EVERY ornamented
+//   main note gets one — a detected ornament fragment attaches to the
+//   main whose attack it sits nearest, and same-pitch re-strikes are
+//   ornamented by definition (their ornament may be below the model's
+//   floor). Ornaments never render as small notes on the staff
+//   (maintainer's choice): main notes stay close together and the
+//   activity reads as a glyph above the staff
 //
-// Precedence: a squiggle suppresses the slide mark on the same note
-// (one visual channel per attack); grace notes coexist with slides.
+// Precedence: an ornament mark suppresses the slide mark on the same
+// note (one visual channel per attack).
 
 import { ORNAMENT_DEFAULTS } from './ornaments.mjs';
 import { SKELETON_DEFAULTS, bendCenter, meanBend } from './skeleton.mjs';
@@ -29,12 +30,21 @@ export const MARK_DEFAULTS = {
   // gap can hold a crest-dropped shred of the glide itself)
   graceNearSec: 0.25, // a shown grace this close to the attack owns it
   restrikeGapSec: 0.05, // same-pitch mains this close are a re-strike
+  excMinSemis: 1.5, // fine-trace excursion: how far above the sounding
+  // main a visit must reach (+1 is vibrato; ornaments visit neighbors)
+  excMaxSemis: 6, // ...and no further (octave ghosts are artifacts)
+  excMinFrames: 2, // consecutive frames — single-frame spikes are junk
+  excClarityMin: 0.3, // the v1 detector must actually be confident
 };
 
-// rawNotes: full Basic Pitch output; decorated: decorate()'s result.
+// rawNotes: full Basic Pitch output; decorated: decorate()'s result;
+// fine: optional v1 fine-cents trace frames [{ t (ms), freq, clarity }]
+// — brief upper-neighbor excursions in them mark ornaments the neural
+// model misses entirely (its contour barely registers quiet flicks
+// under a sustained note; the v1 detector resolves them plainly).
 // Returns a new render timeline with { slide, ornament } flags on the
 // main-note events that earn them.
-export function annotate(rawNotes, decorated, opts = {}) {
+export function annotate(rawNotes, decorated, opts = {}, fine = []) {
   const o = {
     ...SKELETON_DEFAULTS,
     ...ORNAMENT_DEFAULTS,
@@ -62,18 +72,69 @@ export function annotate(rawNotes, decorated, opts = {}) {
     return mean === null ? null : mean + 3 * (seg.n.midi - m.midi);
   };
 
+  // fine-trace ornament excursions: runs of consecutive fine frames
+  // reaching an upper neighbor of the sounding main note
+  const excursions = [];
+  {
+    const mainAt = (t) =>
+      skeleton.find((m) => t >= m.t0 && t <= m.t1) ||
+      skeleton.find((m) => m.t0 >= t && m.t0 - t <= o.graceNearSec);
+    let run = null;
+    const flush = () => {
+      if (run && run.n >= o.excMinFrames) excursions.push(run);
+      run = null;
+    };
+    for (const f of fine) {
+      const tSec = f.t / 1000;
+      let up = false;
+      if (f.freq && f.clarity >= o.excClarityMin) {
+        const m = mainAt(tSec);
+        if (m) {
+          const d = 69 + 12 * Math.log2(f.freq / 440) - m.midi;
+          up = d >= o.excMinSemis && d <= o.excMaxSemis;
+        }
+      }
+      if (up) {
+        if (run) {
+          run.t1 = tSec;
+          run.n++;
+        } else {
+          run = { t0: tSec, t1: tSec, n: 1 };
+        }
+      } else {
+        flush();
+      }
+    }
+    flush();
+  }
+
+  // every detected ornament (pass-2 residual or fine-trace excursion)
+  // marks a main note with the ornament glyph — attached to the main
+  // whose ATTACK it sits nearest, among the mains it overlaps or leads
+  // into (the duduk convention: the ornament belongs to the note it
+  // prepares; a mid-hold flick belongs to the note it rides on)
+  const owned = new Set();
+  for (const g of [...graces, ...excursions]) {
+    let best = null;
+    for (const m of skeleton) {
+      const overlaps = g.t0 < m.t1 && g.t1 > m.t0;
+      const leadsIn = m.t0 - g.t1 >= -0.05 && m.t0 - g.t1 <= o.graceNearSec;
+      if (!overlaps && !leadsIn) continue;
+      const d = Math.abs(g.t0 - m.t0);
+      if (best === null || d < best.d) best = { m, d };
+    }
+    if (best) owned.add(best.m.t0);
+  }
+
   const marks = new Map(); // main-note t0 -> { slide, ornament }
-  for (let i = 1; i < skeleton.length; i++) {
+  for (let i = 0; i < skeleton.length; i++) {
     const b = skeleton[i];
     const a = skeleton[i - 1];
-    const graceNear = graces.some(
-      (g) => g.t0 >= b.t0 - o.graceNearSec && g.t0 <= b.t0 + 0.15,
-    );
     const restrike =
-      b.midi === a.midi && b.t0 - a.t1 <= o.restrikeGapSec;
-    const ornament = restrike && !graceNear;
+      a !== undefined && b.midi === a.midi && b.t0 - a.t1 <= o.restrikeGapSec;
+    const ornament = restrike || owned.has(b.t0);
     let slide = false;
-    if (!ornament && b.t0 - a.t1 <= o.slideGapSec) {
+    if (a !== undefined && !ornament && b.t0 - a.t1 <= o.slideGapSec) {
       // approach glide: this note's opening frames sit low (slid into
       // from below) — or departure glide: the PREVIOUS note's closing
       // frames sag toward this one (slid out of, e.g. back down off a

@@ -827,8 +827,10 @@ export function initTapeTool() {
       label = `skeleton view — ${skeleton.length} main notes`;
     } else {
       const decorated = decorate(notes, skeletonize(notes, opts), opts);
-      timeline = annotate(notes, decorated, opts);
-      label = `transcribed ${decorated.skeleton.length} notes + ${decorated.graces.length} graces (neural)`;
+      // the fine-cents trace frames (when the backfill has run) add
+      // ornament marks the neural model misses — see marks.mjs
+      timeline = annotate(notes, decorated, opts, traceFrames);
+      label = `transcribed ${decorated.skeleton.length} notes + ${decorated.graces.length} ornaments (neural)`;
     }
     for (const n of timeline) {
       evQueue.push({
@@ -931,6 +933,17 @@ export function initTapeTool() {
     };
     inFlight = false;
     paintTrace();
+    // the fine frames may reveal ornaments the neural decode missed —
+    // re-render the tape with them (instant, from the cache), unless
+    // audio is mid-play (a reset would yank the playhead)
+    if (
+      lastDecode &&
+      !micOn &&
+      analysisGen === gen &&
+      playState === 'stopped'
+    ) {
+      rerenderView();
+    }
   }
 
   // ---- demo phrase: a synthetic duduk-ish take (vibrato, a committed

@@ -183,32 +183,16 @@ export function decorate(rawNotes, skeleton, opts = {}) {
     if (mainsNear(c).some((m) => ornamental(c, m))) shown.push(c);
   }
 
-  // render timeline: monophonic — a grace interrupts the main note it
-  // rides on (the tape has one lane; the hold resumes after)
-  const timeline = [];
-  for (const m of split) timeline.push({ t0: m.t0, t1: m.t1, midi: m.midi, grace: false });
-  for (const g of shown) {
-    const i = timeline.findIndex((e) => !e.grace && g.t0 < e.t1 && g.t1 > e.t0);
-    if (i >= 0) {
-      const e = timeline[i];
-      const parts = [];
-      if (g.t0 - e.t0 > 0.02) parts.push({ ...e, t1: g.t0 });
-      parts.push({ t0: g.t0, t1: Math.min(g.t1, e.t1), midi: g.midi, grace: true });
-      if (e.t1 - g.t1 > 0.02) parts.push({ ...e, t0: g.t1 });
-      timeline.splice(i, 1, ...parts);
-    } else {
-      timeline.push({ t0: g.t0, t1: g.t1, midi: g.midi, grace: true });
-    }
-  }
-  timeline.sort((a, b) => a.t0 - b.t0);
-  // strict monophony after grace insertion
-  for (let i = 1; i < timeline.length; i++) {
-    if (timeline[i].t0 < timeline[i - 1].t1) timeline[i - 1].t1 = timeline[i].t0;
-  }
+  // render timeline: the split main notes only. Detected ornaments are
+  // NOT cut in as small notes — pass 3 attaches them to their main
+  // note's attack as the ornament mark (maintainer's choice: main notes
+  // stay close on the tape, ornament activity reads as a glyph)
+  const timeline = split.map((m) => ({
+    t0: m.t0,
+    t1: m.t1,
+    midi: m.midi,
+    grace: false,
+  }));
 
-  return {
-    skeleton: split,
-    graces: shown,
-    timeline: timeline.filter((e) => e.t1 - e.t0 > 0.02),
-  };
+  return { skeleton: split, graces: shown, timeline };
 }

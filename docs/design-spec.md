@@ -319,13 +319,16 @@ key signature before the first note. Monophonic transcription in two
 regimes: while the mic is live, a lightweight pitch tracker sketches
 the tape and trace in real time; when the take ends (Stop, Replay, or
 Load clip) the recording is transcribed by a neural model (Basic
-Pitch, bundled, in-browser) and decoded into main notes, grace notes
-(smaller noteheads, with accidentals shrunk to match), rearticulation
-splits, slide connectors (a thin diagonal between pitches; a dip scoop
-for a same-pitch slide), and approximate-ornament squiggles (the
-Bravura trill squiggle above the staff, marking an ornamented
-re-strike the analysis heard but could not spell out) — the final
-tape replaces the sketch. The
+Pitch, bundled, in-browser) and decoded into main notes,
+rearticulation splits, slide connectors (a thin diagonal between
+pitches; a dip scoop for a same-pitch slide), and ornament marks (a
+small backwards "c" — a procedurally drawn arc opening toward the
+earlier tape — above the staff at the attack of every ornamented main
+note). Ornaments never render as small notes on the staff; the arc is
+painted OVER the preceding tape rather than inserting rows, so main
+notes stay close together. (The renderer still draws small grace
+noteheads with shrunk accidentals for the live sketch's tracker
+events.) The final tape replaces the sketch. The
 preview canvas shows the exact raster rows the printer would receive,
 in reading orientation (staff horizontal, time flowing left to right,
 new tape entering at the right; the strip auto-follows unless the user
@@ -335,18 +338,27 @@ paper.
 Left column (300px): session buttons (Start mic / Demo phrase / New
 take), key signature select (mono), then a single DETECTION control —
 the Melody floor slider, the register split between dam and melody,
-used by both the live sketch and the neural decode — and the LAYOUT
-slider group (label / native range / mono value, the Photo tool's
-tone-row idiom), a hint line, and CLIP buttons (Replay / Save clip /
-Load clip). The old detector/drone selects and threshold sliders are
+used by both the live sketch and the neural decode — a VIEW group, the
+LAYOUT slider group (label / native range / mono value, the Photo
+tool's tone-row idiom), a hint line, and CLIP buttons (Replay / Save
+clip / Load clip). The View group re-renders from the cached decode,
+never re-transcribing: a Notation select (Full — ornaments + slides /
+Skeleton — main notes only, the bare pass-1 melody) and a Pitch trace
+select (Aligned under the tape — one column per tape row, so the raw
+pitch sits under the note bar it produced but glyph rows cut the
+ribbon / Linear time — one continuous ribbon, stretchable via the
+Trace stretch slider in px/s for analysis; clicking a linear trace
+seeks on its own time axis). The old detector/drone selects and threshold sliders are
 gone: they tuned only the live sketch, and the neural decode needs
 none of them (it estimates the take's tuning center from its own
 pitch-bend data). Status during a decode: "transcribing… N%" then
 "transcribed N notes + M graces (neural)".
 The mic button while listening is --red text and border (red rule 5, a
 live capture). Right stage: the tape roll with the raw-pitch trace
-riding inside it (below), a transport row, then a NOTES mono event log
-beside status text and the Print take button.
+riding inside it (below), a transport row (Play/Pause, Stop, a
+varispeed select 0.25×–1× — slower playback also lowers pitch — and
+the position readout at hundredths, m:ss.cc), then a NOTES mono event
+log beside status text and the Print take button.
 
 The pitch trace shares the tape's x-axis and scroll: it sits directly
 under the paper inside the same roll (hairline separator, --raised

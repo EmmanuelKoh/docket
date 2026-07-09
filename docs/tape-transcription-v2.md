@@ -101,8 +101,8 @@ independently testable:
    note re-struck after an ornament splits in two when the ornament
    OVERLAPS the note's own segments at an internal boundary — sequential
    flicks (note pauses, flick sounds, note resumes) decorate a single
-   held note and do not split it. Approximate ornament marks still
-   pending (needs a Bravura mordent/turn glyph in the renderer).
+   held note and do not split it. Approximate ornament marks are
+   pass 3's (the backwards-"c" arc).
 3. **Marking pass** — notation detail: slide connectors on glide
    transitions, vibrato/ornament squiggles, breath commas (already
    done in rendering). BUILT 2026-07-09 (scripts/tape-eval/marks.mjs):
@@ -110,8 +110,8 @@ independently testable:
    semitone under the take's bend center (approached from below —
    the same sub-run-length material the re-snap refuses to relabel);
    rendered as a diagonal between pitches or a dip scoop for
-   same-pitch slides. Ornament squiggles (Bravura ornamentShortTrill,
-   rasterized like the clef) print above the staff at same-pitch
+   same-pitch slides. Ornament marks (a small backwards "c",
+   drawn procedurally as an arc) print above the staff at same-pitch
    re-strikes whose pre-strike ornament was too quiet to render as a
    grace — visible uncertainty instead of a confidently wrong note. A
    re-strike with a shown grace gets neither mark; the grace is the
