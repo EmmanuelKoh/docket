@@ -25,16 +25,16 @@
 // sharps: -7 (Cb major) .. 0 (C) .. +7 (C# major)
 export const KEY_SIGS = [];
 {
-  const flats = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
-  const sharps = ['G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
+  const flats = ["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F"];
+  const sharps = ["G", "D", "A", "E", "B", "F#", "C#"];
   for (let i = 7; i >= 1; i--)
     KEY_SIGS.push({ sharps: -i, name: `${flats[7 - i]} major · ${i}♭` });
-  KEY_SIGS.push({ sharps: 0, name: 'C major · no accidentals' });
+  KEY_SIGS.push({ sharps: 0, name: "C major · no accidentals" });
   for (let i = 1; i <= 7; i++)
     KEY_SIGS.push({ sharps: i, name: `${sharps[i - 1]} major · ${i}♯` });
 }
 
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
 const BASE_PC = [0, 2, 4, 5, 7, 9, 11]; // pitch class of each natural letter
 const SHARP_ORDER = [3, 0, 4, 1, 5, 2, 6]; // F C G D A E B (letter indexes)
 const FLAT_ORDER = [6, 2, 5, 1, 4, 0, 3]; // B E A D G C F
@@ -71,10 +71,10 @@ export function spellNote(midi, sharps) {
           acc === alter[L]
             ? null
             : acc === 0
-              ? 'natural'
+              ? "natural"
               : acc > 0
-                ? 'sharp'
-                : 'flat',
+                ? "sharp"
+                : "flat",
       };
     }
     return null;
@@ -92,7 +92,7 @@ export function spellNote(midi, sharps) {
 export function noteLabel(midi, sharps) {
   const s = spellNote(midi, sharps);
   if (!s) return `midi ${midi}`;
-  const mark = s.acc === 1 ? '♯' : s.acc === -1 ? '♭' : '';
+  const mark = s.acc === 1 ? "♯" : s.acc === -1 ? "♭" : "";
   return `${s.letter}${mark}${s.octave}`;
 }
 
@@ -113,159 +113,141 @@ const GLYPHS_PACKED = {
     h: 281,
     originFromTop: 176,
     data:
-      'AAAAAAAAAAAAgAAAAAAAAAAAAAAAAAPgAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAf' +
-      '+AAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAf/4AAAAAAAAAAAAAAAD//wAAAAAAAAAA' +
-      'AAAAAf//gAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAf//8AAAAAAAAAAAAAAD///4AAA' +
-      'AAAAAAAAAAAP///gAAAAAAAAAAAAAB////AAAAAAAAAAAAAAP///8AAAAAAAAAAAAAA/' +
-      '///4AAAAAAAAAAAAAH////gAAAAAAAAAAAAA/////AAAAAAAAAAAAAD////8AAAAAAAA' +
-      'AAAAAf////wAAAAAAAAAAAAB/////gAAAAAAAAAAAAP////+AAAAAAAAAAAAA/////8A' +
-      'AAAAAAAAAAAH/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/////+AAAAAAAAAAAAP' +
-      '//+D/4AAAAAAAAAAAA///AD/gAAAAAAAAAAAH//wAH+AAAAAAAAAAAAf/+AAP8AAAAAA' +
-      'AAAAAB//wAAfwAAAAAAAAAAAP/+AAB/AAAAAAAAAAAA//wAAD8AAAAAAAAAAAD/+AAAP' +
-      'wAAAAAAAAAAAP/4AAA/gAAAAAAAAAAB//AAAD+AAAAAAAAAAAH/4AAAH4AAAAAAAAAAA' +
-      'f/gAAAfgAAAAAAAAAAB/8AAAB+AAAAAAAAAAAP/wAAAH4AAAAAAAAAAA/+AAAAfgAAAA' +
-      'AAAAAAD/4AAAB+AAAAAAAAAAAP/AAAAH4AAAAAAAAAAA/8AAAA/wAAAAAAAAAAD/gAAA' +
-      'D/AAAAAAAAAAAf+AAAAP8AAAAAAAAAAB/4AAAA/wAAAAAAAAAAH/AAAAD/AAAAAAAAAA' +
-      'Af8AAAAf8AAAAAAAAAAB/wAAAB/wAAAAAAAAAAH/AAAAH+AAAAAAAAAAAf8AAAA/4AAA' +
-      'AAAAAAAB/gAAAD/gAAAAAAAAAAH+AAAAf+AAAAAAAAAAAf4AAAB/4AAAAAAAAAAB/gAA' +
-      'AH/gAAAAAAAAAAH+AAAA/+AAAAAAAAAAAf4AAAH/4AAAAAAAAAAB/AAAAf/AAAAAAAAA' +
-      'AAH8AAAD/8AAAAAAAAAAAfwAAAP/wAAAAAAAAAAB/AAAB//AAAAAAAAAAAH8AAAP/8AA' +
-      'AAAAAAAAAfwAAB//gAAAAAAAAAAB/AAAH/+AAAAAAAAAAAH8AAA//4AAAAAAAAAAAfwA' +
-      'AH//gAAAAAAAAAAB/AAA//8AAAAAAAAAAAH8AAH//wAAAAAAAAAAAfwAA///AAAAAAAA' +
-      'AAAB/AAD//4AAAAAAAAAAAH8AAf//gAAAAAAAAAAAfwAD//8AAAAAAAAAAAB/AAf//wA' +
-      'AAAAAAAAAAH8AD///AAAAAAAAAAAAPwAf//4AAAAAAAAAAAA/AD///gAAAAAAAAAAAD+' +
-      'A///8AAAAAAAAAAAAP4H///wAAAAAAAAAAAA/g///+AAAAAAAAAAAAD+H///4AAAAAAA' +
-      'AAAAAP4////AAAAAAAAAAAAA/n///8AAAAAAAAAAAAB/////gAAAAAAAAAAAAH////8A' +
-      'AAAAAAAAAAAAf////wAAAAAAAAAAAAB////+AAAAAAAAAAAAAH////wAAAAAAAAAAAAA' +
-      '/////AAAAAAAAAAAAAH////4AAAAAAAAAAAAA/////AAAAAAAAAAAAAP////8AAAAAAA' +
-      'AAAAAB/////gAAAAAAAAAAAAP////8AAAAAAAAAAAAB/////gAAAAAAAAAAAAP////8A' +
-      'AAAAAAAAAAAB/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf' +
-      '////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAA' +
-      'AAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wA' +
-      'AAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/' +
-      '////8AAAAAAAAAAAAf/////wAAAAAAAAAAAD//////gAAAAAAAAAAAf////7+AAAAAAA' +
-      'AAAAD/////P4AAAAAAAAAAAf////w/gAAAAAAAAAAB////+B+AAAAAAAAAAAP////wH4' +
-      'AAAAAAAAAAB////+AfwAAAAAAAAAAP////gB/AAAAAAAAAAB////8AH8AAAAAAAAAAH/' +
-      '///gAfwAAAAAAAAAA////8AA/AAAAAAAAAAH////gAD8AAAAAAAAAAf///8AAP4AAAAA' +
-      'AAAAD////gAA/gAAAAAAAAAf///8AAD+AAAAAAAAAB////gAAP4AAAAAAAAAP///4AAA' +
-      'fgAAAAAAAAB////AAAB+AAAAAAAAAH///4AAAH8AAAAAAAAA////gAAAfwAAAAAAAAD/' +
-      '//8AAAB/AAAAAAAAAf///gAAAH8AAAAAAAAB///8AAAAPwAAAAAAAAP///gAAAA/gAAA' +
-      'AAAAA///8AAAAD/AAAAAAAAH///gAAAAP//4AAAAAAf//8AAAAB///+AAAAAB///gAAA' +
-      'A/////AAAAAP//+AAAAP/////AAAAA///wAAAD//////AAAAD//+AAAA///////AAAAf' +
-      '//wAAAP//////+AAAB///AAAB///////+AAAH//4AAAP///////8AAA///AAAB//////' +
-      '//4AAD//8AAAP////////wAAP//gAAB/////////gAA//+AAAP/////////AAH//wAAB' +
-      '/////////+AAf//AAAP/////////8AB//4AAA//////////wAH//gAAH//////////gA' +
-      'f/8AAA///////////AD//wAAD//////////8AP//AAAf//////////4A//4AAB//////' +
-      '/////gD//gAAP/////j/////AP/+AAA////n+A////8A//wAAD///wP4Af///4D//AAA' +
-      'f//8A/gAf///gP/8AAB///AD+AA///+A//wAAH//4AP4AA///8D//AAAf/+AAfwAB///' +
-      'wP/4AAD//wAB/AAD///A//gAAP/+AAH8AAH//8D/+AAA//4AAfwAAP//4P/4AAD//AAB' +
-      '/AAAf//g//gAAP/4AAH8AAA//+D/+AAA//gAAP4AAD//4H/4AAD/8AAA/gAAH//gf/gA' +
-      'AP/wAAD+AAAf/+B/+AAA//AAAP4AAA//4H/4AAD/4AAA/gAAD//gf/gAAH/gAAD+AAAH' +
-      '/+A/+AAAf+AAAH8AAAf/4D/4AAB/4AAAfwAAB//gP/gAAH/gAAB/AAAD/+A/+AAAf+AA' +
-      'AH8AAAP/4B/4AAA/4AAAfwAAA//gH/wAAD/gAAB/AAAD/+Af/AAAP+AAAD+AAAP/4A/8' +
-      'AAAf8AAAP4AAA//gD/wAAB/wAAA/gAAD/8AP/gAAD/gAAD+AAAP/wAf+AAAP+AAAP4AA' +
-      'A//AB/4AAAf8AAA/gAAD/8AD/wAAA/wAAB/AAAP/gAP/AAAD/gAAH8AAA/+AAf+AAAH/' +
-      'AAAfwAAH/wAB/4AAAP+AAB/AAAf/AAD/wAAAf8AAH8AAB/8AAH/gAAA/4AAf4AAP/gAA' +
-      'f+AAAB/4AA/gAA/+AAA/8AAAB/4AD+AAH/wAAB/4AAAD/wAP4AAf+AAAD/wAAAB/gA/g' +
-      'AD/4AAAH/gAAAB8AD+AAP/AAAAf/AAAAAAAH8AB/4AAAA/+AAAAAAAfwAP/gAAAB/8AA' +
-      'AAAAB/AB/8AAAAD/4AAAAAAH8AP/gAAAAH/4AAAAAAfwB/8AAAAAH/wAAAAAB/Af/gAA' +
-      'AAAP/wAAAAAD+D/8AAAAAAf/wAAAAAP4//AAAAAAAf/wAAAAA/v/4AAAAAAA//4AAAAD' +
-      '///AAAAAAAA//8AAAAP//wAAAAAAAA///gAAB//8AAAAAAAAA////AH///gAAAAAAAAA' +
-      '////////wAAAAAAAAAAf//////8AAAAAAAAAAAP//////AAAAAAAAAAAAD/////8AAAA' +
-      'AAAAAAAAAf//+f4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAA' +
-      'AP4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP8AAAAAAAAA' +
-      'AAAAAAAAfwAAAAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAA' +
-      'AAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAA' +
-      'AAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAAAAA/gAAAAAAA' +
-      'AAAAAAAAAD/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAAAAAAAAAAAAAAAAB/A' +
-      'AAAAAAAAAH/gAAAAH8AAAAAAAAAB//gAAAAfwAAAAAAAAAf//gAAAB/AAAAAAAAAD///' +
-      'AAAAH+AAAAAAAAAf//+AAAAf4AAAAAAAAH///8AAAA/gAAAAAAAAf///4AAAD+AAAAAA' +
-      'AAD////wAAAP4AAAAAAAAf////AAAA/gAAAAAAAB////8AAAD+AAAAAAAAH////4AAAP' +
-      '4AAAAAAAA/////gAAA/gAAAAAAAD////+AAAD+AAAAAAAAP////4AAAP4AAAAAAAB///' +
-      '//wAAA/gAAAAAAAH/////AAAD+AAAAAAAAf////8AAAP4AAAAAAAB/////wAAA/gAAAA' +
-      'AAAH/////AAAH+AAAAAAAAf////4AAAfwAAAAAAAB/////gAAB/AAAAAAAAH////+AAA' +
-      'H8AAAAAAAAf////4AAAfwAAAAAAAA/////AAAD/AAAAAAAAD////8AAAP4AAAAAAAAP/' +
-      '///gAAA/gAAAAAAAA////8AAAH+AAAAAAAAB////gAAAfwAAAAAAAAH///8AAAD/AAAA' +
-      'AAAAAP///gAAAf4AAAAAAAAA///4AAAB/gAAAAAAAAB//8AAAAP8AAAAAAAAAH/+AAAA' +
-      'B/gAAAAAAAAAP/wAAAAP+AAAAAAAAAAf/AAAAD/wAAAAAAAAAA/+AAAAf+AAAAAAAAAA' +
-      'B/8AAAP/wAAAAAAAAAAD/8AAH/+AAAAAAAAAAAH//wP//gAAAAAAAAAAAP/////8AAAA' +
-      'AAAAAAAAP/////AAAAAAAAAAAAAP////wAAAAAAAAAAAAAH///4AAAAAAAAAAAAAAB//' +
-      '4AAAAAAAAA==',
+      "AAAAAAAAAAAAgAAAAAAAAAAAAAAAAAPgAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAf" +
+      "+AAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAf/4AAAAAAAAAAAAAAAD//wAAAAAAAAAA" +
+      "AAAAAf//gAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAf//8AAAAAAAAAAAAAAD///4AAA" +
+      "AAAAAAAAAAAP///gAAAAAAAAAAAAAB////AAAAAAAAAAAAAAP///8AAAAAAAAAAAAAA/" +
+      "///4AAAAAAAAAAAAAH////gAAAAAAAAAAAAA/////AAAAAAAAAAAAAD////8AAAAAAAA" +
+      "AAAAAf////wAAAAAAAAAAAAB/////gAAAAAAAAAAAAP////+AAAAAAAAAAAAA/////8A" +
+      "AAAAAAAAAAAH/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/////+AAAAAAAAAAAAP" +
+      "//+D/4AAAAAAAAAAAA///AD/gAAAAAAAAAAAH//wAH+AAAAAAAAAAAAf/+AAP8AAAAAA" +
+      "AAAAAB//wAAfwAAAAAAAAAAAP/+AAB/AAAAAAAAAAAA//wAAD8AAAAAAAAAAAD/+AAAP" +
+      "wAAAAAAAAAAAP/4AAA/gAAAAAAAAAAB//AAAD+AAAAAAAAAAAH/4AAAH4AAAAAAAAAAA" +
+      "f/gAAAfgAAAAAAAAAAB/8AAAB+AAAAAAAAAAAP/wAAAH4AAAAAAAAAAA/+AAAAfgAAAA" +
+      "AAAAAAD/4AAAB+AAAAAAAAAAAP/AAAAH4AAAAAAAAAAA/8AAAA/wAAAAAAAAAAD/gAAA" +
+      "D/AAAAAAAAAAAf+AAAAP8AAAAAAAAAAB/4AAAA/wAAAAAAAAAAH/AAAAD/AAAAAAAAAA" +
+      "Af8AAAAf8AAAAAAAAAAB/wAAAB/wAAAAAAAAAAH/AAAAH+AAAAAAAAAAAf8AAAA/4AAA" +
+      "AAAAAAAB/gAAAD/gAAAAAAAAAAH+AAAAf+AAAAAAAAAAAf4AAAB/4AAAAAAAAAAB/gAA" +
+      "AH/gAAAAAAAAAAH+AAAA/+AAAAAAAAAAAf4AAAH/4AAAAAAAAAAB/AAAAf/AAAAAAAAA" +
+      "AAH8AAAD/8AAAAAAAAAAAfwAAAP/wAAAAAAAAAAB/AAAB//AAAAAAAAAAAH8AAAP/8AA" +
+      "AAAAAAAAAfwAAB//gAAAAAAAAAAB/AAAH/+AAAAAAAAAAAH8AAA//4AAAAAAAAAAAfwA" +
+      "AH//gAAAAAAAAAAB/AAA//8AAAAAAAAAAAH8AAH//wAAAAAAAAAAAfwAA///AAAAAAAA" +
+      "AAAB/AAD//4AAAAAAAAAAAH8AAf//gAAAAAAAAAAAfwAD//8AAAAAAAAAAAB/AAf//wA" +
+      "AAAAAAAAAAH8AD///AAAAAAAAAAAAPwAf//4AAAAAAAAAAAA/AD///gAAAAAAAAAAAD+" +
+      "A///8AAAAAAAAAAAAP4H///wAAAAAAAAAAAA/g///+AAAAAAAAAAAAD+H///4AAAAAAA" +
+      "AAAAAP4////AAAAAAAAAAAAA/n///8AAAAAAAAAAAAB/////gAAAAAAAAAAAAH////8A" +
+      "AAAAAAAAAAAAf////wAAAAAAAAAAAAB////+AAAAAAAAAAAAAH////wAAAAAAAAAAAAA" +
+      "/////AAAAAAAAAAAAAH////4AAAAAAAAAAAAA/////AAAAAAAAAAAAAP////8AAAAAAA" +
+      "AAAAAB/////gAAAAAAAAAAAAP////8AAAAAAAAAAAAB/////gAAAAAAAAAAAAP////8A" +
+      "AAAAAAAAAAAB/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf" +
+      "////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAA" +
+      "AAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf////+AAAAAAAAAAAAD/////wA" +
+      "AAAAAAAAAAAf////+AAAAAAAAAAAAD/////wAAAAAAAAAAAAf/////AAAAAAAAAAAAD/" +
+      "////8AAAAAAAAAAAAf/////wAAAAAAAAAAAD//////gAAAAAAAAAAAf////7+AAAAAAA" +
+      "AAAAD/////P4AAAAAAAAAAAf////w/gAAAAAAAAAAB////+B+AAAAAAAAAAAP////wH4" +
+      "AAAAAAAAAAB////+AfwAAAAAAAAAAP////gB/AAAAAAAAAAB////8AH8AAAAAAAAAAH/" +
+      "///gAfwAAAAAAAAAA////8AA/AAAAAAAAAAH////gAD8AAAAAAAAAAf///8AAP4AAAAA" +
+      "AAAAD////gAA/gAAAAAAAAAf///8AAD+AAAAAAAAAB////gAAP4AAAAAAAAAP///4AAA" +
+      "fgAAAAAAAAB////AAAB+AAAAAAAAAH///4AAAH8AAAAAAAAA////gAAAfwAAAAAAAAD/" +
+      "//8AAAB/AAAAAAAAAf///gAAAH8AAAAAAAAB///8AAAAPwAAAAAAAAP///gAAAA/gAAA" +
+      "AAAAA///8AAAAD/AAAAAAAAH///gAAAAP//4AAAAAAf//8AAAAB///+AAAAAB///gAAA" +
+      "A/////AAAAAP//+AAAAP/////AAAAA///wAAAD//////AAAAD//+AAAA///////AAAAf" +
+      "//wAAAP//////+AAAB///AAAB///////+AAAH//4AAAP///////8AAA///AAAB//////" +
+      "//4AAD//8AAAP////////wAAP//gAAB/////////gAA//+AAAP/////////AAH//wAAB" +
+      "/////////+AAf//AAAP/////////8AB//4AAA//////////wAH//gAAH//////////gA" +
+      "f/8AAA///////////AD//wAAD//////////8AP//AAAf//////////4A//4AAB//////" +
+      "/////gD//gAAP/////j/////AP/+AAA////n+A////8A//wAAD///wP4Af///4D//AAA" +
+      "f//8A/gAf///gP/8AAB///AD+AA///+A//wAAH//4AP4AA///8D//AAAf/+AAfwAB///" +
+      "wP/4AAD//wAB/AAD///A//gAAP/+AAH8AAH//8D/+AAA//4AAfwAAP//4P/4AAD//AAB" +
+      "/AAAf//g//gAAP/4AAH8AAA//+D/+AAA//gAAP4AAD//4H/4AAD/8AAA/gAAH//gf/gA" +
+      "AP/wAAD+AAAf/+B/+AAA//AAAP4AAA//4H/4AAD/4AAA/gAAD//gf/gAAH/gAAD+AAAH" +
+      "/+A/+AAAf+AAAH8AAAf/4D/4AAB/4AAAfwAAB//gP/gAAH/gAAB/AAAD/+A/+AAAf+AA" +
+      "AH8AAAP/4B/4AAA/4AAAfwAAA//gH/wAAD/gAAB/AAAD/+Af/AAAP+AAAD+AAAP/4A/8" +
+      "AAAf8AAAP4AAA//gD/wAAB/wAAA/gAAD/8AP/gAAD/gAAD+AAAP/wAf+AAAP+AAAP4AA" +
+      "A//AB/4AAAf8AAA/gAAD/8AD/wAAA/wAAB/AAAP/gAP/AAAD/gAAH8AAA/+AAf+AAAH/" +
+      "AAAfwAAH/wAB/4AAAP+AAB/AAAf/AAD/wAAAf8AAH8AAB/8AAH/gAAA/4AAf4AAP/gAA" +
+      "f+AAAB/4AA/gAA/+AAA/8AAAB/4AD+AAH/wAAB/4AAAD/wAP4AAf+AAAD/wAAAB/gA/g" +
+      "AD/4AAAH/gAAAB8AD+AAP/AAAAf/AAAAAAAH8AB/4AAAA/+AAAAAAAfwAP/gAAAB/8AA" +
+      "AAAAB/AB/8AAAAD/4AAAAAAH8AP/gAAAAH/4AAAAAAfwB/8AAAAAH/wAAAAAB/Af/gAA" +
+      "AAAP/wAAAAAD+D/8AAAAAAf/wAAAAAP4//AAAAAAAf/wAAAAA/v/4AAAAAAA//4AAAAD" +
+      "///AAAAAAAA//8AAAAP//wAAAAAAAA///gAAB//8AAAAAAAAA////AH///gAAAAAAAAA" +
+      "////////wAAAAAAAAAAf//////8AAAAAAAAAAAP//////AAAAAAAAAAAAD/////8AAAA" +
+      "AAAAAAAAAf//+f4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAA" +
+      "AP4AAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP8AAAAAAAAA" +
+      "AAAAAAAAfwAAAAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAA" +
+      "AAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAA" +
+      "AAA/gAAAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAAAAA/gAAAAAAA" +
+      "AAAAAAAAAD/AAAAAAAAAAAAAAAAAH8AAAAAAAAAAAAAAAAAfwAAAAAAAAAAAAAAAAB/A" +
+      "AAAAAAAAAH/gAAAAH8AAAAAAAAAB//gAAAAfwAAAAAAAAAf//gAAAB/AAAAAAAAAD///" +
+      "AAAAH+AAAAAAAAAf//+AAAAf4AAAAAAAAH///8AAAA/gAAAAAAAAf///4AAAD+AAAAAA" +
+      "AAD////wAAAP4AAAAAAAAf////AAAA/gAAAAAAAB////8AAAD+AAAAAAAAH////4AAAP" +
+      "4AAAAAAAA/////gAAA/gAAAAAAAD////+AAAD+AAAAAAAAP////4AAAP4AAAAAAAB///" +
+      "//wAAA/gAAAAAAAH/////AAAD+AAAAAAAAf////8AAAP4AAAAAAAB/////wAAA/gAAAA" +
+      "AAAH/////AAAH+AAAAAAAAf////4AAAfwAAAAAAAB/////gAAB/AAAAAAAAH////+AAA" +
+      "H8AAAAAAAAf////4AAAfwAAAAAAAA/////AAAD/AAAAAAAAD////8AAAP4AAAAAAAAP/" +
+      "///gAAA/gAAAAAAAA////8AAAH+AAAAAAAAB////gAAAfwAAAAAAAAH///8AAAD/AAAA" +
+      "AAAAAP///gAAAf4AAAAAAAAA///4AAAB/gAAAAAAAAB//8AAAAP8AAAAAAAAAH/+AAAA" +
+      "B/gAAAAAAAAAP/wAAAAP+AAAAAAAAAAf/AAAAD/wAAAAAAAAAA/+AAAAf+AAAAAAAAAA" +
+      "B/8AAAP/wAAAAAAAAAAD/8AAH/+AAAAAAAAAAAH//wP//gAAAAAAAAAAAP/////8AAAA" +
+      "AAAAAAAAP/////AAAAAAAAAAAAAP////wAAAAAAAAAAAAAH///4AAAAAAAAAAAAAAB//" +
+      "4AAAAAAAAA==",
   },
   sharp: {
     w: 40,
     h: 112,
     originFromTop: 56,
     data:
-      'AAAADgAAAAAfAAAAAB8AAAAAHwAAAAAfAAAAAB8AAAAAHwAAcAAfAAD4AB8AAPgAHwAA' +
-      '+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4' +
-      'AB8AAPgAHwAA+AAfDwD4AB//APgAP/8A+AA//wD4AH//APgA//8A+AP//wD4D///APx/' +
-      '//8A/////wD/////Af////8D/////w//////P/////5/////+P/////A/////4D/////' +
-      'AP////8A/////wD///gfAP//wB8A//8AHwD//gAfAP/8AB8A//gAHwD/+AAfAPn4AB8A' +
-      'wPgAHwAA+AAfAAD4AB8AAPgAHwAA8AAfAADwAB8AAPAAHwAA8AAfAADwAB8CAPAAH58A' +
-      '8AAf/wDwAB//APAAH/8A8AA//wD4AH//APgA//8A+AP//wD4D///APz///8A/////wH/' +
-      '////A/////8f/////n/////8//////D/////wP////8A/////wD/////AP///j8A///4' +
-      'PwD//+AfAP//AB8A//wAHwD/+AAfAP/4AB8A//gAHwDx+AAfAAD4AB8AAPgAHwAA+AAf' +
-      'AAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8A' +
-      'APgAHwAA+AAeAAD4AAwAAPgAAAAA+AAAAAD4AAAAAPgAAAAA+AAAAAD4AAAAAGAAAAA=',
+      "AAAADgAAAAAfAAAAAB8AAAAAHwAAAAAfAAAAAB8AAAAAHwAAcAAfAAD4AB8AAPgAHwAA" +
+      "+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4" +
+      "AB8AAPgAHwAA+AAfDwD4AB//APgAP/8A+AA//wD4AH//APgA//8A+AP//wD4D///APx/" +
+      "//8A/////wD/////Af////8D/////w//////P/////5/////+P/////A/////4D/////" +
+      "AP////8A/////wD///gfAP//wB8A//8AHwD//gAfAP/8AB8A//gAHwD/+AAfAPn4AB8A" +
+      "wPgAHwAA+AAfAAD4AB8AAPgAHwAA8AAfAADwAB8AAPAAHwAA8AAfAADwAB8CAPAAH58A" +
+      "8AAf/wDwAB//APAAH/8A8AA//wD4AH//APgA//8A+AP//wD4D///APz///8A/////wH/" +
+      "////A/////8f/////n/////8//////D/////wP////8A/////wD/////AP///j8A///4" +
+      "PwD//+AfAP//AB8A//wAHwD/+AAfAP/4AB8A//gAHwDx+AAfAAD4AB8AAPgAHwAA+AAf" +
+      "AAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8AAPgAHwAA+AAfAAD4AB8A" +
+      "APgAHwAA+AAeAAD4AAwAAPgAAAAA+AAAAAD4AAAAAPgAAAAA+AAAAAD4AAAAAGAAAAA=",
   },
   flat: {
     w: 36,
     h: 98,
     originFromTop: 70,
     data:
-      'PgAAAAB/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/' +
-      'AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8A' +
-      'AAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP4AAAAA/gAA' +
-      'AAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAA' +
-      'AP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AH/AAP4D//AA/gf//AD/H//+AP////8A' +
-      '/////4D/////wP/////A//8H/+D//AP/4P/wAf/w/+AA//D/wAD/8P+AAH/wfwAAf/B/' +
-      'AAB/8H4AAH/wfgAAf/B+AAB/8H4AAH/wfgAAf+B+AAD/4H4AAP/AfgAA/8B+AAH/wH4A' +
-      'Af+AfgAD/wB+AAP/AH4AB/4AfgAH/AB+AA/8AH4AH/gAfgA/8AB+AH/gAH8A/8AAfwH/' +
-      'gAB/A/8AAH8H/gAAfx/8AAB///AAAH//4AAAf//AAAB//wAAAH/+AAAAf/wAAAB/8AAA' +
-      'AH/gAAAAf8AAAAB/gAAAAD8AAAAAPAAAAAA4AAAAAA==',
+      "PgAAAAB/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/" +
+      "AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8A" +
+      "AAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP8AAAAA/wAAAAD/AAAAAP4AAAAA/gAA" +
+      "AAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AAAA" +
+      "AP4AAAAA/gAAAAD+AAAAAP4AAAAA/gAAAAD+AH/AAP4D//AA/gf//AD/H//+AP////8A" +
+      "/////4D/////wP/////A//8H/+D//AP/4P/wAf/w/+AA//D/wAD/8P+AAH/wfwAAf/B/" +
+      "AAB/8H4AAH/wfgAAf/B+AAB/8H4AAH/wfgAAf+B+AAD/4H4AAP/AfgAA/8B+AAH/wH4A" +
+      "Af+AfgAD/wB+AAP/AH4AB/4AfgAH/AB+AA/8AH4AH/gAfgA/8AB+AH/gAH8A/8AAfwH/" +
+      "gAB/A/8AAH8H/gAAfx/8AAB///AAAH//4AAAf//AAAB//wAAAH/+AAAAf/wAAAB/8AAA" +
+      "AH/gAAAAf8AAAAB/gAAAAD8AAAAAPAAAAAA4AAAAAA==",
   },
   natural: {
     w: 27,
     h: 108,
     originFromTop: 54,
     data:
-      '/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA' +
-      'APwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA4PwA' +
-      'B+D8AD/g/AH/4Pwf/+D////g////4P///+D////g////4P///+D////g////4P///+D/' +
-      '///g////4P///+D//+/g//wH4P/wB+D/wAfg/wAH4P4AB+D8AAfg/AAH4PwAB+D8AAfg' +
-      '/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAP4PwAH+D8AH/g/AH/' +
-      '4PwP/+D////g////4P///+D////g////4P///+D////g////4P///+D////g////4P//' +
-      '/+D////g////4P///+D//g/g/+AH4P8AB+D8AAfg4AAH4AAAB+AAAAfgAAAH4AAAB+AA' +
-      'AAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfg' +
-      'AAAH4AAAB+AAAAfgAAAH4AAAB+AAAAOA',
+      "/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA" +
+      "APwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAA4PwA" +
+      "B+D8AD/g/AH/4Pwf/+D////g////4P///+D////g////4P///+D////g////4P///+D/" +
+      "///g////4P///+D//+/g//wH4P/wB+D/wAfg/wAH4P4AB+D8AAfg/AAH4PwAB+D8AAfg" +
+      "/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAH4PwAB+D8AAfg/AAP4PwAH+D8AH/g/AH/" +
+      "4PwP/+D////g////4P///+D////g////4P///+D////g////4P///+D////g////4P//" +
+      "/+D////g////4P///+D//g/g/+AH4P8AB+D8AAfg4AAH4AAAB+AAAAfgAAAH4AAAB+AA" +
+      "AAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfgAAAH4AAAB+AAAAfg" +
+      "AAAH4AAAB+AAAAfgAAAH4AAAB+AAAAOA",
   },
   breath: {
     w: 24,
     h: 40,
     originFromTop: 40,
     data:
-      'Af8AB//AD//wH//4P//8f//8f//+///+////////////////////f///f///P///H///' +
-      'D///A///AA//AAf/AAf+AAP+AAP+AAP8AAP8AAf4AAf4AA/wAA/wAB/gAD/AAH+AAP8A' +
-      'Af4AA/gAD/AAH8AAH4AADAAA',
-  },
-  ornament: {
-    w: 116,
-    h: 39,
-    originFromTop: 39,
-    data:
-      'AAAAPgAAAAAHgAAAAAPAAAAAfwAAAAAfwAAAAA/gAAAA/4AAAAA/4AAAAB/wAAAB/8AA' +
-      'AAB/8AAAAD/wAAAD/+AAAAD/+AAAAD/gAAAH//AAAAH//AAAAH/AAAAP//AAAAH//gAA' +
-      'AP/AAAAf//gAAAP//wAAAf+AAAA///wAAAf//wAAA/8AAAB///4AAA///4AAB/4AAAB/' +
-      '//8AAB///8AAB/wAAAD///8AAD///+AAD/gAAAH///+AAH////AAH/AAAAP////AAP//' +
-      '//gAP+AAAAf////gAf////gAf8AAAA/////wA/////wA/4AAAB/////4B/////4A/4AA' +
-      'AD/////4D/////8B/wAAAD/////8H/////+D/gAAAH/////+P//////v/AAAAP//////' +
-      'f///////+AAAAf/P//////v/////8AAAA/+H/////+D/////4AAAB/8D/////8D/////' +
-      'wAAAD/4B/////4B/////gAAAH/wA/////wA/////AAAAP/AAf////gAf///+AAAAP+AA' +
-      'P////AAP///8AAAAf8AAH///+AAH///4AAAA/4AAD///8AAD///wAAAA/wAAB///wAAB' +
-      '///wAAAA/gAAA///gAAA///gAAAAMAAAAf//AAAAf//AAAAAAAAAAP/+AAAAP/+AAAAA' +
-      'AAAAAH/8AAAAH/8AAAAAAAAAAD/4AAAAD/4AAAAAAAAAAD/wAAAAB/wAAAAAAAAAAB/g' +
-      'AAAAA/gAAAAAAAAAAA+AAAAAAfAAAAAA',
+      "Af8AB//AD//wH//4P//8f//8f//+///+////////////////////f///f///P///H///" +
+      "D///A///AA//AAf/AAf+AAP+AAP+AAP8AAP8AAf4AAf4AA/wAA/wAB/gAD/AAH+AAP8A" +
+      "Af4AA/gAD/AAH8AAH4AADAAA",
   },
 };
 
@@ -273,10 +255,10 @@ const GLYPHS_PACKED = {
 // runs in the browser and in Node)
 function b64decode(str) {
   const chars =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const lut = {};
   for (let i = 0; i < 64; i++) lut[chars[i]] = i;
-  const clean = str.replace(/=+$/, '');
+  const clean = str.replace(/=+$/, "");
   const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
   let o = 0;
   for (let i = 0; i < clean.length; i += 4) {
@@ -325,6 +307,7 @@ export const TAPE_DEFAULTS = {
   breathGapMs: 350, // a rest at least this long prints a breath mark
   gapRows: 8, // blank rows between consecutive notes
   graceGapRows: 2, // tighter gap around grace notes (back-to-back events)
+  ornamentGapRows: 6, // air under an ornament arc before its note
   minNoteRows: 3, // every note prints at least this many rows — a grace
   // note needs a visible head, not a 1-row sliver under a big accidental
   breathRows: 10, // extra blank rows on each side of a breath mark
@@ -474,6 +457,36 @@ export function createTapeRenderer(config) {
     }
   }
 
+  // Ornament mark: a small backwards "c" (an arc opening toward the
+  // earlier tape) hovering just above the note's accidental/notehead,
+  // centered in the space between the notes — drawn procedurally like
+  // the ledger lines, so it stays small at any glyph scale. It is
+  // painted OVER existing rows instead of inserting its own, so
+  // ornamented main notes stay close together; painting is deferred to
+  // noteOff so the arc can be centered even when it overlaps the
+  // note's opening rows. Stroke swells slightly through the belly and
+  // thins at the tips, nib-style.
+  function paintOrnamentArc(centerRow, step) {
+    const r = Math.max(
+      4,
+      Math.round(cfg.staffGap * 0.35 * (cfg.glyphScale / 2))
+    );
+    const cx = xOfStep(step);
+    const openCos = Math.cos((125 * Math.PI) / 180); // opening half-angle
+    for (let gx = 0; gx <= 2 * r; gx++) {
+      const row = rows[centerRow - r + gx];
+      if (!row) continue;
+      const dx = gx - r;
+      const span = Math.sqrt(Math.max(0, r * r - dx * dx));
+      for (const dy of [span, -span]) {
+        // skip the opening sector (angle near 180° — the early side)
+        if (dx / r < openCos) continue;
+        const t = Math.round(2 + 4 * Math.max(0, dx / r));
+        setDots(row, Math.round(cx + dy) - (t >> 1), t);
+      }
+    }
+  }
+
   // Slide connector: a thin line carrying the pitch from the previous
   // note into this one — diagonal between different pitches, a dip
   // scoop for a same-pitch slide (played through the note below and
@@ -494,7 +507,7 @@ export function createTapeRenderer(config) {
   function emitKeySignature() {
     const n = Math.abs(cfg.keySig);
     const steps = cfg.keySig > 0 ? SIG_STEPS_SHARP : SIG_STEPS_FLAT;
-    const glyph = cfg.keySig > 0 ? 'sharp' : 'flat';
+    const glyph = cfg.keySig > 0 ? "sharp" : "flat";
     for (let i = 0; i < n; i++) {
       emitGlyph(glyph, steps[i]);
       emitBlank(3);
@@ -511,7 +524,7 @@ export function createTapeRenderer(config) {
     started = true;
     emitEmpty(cfg.startBlankRows);
     emitBlank(4);
-    emitGlyph('clef', 2); // the G clef winds around the G4 line
+    emitGlyph("clef", 2); // the G clef winds around the G4 line
     emitBlank(6);
     emitKeySignature();
     emitBlank(cfg.leadRows);
@@ -528,13 +541,20 @@ export function createTapeRenderer(config) {
     const preT = lastOffMs === null ? 0 : lastOffMs;
     if (!started) start();
     const sp = spellNote(midi, cfg.keySig);
+    const markFrom = rows.length; // where the inter-note space begins
     if (lastOffMs !== null) {
       if (tMs - lastOffMs >= cfg.breathGapMs) {
         emitBlank(cfg.breathRows);
-        emitGlyph('breath', 10); // above the staff, like on paper
-        emitBlank(cfg.breathRows);
+        // slightly small comma, with a touch more air after it than
+        // before the next note begins
+        emitGlyph("breath", 10, 0.8); // above the staff, like on paper
+        emitBlank(cfg.breathRows + 6);
       } else if (marks.slide && lastStep !== null) {
         emitSlide(lastStep, sp.step);
+      } else if (marks.ornament) {
+        // an ornamented attack keeps a bit of visible air under its
+        // arc, even at re-strike (zero-gap) transitions
+        emitBlank(cfg.ornamentGapRows);
       } else if (tMs - lastOffMs <= 40) {
         emitBlank(cfg.graceGapRows); // grace notes hug their neighbors
       } else {
@@ -543,14 +563,18 @@ export function createTapeRenderer(config) {
     }
     const led = ledgerSteps(sp.step);
     cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0, grace: !!grace };
-    if (marks.ornament) {
-      emitGlyph('ornament', 10); // above the staff, over the attack
-      emitBlank(2);
-    }
     if (sp.glyph) {
       // grace accidentals shrink with their notehead (same 0.6 ratio)
       emitGlyph(sp.glyph, sp.step, grace ? 0.6 : 1);
       emitBlank(3);
+    }
+    if (marks.ornament) {
+      // centered midway between the previous note's end and this
+      // note's first bar row; painted at noteOff once those rows exist
+      cur.arc = {
+        center: Math.round((markFrom + rows.length) / 2),
+        step: sp.step + (sp.glyph ? 4 : 2.5),
+      };
     }
     if (led.length) emitPad(led, cfg.ledgerPadRows);
     pushSpan(preRow, preT, tMs); // lead/gap/glyph rows cover the silence
@@ -577,6 +601,7 @@ export function createTapeRenderer(config) {
     pushSpan(cur.rStart, cur.onMs, tMs);
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);
+    if (cur.arc) paintOrnamentArc(cur.arc.center, cur.arc.step);
     if (!cur.grace) lastStep = cur.step; // slides connect main notes
     cur = null;
     lastOffMs = tMs;
