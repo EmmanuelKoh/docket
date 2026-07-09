@@ -7,7 +7,7 @@
 // (public/pcm-worklet.js, raw PCM to the main thread) → decimate to
 // ~22 kHz → windows to the pitch worker (public/pitch-worker.js) → v1
 // note tracker (components/tape-events.js) → a real-time SKETCH of the
-// tape and trace. FINAL: on Stop / Replay / Load clip, the recording is
+// tape and trace. FINAL: on Stop / Load clip, the recording is
 // transcribed by Basic Pitch (model in public/basic-pitch/) and decoded
 // by the shared pass-1/pass-2 modules (scripts/tape-eval/), then fed to
 // the tape renderer (components/tape-renderer.js) → exact printer rows,
@@ -41,7 +41,6 @@ export function initTapeTool() {
   const logEl = $('tapeEventLog');
   const micBtn = $('tapeMicBtn');
   const demoBtn = $('tapeDemoBtn');
-  const replayBtn = $('tapeReplayBtn');
   const newBtn = $('tapeNewBtn');
   const printBtn = $('tapePrintBtn');
   const saveBtn = $('tapeSaveClipBtn');
@@ -108,6 +107,7 @@ export function initTapeTool() {
   let traceMode = 'aligned'; // 'aligned' (tape rows) | 'linear' (time)
   let traceZoom = 90; // linear-trace columns per second of audio
   let lastDecode = null; // { notes, opts } of the newest neural decode
+  let pendingRerender = false; // trace backfill finished mid-playback
 
   // ---- sliders: id -> config key, with live application ----
   function bindSlider(id, apply, fmt) {
@@ -125,7 +125,32 @@ export function initTapeTool() {
   function layoutCfg(key) {
     return (v) => {
       if (renderer) renderer.setConfig(keyVal(key, v));
+      scheduleRerender();
     };
+  }
+
+  // finished takes re-render automatically as settings change (cheap,
+  // from the cached decode); live recording keeps applying values to
+  // new tape only. Debounced: sliders fire per pixel of drag. A floor
+  // change also re-runs the trace analysis (the floor is baked into
+  // the pitch detector's band), refreshing the trace pane and the
+  // ornament evidence — the tape updates once more when it finishes.
+  let rerenderTimer = 0;
+  let rerenderReanalyze = false;
+  function scheduleRerender(reanalyze = false) {
+    if (!lastDecode || micOn || replaying) return;
+    rerenderReanalyze = rerenderReanalyze || reanalyze;
+    clearTimeout(rerenderTimer);
+    rerenderTimer = setTimeout(() => {
+      if (playState !== 'stopped') {
+        pendingRerender = true;
+        return;
+      }
+      const reanalyzeNow = rerenderReanalyze;
+      rerenderReanalyze = false;
+      rerenderView();
+      if (reanalyzeNow) traceReplay();
+    }, 150);
   }
   function keyVal(k, v) {
     const o = {};
@@ -142,6 +167,8 @@ export function initTapeTool() {
     'tapeFloor',
     (v) => {
       melodyFloor = v;
+      // the register split changes the decode AND the trace analysis
+      scheduleRerender(true);
     },
     (v) => `${v} Hz`,
   );
@@ -173,6 +200,7 @@ export function initTapeTool() {
   }
   keySel.addEventListener('change', () => {
     if (renderer) renderer.setConfig({ keySig: parseInt(keySel.value, 10) });
+    scheduleRerender();
   });
 
   // ---- tape preview: offscreen canvas in PRINTER orientation (x = dot,
@@ -396,6 +424,7 @@ export function initTapeTool() {
     traceCols = 1;
     droneScore.clear(); // re-learned per take (and per replay)
     analysisGen++; // the worker forgets its background spectrum too
+    pendingRerender = false; // any queued re-render is now stale
     evQueue = [];
     frameQueue = [];
     paintVisible();
@@ -769,7 +798,7 @@ export function initTapeTool() {
     resetTake(false);
     try {
       if (!neural) {
-        statusEl.textContent = 'loading transcription model…';
+        statusEl.textContent = 'loading the transcriber…';
         const bpModule = await import('@spotify/basic-pitch');
         neural = {
           ...bpModule,
@@ -824,7 +853,6 @@ export function initTapeTool() {
     syncTransport();
     traceReplay(); // fill the raw-pitch trace under the finished tape
   }
-  replayBtn.addEventListener('click', neuralReplay);
 
   // render the cached decode into the tape at the current view mode:
   // 'full' = pass 1 + 2 + 3 (ornaments, splits, slides, squiggles);
@@ -835,13 +863,15 @@ export function initTapeTool() {
     if (viewMode === 'skeleton') {
       const skeleton = skeletonize(notes, opts);
       timeline = skeleton;
-      label = `skeleton view — ${skeleton.length} main notes`;
+      label = `main notes only — ${skeleton.length} notes`;
     } else {
       const decorated = decorate(notes, skeletonize(notes, opts), opts);
       // the fine-cents trace frames (when the backfill has run) add
       // ornament marks the neural model misses — see marks.mjs
       timeline = annotate(notes, decorated, opts, traceFrames);
-      label = `transcribed ${decorated.skeleton.length} notes + ${decorated.graces.length} ornaments (neural)`;
+      const mains = timeline.filter((e) => !e.mark).length;
+      const arcs = timeline.filter((e) => e.ornament || e.mark).length;
+      label = `${mains} notes · ${arcs} ornaments`;
     }
     for (const n of timeline) {
       if (n.mark) {
@@ -872,7 +902,11 @@ export function initTapeTool() {
     const frames = traceFrames;
     resetTake(false);
     traceFrames = frames;
-    statusEl.textContent = renderDecoded(lastDecode.notes, lastDecode.opts);
+    // options recomputed from the CURRENT controls (the Melody floor
+    // can change between decode and re-render)
+    statusEl.textContent = renderDecoded(lastDecode.notes, {
+      melodyLoMidi: Math.round(69 + 12 * Math.log2(melodyFloor / 440)),
+    });
     rebuildTrace();
   }
   viewSel.addEventListener('change', () => {
@@ -897,9 +931,22 @@ export function initTapeTool() {
   // the tape (continuous cents — finer than the model's 1/3-semitone
   // grid, so it answers "did the recording even capture that figure?"
   // by eye). No note events; the tape itself is the neural decode's.
+  let tracing = false; // one backfill at a time; latest request wins
+  let traceAgain = false;
   async function traceReplay() {
     if (micOn || recLen < WINDOW || !renderer) return;
+    if (tracing) {
+      // the running backfill aborts on the analysisGen bump; rerun
+      // with fresh settings once it exits
+      traceAgain = true;
+      return;
+    }
+    tracing = true;
     ensureWorker();
+    // a full re-analysis replaces the previous frames
+    traceFrames = [];
+    traceCols = 1;
+    traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
     const gen = analysisGen;
     const trk = createNoteTracker(trackerValues());
     const total = Math.floor((recLen - WINDOW) / HOP) + 1;
@@ -949,16 +996,20 @@ export function initTapeTool() {
     };
     inFlight = false;
     paintTrace();
-    // the fine frames may reveal ornaments the neural decode missed —
-    // re-render the tape with them (instant, from the cache), unless
-    // audio is mid-play (a reset would yank the playhead)
-    if (
-      lastDecode &&
-      !micOn &&
-      analysisGen === gen &&
-      playState === 'stopped'
-    ) {
-      rerenderView();
+    tracing = false;
+    if (traceAgain) {
+      // settings changed while this backfill ran — redo with them
+      traceAgain = false;
+      traceReplay();
+      return;
+    }
+    // the fine frames may reveal ornaments (and revived notes) the
+    // neural decode missed — re-render the tape with them (instant,
+    // from the cache). If audio is mid-play, queue it: a reset now
+    // would yank the playhead
+    if (lastDecode && !micOn && analysisGen === gen) {
+      if (playState === 'stopped') rerenderView();
+      else pendingRerender = true;
     }
   }
 
@@ -1145,6 +1196,7 @@ export function initTapeTool() {
       playState = 'stopped';
       playOffset = 0;
       syncTransport();
+      applyPendingRerender();
     };
     playStartedAt = playerCtx.currentTime;
     playSource.start(0, playOffset);
@@ -1158,6 +1210,15 @@ export function initTapeTool() {
     killSource();
     playState = 'paused';
     syncTransport();
+    applyPendingRerender();
+  }
+
+  // a re-render deferred because audio was playing when the trace
+  // backfill completed — apply as soon as playback rests
+  function applyPendingRerender() {
+    if (!pendingRerender || micOn || replaying) return;
+    pendingRerender = false;
+    rerenderView();
   }
 
   function stopClip(keepOffset) {
@@ -1165,6 +1226,7 @@ export function initTapeTool() {
     playState = 'stopped';
     if (!keepOffset) playOffset = 0;
     syncTransport();
+    applyPendingRerender();
   }
 
   function syncTransport() {
