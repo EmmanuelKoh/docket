@@ -307,7 +307,8 @@ export const TAPE_DEFAULTS = {
   breathGapMs: 350, // a rest at least this long prints a breath mark
   gapRows: 8, // blank rows between consecutive notes
   graceGapRows: 2, // tighter gap around grace notes (back-to-back events)
-  ornamentGapRows: 6, // air under an ornament arc before its note
+  ornamentGapRows: 12, // space between the notes an ornament sits
+  // between — the arc centers in it, with air on both sides
   minNoteRows: 3, // every note prints at least this many rows — a grace
   // note needs a visible head, not a 1-row sliver under a big accidental
   breathRows: 10, // extra blank rows on each side of a breath mark
@@ -565,8 +566,9 @@ export function createTapeRenderer(config) {
     const led = ledgerSteps(sp.step);
     cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0, grace: !!grace };
     if (sp.glyph) {
-      // grace accidentals shrink with their notehead (same 0.6 ratio)
-      emitGlyph(sp.glyph, sp.step, grace ? 0.6 : 1);
+      // main accidentals a hair under full size; grace accidentals
+      // shrink with their notehead (same 0.6 ratio)
+      emitGlyph(sp.glyph, sp.step, grace ? 0.6 : 0.9);
       emitBlank(3);
     }
     if (marks.ornament) {
