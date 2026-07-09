@@ -98,15 +98,40 @@ function resnapSharpRuns(notes, o) {
   if (center === null) return notes;
 
   // walk same-pitch runs; a maximal group of consecutive low segments
-  // re-snaps when it sustains long enough and is not too deep overall
+  // re-snaps when it is not too deep overall and either sustains
+  // note-length (resnapRunSec) or — for SHORT runs down to minLenSec —
+  // would surface a DISTINCT hidden note: a quick sharp-played D#4
+  // between E4s (maintainer-confirmed on the pitch trace). A short low
+  // run ADJOINING material of its flip target is that lower note's own
+  // crest or slide instead (the slid-to G4 sits low over its F#4
+  // neighbors and must keep its label), so it does not flip
   const out = notes.map((n) => ({ ...n }));
   let group = [];
   const flush = () => {
     const dur = group.reduce((a, i) => a + stats[i].dur, 0);
     const mean =
       group.reduce((a, i) => a + stats[i].mean * stats[i].dur, 0) / (dur || 1);
-    if (dur >= o.resnapRunSec && mean >= center - o.resnapMaxBins) {
-      for (const i of group) out[i].midi -= 1;
+    if (dur >= o.minLenSec - 1e-3 && mean >= center - o.resnapMaxBins) {
+      const first = stats[group[0]].n;
+      const last = stats[group[group.length - 1]].n;
+      const target = first.midi - 1;
+      const adjoinsTarget = notes.some(
+        (n) =>
+          n.midi === target &&
+          n.amp >= o.candidateAmp &&
+          (Math.abs(n.t1 - first.t0) <= 0.15 ||
+            Math.abs(n.t0 - last.t1) <= 0.15),
+      );
+      // a short run must also be COHERENT — every frame in the tight
+      // low band. A hidden sharp-played note sits steadily just under
+      // the line (min bend 0 measured on all confirmed cases); reverb-
+      // contaminated material spikes far deeper on single frames
+      const coherent = group.every((i) =>
+        stats[i].n.bends.every((b) => b >= center - o.resnapMaxBins),
+      );
+      if (dur >= o.resnapRunSec || (!adjoinsTarget && coherent)) {
+        for (const i of group) out[i].midi -= 1;
+      }
     }
     group = [];
   };
@@ -267,7 +292,9 @@ export function skeletonize(notes, opts = {}) {
   }
   return mergeRuns(
     skeleton.filter(
-      (n) => n.t1 - n.t0 > (truncated.has(n) ? o.minLenSec - 1e-3 : 0.02),
+      // 0.01 of slack: a real note whose head is squeezed to exactly
+      // minLenSec by a neighbor must not die to frame quantization
+      (n) => n.t1 - n.t0 > (truncated.has(n) ? o.minLenSec - 0.01 : 0.02),
     ),
     o.mergeGapSec,
   );

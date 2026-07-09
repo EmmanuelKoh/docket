@@ -40,8 +40,9 @@ export const ORNAMENT_DEFAULTS = {
   graceMaxSec: 0.3, // longer residuals are reverb tails, not graces
   graceMaxSemisUp: 4, // ornaments use the next scale note or two
   graceReachSec: 0.3, // a grace belongs NEAR a main note, not silence
-  splitWindowSec: 0.15, // ornament-to-boundary slack for a split (the
-  // ornament's onset lags the re-strike by up to ~0.1s in the fixtures)
+  splitWindowSec: 0.11, // ornament-to-boundary slack for a split — the
+  // ornament's onset lags the re-strike by up to ~0.10s across every
+  // confirmed case; an ornament further out belongs to another note
   splitOnsetMin: 0.7, // model onset strength that marks a re-strike...
   splitAmpJump: 0.1, // ...unless amplitude jumps too (crescendo swells
   // fire the onset head; true re-strikes are amplitude-flat)
