@@ -323,9 +323,16 @@ entering at the right; the strip auto-follows unless the user scrolls
 back). The tape sits on white in both themes, receipts are paper.
 
 Left column (300px): session buttons (Start mic / Demo phrase / New
-take), key signature select (mono), then DETECTION and LAYOUT slider
-groups (label / native range / mono value, the Photo tool's tone-row
-idiom), a hint line, and CLIP buttons (Replay / Save clip / Load clip).
+take), key signature select (mono), then DETECTION (detector select —
+harmonic/drone-robust or autocorrelation — a drone-filter select — Off /
+Auto / fixed dam note — and a melody-floor slider above the threshold
+sliders) and LAYOUT
+slider groups (label / native range / mono value, the Photo tool's
+tone-row idiom), a hint line, and CLIP buttons (Replay / Save clip /
+Load clip). Replay is two-pass: a silent first pass lets the detector
+learn the room (drone, noise) over the whole clip, so the render pass
+starts converged — the status line shows "learning the room…" then
+"replaying…".
 The mic button while listening is --red text and border (red rule 5, a
 live capture). Right stage: the tape roll with the raw-pitch trace
 riding inside it (below), a transport row, then a NOTES mono event log

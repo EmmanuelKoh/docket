@@ -306,6 +306,9 @@ export const TAPE_DEFAULTS = {
   staffCenter: 288, // dot x of the middle staff line (B4)
   breathGapMs: 350, // a rest at least this long prints a breath mark
   gapRows: 8, // blank rows between consecutive notes
+  graceGapRows: 2, // tighter gap around grace notes (back-to-back events)
+  minNoteRows: 3, // every note prints at least this many rows — a grace
+  // note needs a visible head, not a 1-row sliver under a big accidental
   breathRows: 10, // extra blank rows on each side of a breath mark
   ledgerPadRows: 4, // ledger lines poke this far past the note (each side)
   startBlankRows: 24, // bare paper before the staff begins
@@ -394,11 +397,11 @@ export function createTapeRenderer(config) {
     const row = blankRow();
     if (withNote && cur) {
       for (const s of ledgerSteps(cur.step)) setLine(row, s);
-      setDots(
-        row,
-        xOfStep(cur.step) - Math.floor(cfg.noteDots / 2),
-        cfg.noteDots,
-      );
+      // grace notes print thinner, like small engraved noteheads
+      const dots = cur.grace
+        ? Math.max(4, Math.round(cfg.noteDots * 0.6))
+        : cfg.noteDots;
+      setDots(row, xOfStep(cur.step) - Math.floor(dots / 2), dots);
     }
     rows.push(row);
   }
@@ -477,7 +480,7 @@ export function createTapeRenderer(config) {
     emitBlank(cfg.leadRows);
   }
 
-  function noteOn(midi, tMs) {
+  function noteOn(midi, tMs, grace) {
     if (cur) noteOff(tMs); // defensive: overlapping monophonic events
     const preRow = rows.length;
     const preT = lastOffMs === null ? 0 : lastOffMs;
@@ -487,13 +490,15 @@ export function createTapeRenderer(config) {
         emitBlank(cfg.breathRows);
         emitGlyph('breath', 10); // above the staff, like on paper
         emitBlank(cfg.breathRows);
+      } else if (tMs - lastOffMs <= 40) {
+        emitBlank(cfg.graceGapRows); // grace notes hug their neighbors
       } else {
         emitBlank(cfg.gapRows);
       }
     }
     const sp = spellNote(midi, cfg.keySig);
     const led = ledgerSteps(sp.step);
-    cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0 };
+    cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0, grace: !!grace };
     if (sp.glyph) {
       emitGlyph(sp.glyph, sp.step);
       emitBlank(3);
@@ -516,7 +521,10 @@ export function createTapeRenderer(config) {
   function noteOff(tMs) {
     if (!cur) return;
     advance(tMs);
-    if (cur.rowsEmitted === 0) emitRow(true); // every note gets >= 1 row
+    while (cur.rowsEmitted < cfg.minNoteRows) {
+      emitRow(true); // every note gets a visible head
+      cur.rowsEmitted++;
+    }
     pushSpan(cur.rStart, cur.onMs, tMs);
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);

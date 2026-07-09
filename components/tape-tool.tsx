@@ -70,12 +70,28 @@ export function TapeTool() {
 
         <div className="tape-group">
           <span className="label">Detection</span>
+          <div className="tape-field">
+            <span className="label">Detector</span>
+            <select id="tapeDetector" className="tape-select" />
+          </div>
+          <div className="tape-field">
+            <span className="label">Drone filter</span>
+            <select id="tapeDrone" className="tape-select" />
+          </div>
+          <Slider
+            id="tapeFloor"
+            label="Melody floor"
+            min={120}
+            max={500}
+            def={230}
+          />
+          <Slider id="tapeTuning" label="Tuning" min={-50} max={50} def={0} />
           <Slider
             id="tapeClarity"
             label="Clarity gate"
-            min={50}
+            min={30}
             max={99}
-            def={88}
+            def={50}
           />
           <Slider
             id="tapeOnsetHold"
@@ -98,6 +114,21 @@ export function TapeTool() {
             max={300}
             def={80}
           />
+          <Slider
+            id="tapeFastHold"
+            label="Ornament hold"
+            min={10}
+            max={100}
+            def={30}
+          />
+          <Slider
+            id="tapeOrnament"
+            label="Ornament dip"
+            min={0}
+            max={90}
+            def={45}
+          />
+          <Slider id="tapeRestCut" label="Rest cut" min={0} max={50} def={18} />
           <Slider id="tapeOffMs" label="Release" min={30} max={400} def={110} />
         </div>
 

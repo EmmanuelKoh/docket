@@ -42,6 +42,8 @@ export function initTapeTool() {
   const saveBtn = $('tapeSaveClipBtn');
   const loadInput = $('tapeLoadClip');
   const keySel = $('tapeKeySig');
+  const droneSel = $('tapeDrone');
+  const detectorSel = $('tapeDetector');
   const vis = $('tapeCanvas');
   const visWrap = $('tapeCanvasWrap');
   const trace = $('tapeTraceCanvas');
@@ -82,6 +84,56 @@ export function initTapeTool() {
     o.textContent = k.name;
     if (k.sharps === 0) o.selected = true;
     keySel.appendChild(o);
+  });
+
+  // detector select: the harmonic-salience detector subtracts steady
+  // sounds (dam, noise) from the spectrum before finding the melody;
+  // the autocorrelation (MPM) detector is the original — marginally
+  // finer cents on clean solo takes, helpless against a drone.
+  let detectorMode = 'harm';
+  let melodyFloor = 230; // Hz — above the dam (185-210 measured), below
+  // the melody's lowest note (B3, 247): the dam never becomes a
+  // candidate, so detection is melody-only while subtraction eats the
+  // dam freely
+  let analysisGen = 0; // bumped per take: resets the worker's background
+  for (const [v, label] of [
+    ['harm', 'Harmonic · drone-robust'],
+    ['mpm', 'Autocorrelation · clean solo'],
+  ]) {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = label;
+    detectorSel.appendChild(o);
+  }
+  detectorSel.addEventListener('change', () => {
+    detectorMode = detectorSel.value;
+  });
+
+  // drone filter select: Off, Auto (track steady pitches), or a fixed
+  // dam note (G2..C5). Auto handles a dam that changes pitch mid-piece.
+  let droneMode = null; // null | 'auto' | midi number
+  for (const [v, label] of [
+    ['', 'Off'],
+    ['auto', 'Auto · track steady drones'],
+  ]) {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = label;
+    droneSel.appendChild(o);
+  }
+  for (let m = 43; m <= 72; m++) {
+    const o = document.createElement('option');
+    o.value = String(m);
+    o.textContent = `${noteLabel(m, 0)} · ${(440 * 2 ** ((m - 69) / 12)).toFixed(0)} Hz`;
+    droneSel.appendChild(o);
+  }
+  droneSel.addEventListener('change', () => {
+    droneMode =
+      droneSel.value === ''
+        ? null
+        : droneSel.value === 'auto'
+          ? 'auto'
+          : parseInt(droneSel.value, 10);
   });
 
   // ---- sliders: id -> config key, with live application ----
@@ -125,9 +177,30 @@ export function initTapeTool() {
     },
     (v) => (v / 100).toFixed(2),
   );
+  bindSlider(
+    'tapeFloor',
+    (v) => {
+      melodyFloor = v;
+    },
+    (v) => `${v} Hz`,
+  );
+  bindSlider('tapeTuning', trackerCfg('tuningCents'), (v) =>
+    v > 0 ? `+${v}¢` : `${v}¢`,
+  );
   bindSlider('tapeOnsetHold', trackerCfg('onsetHoldMs'), (v) => `${v} ms`);
   bindSlider('tapeRetrig', trackerCfg('retrigCents'), (v) => `±${v}¢`);
   bindSlider('tapeChangeHold', trackerCfg('changeHoldMs'), (v) => `${v} ms`);
+  bindSlider('tapeFastHold', trackerCfg('changeFastMs'), (v) => `${v} ms`);
+  bindSlider('tapeOrnament', trackerCfg('ornamentCents'), (v) =>
+    v > 0 ? `±${v}¢` : 'off',
+  );
+  bindSlider(
+    'tapeRestCut',
+    (v) => {
+      if (tracker) tracker.setParams({ restFrac: v / 100 });
+    },
+    (v) => `${v}%`,
+  );
   bindSlider('tapeOffMs', trackerCfg('offMs'), (v) => `${v} ms`);
 
   function layoutValues() {
@@ -143,9 +216,13 @@ export function initTapeTool() {
   function trackerValues() {
     return {
       clarityMin: parseFloat($('tapeClarity').value) / 100,
+      tuningCents: parseFloat($('tapeTuning').value),
       onsetHoldMs: parseFloat($('tapeOnsetHold').value),
       retrigCents: parseFloat($('tapeRetrig').value),
       changeHoldMs: parseFloat($('tapeChangeHold').value),
+      changeFastMs: parseFloat($('tapeFastHold').value),
+      ornamentCents: parseFloat($('tapeOrnament').value),
+      restFrac: parseFloat($('tapeRestCut').value) / 100,
       offMs: parseFloat($('tapeOffMs').value),
     };
   }
@@ -329,6 +406,10 @@ export function initTapeTool() {
     logEl.textContent = '';
     noteNowEl.textContent = '—';
     traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
+    droneScore.clear(); // re-learned per take (and per replay)
+    analysisGen++; // the worker forgets its background spectrum too
+    evQueue = [];
+    frameQueue = [];
     paintVisible();
     paintTrace();
     if (clearRecording) recLen = 0;
@@ -347,21 +428,93 @@ export function initTapeTool() {
     };
   }
 
-  function applyFrame(m) {
-    lastT = m.t;
-    const events = tracker.push({ tMs: m.t, freq: m.freq, clarity: m.clarity });
-    for (let i = 0; i < events.length; i++) {
-      const e = events[i];
+  // ---- drone filter. A dam (drone) is a second, steady periodicity:
+  // the detector's tallest peak is then often the drone, not the melody,
+  // and the mixture drags clarity down. Fixed mode gates a chosen note;
+  // Auto mode learns which pitches are drones by PERSISTENCE — every
+  // candidate pitch accrues a score with a ~5s time constant, and a
+  // pitch continuously present for ~10s (longer than any melody note) is
+  // treated as drone until it stops or moves, so a dam that changes
+  // pitch mid-piece is re-acquired automatically. The drone's
+  // octave-below ghost peak is persistent too, so it earns its own
+  // drone score without special handling. While the tracked melody
+  // sits within a semitone of a drone pitch the filter stands down —
+  // a melody note ON the dam still sustains. ----
+  const DRONE_CENTS = 70; // fixed-mode gate half-width
+  const DRONE_TAU_S = 5; // persistence EMA time constant
+  const DRONE_THRESH = 0.85; // score needed to call a pitch a drone
+  const droneScore = new Map(); // 50-cent bin -> presence score 0..1
+
+  const midiOf = (f) => 69 + 12 * Math.log2(f / 440);
+  const binOf = (f) => Math.round(midiOf(f) * 2);
+
+  function updateDroneScores(cands) {
+    const alpha = Math.min(1, HOP / effSr / DRONE_TAU_S);
+    const present = new Set(cands.map((c) => binOf(c.freq)));
+    for (const b of present) {
+      if (!droneScore.has(b)) droneScore.set(b, 0);
+    }
+    for (const [b, s] of droneScore) {
+      const next = s + ((present.has(b) ? 1 : 0) - s) * alpha;
+      if (next < 0.02 && !present.has(b)) droneScore.delete(b);
+      else droneScore.set(b, next);
+    }
+  }
+
+  function isDroneMidi(mf) {
+    if (droneMode === 'auto') {
+      const b = Math.round(mf * 2);
+      for (let d = -1; d <= 1; d++) {
+        if ((droneScore.get(b + d) || 0) >= DRONE_THRESH) return true;
+      }
+      return false;
+    }
+    const dc = Math.abs(mf - droneMode) * 100;
+    const ghost = Math.abs(mf + 12 - droneMode) * 100; // octave-below ghost
+    return dc <= DRONE_CENTS || ghost <= DRONE_CENTS;
+  }
+
+  function pickFrame(m, trk = tracker) {
+    if (m.cands?.length) updateDroneScores(m.cands);
+    if (droneMode === null || !m.cands || !m.cands.length) return m;
+    if (trk.sounding !== null && isDroneMidi(trk.sounding)) return m;
+    let best = 0;
+    for (const c of m.cands) best = Math.max(best, c.clarity);
+    const pick = m.cands.find(
+      (c) => c.clarity >= 0.7 * best && !isDroneMidi(midiOf(c.freq)),
+    );
+    return pick
+      ? { ...m, freq: pick.freq, clarity: pick.clarity }
+      : { ...m, freq: null, clarity: 0 };
+  }
+
+  // ---- look-behind rendering: the tape draws ~300ms behind the
+  // analysis. Some interpretations are only knowable in retrospect — an
+  // ornament is recognized when the pitch RETURNS, and the tracker then
+  // emits it backdated to its true start with its true span. The delay
+  // queue lets those backdated events land before that stretch of tape
+  // is drawn, so a grace note gets its real length instead of a
+  // zero-width sliver. Live printing runs seconds behind the horn
+  // anyway; 300ms of hindsight is free accuracy. ----
+  const RENDER_DELAY_MS = 300; // must exceed ornamentMaxMs + one hop
+  let evQueue = []; // note events awaiting the horizon, sorted by tMs
+  let frameQueue = []; // pitch frames awaiting the (delayed) trace
+
+  function feedRenderer(horizonMs) {
+    while (evQueue.length && evQueue[0].tMs <= horizonMs) {
+      const e = evQueue.shift();
+      renderer.advance(e.tMs);
       if (e.type === 'on') {
-        renderer.noteOn(e.midi, e.tMs);
-        lastOn = { midi: e.midi, tMs: e.tMs };
+        renderer.noteOn(e.midi, e.tMs, e.grace);
+        lastOn = { midi: e.midi, tMs: e.tMs, grace: e.grace };
         noteNowEl.textContent = noteLabel(e.midi, renderer.config.keySig);
       } else {
         renderer.noteOff(e.tMs);
         noteNowEl.textContent = '—';
         if (lastOn) {
+          const label = noteLabel(lastOn.midi, renderer.config.keySig);
           logLine(
-            noteLabel(lastOn.midi, renderer.config.keySig) +
+            (lastOn.grace ? `( ${label} )` : label) +
               '  ' +
               ((e.tMs - lastOn.tMs) / 1000).toFixed(2) +
               's',
@@ -370,32 +523,72 @@ export function initTapeTool() {
         }
       }
     }
-    renderer.advance(m.t);
+    renderer.advance(horizonMs);
+    while (frameQueue.length && frameQueue[0].t <= horizonMs) {
+      const f = frameQueue.shift();
+      drawTraceFrame(f.freq, f.clarity, f.sounding);
+    }
     if (renderer.rows.length) printBtn.disabled = false;
   }
 
-  // End-of-take: flush a still-sounding note through the same logging
-  // path a live noteOff takes.
+  function applyFrame(raw) {
+    const m = pickFrame(raw);
+    lastT = m.t;
+    const events = tracker.push({
+      tMs: m.t,
+      freq: m.freq,
+      clarity: m.clarity,
+      energy: m.energy,
+    });
+    if (events.length) {
+      evQueue.push(...events);
+      evQueue.sort((a, b) => a.tMs - b.tMs);
+    }
+    frameQueue.push({
+      t: m.t,
+      freq: m.freq,
+      clarity: m.clarity,
+      sounding: tracker.sounding,
+    });
+    feedRenderer(m.t - RENDER_DELAY_MS);
+    return m;
+  }
+
+  // End-of-take: flush the still-sounding note and drain the look-behind
+  // queue so the tape catches up to the last analyzed frame.
   function flushTracker() {
     const events = tracker.finish(lastT);
-    for (let i = 0; i < events.length; i++) {
-      renderer.noteOff(events[i].tMs);
-      noteNowEl.textContent = '—';
-      if (lastOn) {
-        logLine(
-          noteLabel(lastOn.midi, renderer.config.keySig) +
-            '  ' +
-            ((events[i].tMs - lastOn.tMs) / 1000).toFixed(2) +
-            's',
-        );
-        lastOn = null;
-      }
+    if (events.length) {
+      evQueue.push(...events);
+      evQueue.sort((a, b) => a.tMs - b.tMs);
     }
+    feedRenderer(Number.MAX_SAFE_INTEGER);
   }
 
   function onPitchFrame(m) {
     applyFrame(m);
-    drawTraceFrame(m.freq, m.clarity, tracker.sounding);
+  }
+
+  // detector parameters that ride along with every analysis window;
+  // holdF0 tells the harmonic detector which comb is the melody being
+  // tracked right now, so its background never learns (eats) a long
+  // held note
+  // The hold frequency is the note's TRUE played pitch: nominal shifted
+  // by the Tuning offset. A +30¢ player's F#4 sounds at 376 Hz, not 370
+  // — an off-center hold mask slowly eats the note's own harmonics.
+  function holdFreq(trk) {
+    if (!trk || trk.sounding === null) return 0;
+    const tune = parseFloat($('tapeTuning').value) || 0;
+    return 440 * 2 ** ((trk.sounding - 69) / 12) * 2 ** (tune / 1200);
+  }
+
+  function analysisParams() {
+    return {
+      mode: detectorMode,
+      fMin: melodyFloor,
+      gen: analysisGen,
+      holdF0: holdFreq(tracker),
+    };
   }
 
   function pumpAnalysis() {
@@ -406,7 +599,48 @@ export function initTapeTool() {
     const t = ((cursor + WINDOW) / effSr) * 1000;
     cursor += HOP;
     inFlight = true;
-    worker.postMessage({ buf: win.buffer, sr: effSr, t: t }, [win.buffer]);
+    worker.postMessage(
+      { buf: win.buffer, sr: effSr, t: t, ...analysisParams() },
+      [win.buffer],
+    );
+  }
+
+  // ---- input high-pass (~130 Hz, RBJ biquad): kills room rumble and
+  // handling noise that erode detector clarity. The duduk's lowest note
+  // is A3 (220 Hz), so the music passes untouched. Applied at record
+  // time, so replays and saved clips carry the same signal. ----
+  const HP_HZ = 130;
+  let hpB0 = 1;
+  let hpB1 = 0;
+  let hpB2 = 0;
+  let hpA1 = 0;
+  let hpA2 = 0;
+  let hpX1 = 0;
+  let hpX2 = 0;
+  let hpY1 = 0;
+  let hpY2 = 0;
+
+  function setHighpass(sr) {
+    const w0 = (2 * Math.PI * HP_HZ) / sr;
+    const alpha = Math.sin(w0) / (2 * Math.SQRT1_2);
+    const cosw = Math.cos(w0);
+    const a0 = 1 + alpha;
+    hpB0 = (1 + cosw) / 2 / a0;
+    hpB1 = -(1 + cosw) / a0;
+    hpB2 = (1 + cosw) / 2 / a0;
+    hpA1 = (-2 * cosw) / a0;
+    hpA2 = (1 - alpha) / a0;
+    hpX1 = hpX2 = hpY1 = hpY2 = 0;
+  }
+  setHighpass(effSr);
+
+  function highpass(x) {
+    const y = hpB0 * x + hpB1 * hpX1 + hpB2 * hpX2 - hpA1 * hpY1 - hpA2 * hpY2;
+    hpX2 = hpX1;
+    hpX1 = x;
+    hpY2 = hpY1;
+    hpY1 = y;
+    return y;
   }
 
   function appendPcm(block, factor) {
@@ -425,7 +659,7 @@ export function initTapeTool() {
     for (let i = 0; i < n; i++) {
       let s = 0;
       for (let j = 0; j < factor; j++) s += block[i * factor + j];
-      recorded[recLen++] = s / factor;
+      recorded[recLen++] = highpass(s / factor);
     }
   }
 
@@ -447,6 +681,7 @@ export function initTapeTool() {
       await actx.audioWorklet.addModule('/pcm-worklet.js');
       const factor = Math.max(1, Math.round(actx.sampleRate / 22050));
       effSr = actx.sampleRate / factor;
+      setHighpass(effSr);
       const src = actx.createMediaStreamSource(stream);
       workletNode = new AudioWorkletNode(actx, 'pcm-forwarder');
       const mute = actx.createGain();
@@ -497,26 +732,63 @@ export function initTapeTool() {
     else startMic();
   });
 
-  // ---- replay: identical windows, current slider values ----
+  // ---- replay: identical windows, current slider values, TWO passes.
+  // The first pass runs full tracking with the results discarded, so the
+  // detector's background spectrum, drone memory, and drone scores learn
+  // over the whole clip (held-note protection active via a throwaway
+  // tracker). The second pass renders — starting with a converged model
+  // instead of re-living the learning window, which is where live takes
+  // misbehave. resetTake bumps analysisGen once, so the worker's learned
+  // state carries from pass 1 into pass 2. ----
   async function replay() {
     if (micOn || replaying || recLen < WINDOW) return;
     ensureWorker();
     replaying = true;
     resetTake(false);
     const total = Math.floor((recLen - WINDOW) / HOP) + 1;
-    for (let f = 0; f < total; f++) {
-      const start = f * HOP;
-      const win = new Float32Array(WINDOW);
-      win.set(recorded.subarray(start, start + WINDOW));
-      const t = ((start + WINDOW) / effSr) * 1000;
-      const m = await new Promise((resolve) => {
+    const analyzeAt = (f, holdF0) =>
+      new Promise((resolve) => {
+        const start = f * HOP;
+        const win = new Float32Array(WINDOW);
+        win.set(recorded.subarray(start, start + WINDOW));
         worker.onmessage = (ev) => {
           resolve(ev.data);
         };
-        worker.postMessage({ buf: win.buffer, sr: effSr, t: t }, [win.buffer]);
+        worker.postMessage(
+          {
+            buf: win.buffer,
+            sr: effSr,
+            t: ((start + WINDOW) / effSr) * 1000,
+            mode: detectorMode,
+            fMin: melodyFloor,
+            gen: analysisGen,
+            holdF0: holdF0,
+          },
+          [win.buffer],
+        );
       });
+
+    const warmTrk = createNoteTracker(trackerValues());
+    for (let f = 0; f < total; f++) {
+      const m = await analyzeAt(f, holdFreq(warmTrk));
+      const p = pickFrame(m, warmTrk);
+      warmTrk.push({
+        tMs: m.t,
+        freq: p.freq,
+        clarity: p.clarity,
+        energy: p.energy,
+      });
+      if (f % 200 === 0) {
+        statusEl.textContent = `learning the room… ${Math.round((f / total) * 100)}%`;
+        await new Promise((r) => {
+          setTimeout(r, 0);
+        });
+      }
+    }
+
+    for (let f = 0; f < total; f++) {
+      const m = await analyzeAt(f, analysisParams().holdF0);
       applyFrame(m);
-      drawTraceFrame(m.freq, m.clarity, tracker.sounding);
       if (f % 200 === 0) {
         statusEl.textContent = `replaying… ${Math.round((f / total) * 100)}%`;
         await new Promise((r) => {
@@ -643,6 +915,7 @@ export function initTapeTool() {
       const ch = decoded.getChannelData(0);
       const factor = Math.max(1, Math.round(decoded.sampleRate / 22050));
       effSr = decoded.sampleRate / factor;
+      setHighpass(effSr);
       recorded = new Float32Array(Math.ceil(ch.length / factor) + WINDOW);
       recLen = 0;
       appendPcm(ch, factor);
