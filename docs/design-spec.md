@@ -315,24 +315,30 @@ Full-bleed workbench at /tape (sidebar collapses on entry, like the
 Studio). Notation glyphs (treble clef, key signature, accidentals,
 breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
 sized to the staff; the take opens with bare paper, then the clef and
-key signature before the first note. Live monophonic transcription: the mic feeds a pitch detector,
-note events render onto a 5-line staff as a piano roll, and the preview
-canvas shows the exact raster rows the printer would receive, in reading
-orientation (staff horizontal, time flowing left to right, new tape
-entering at the right; the strip auto-follows unless the user scrolls
-back). The tape sits on white in both themes, receipts are paper.
+key signature before the first note. Monophonic transcription in two
+regimes: while the mic is live, a lightweight pitch tracker sketches
+the tape and trace in real time; when the take ends (Stop, Replay, or
+Load clip) the recording is transcribed by a neural model (Basic
+Pitch, bundled, in-browser) and decoded into main notes, grace notes
+(smaller noteheads, with accidentals shrunk to match), and
+rearticulation splits — the final tape replaces the sketch. The
+preview canvas shows the exact raster rows the printer would receive,
+in reading orientation (staff horizontal, time flowing left to right,
+new tape entering at the right; the strip auto-follows unless the user
+scrolls back). The tape sits on white in both themes, receipts are
+paper.
 
 Left column (300px): session buttons (Start mic / Demo phrase / New
-take), key signature select (mono), then DETECTION (detector select —
-harmonic/drone-robust or autocorrelation — a drone-filter select — Off /
-Auto / fixed dam note — and a melody-floor slider above the threshold
-sliders) and LAYOUT
-slider groups (label / native range / mono value, the Photo tool's
+take), key signature select (mono), then a single DETECTION control —
+the Melody floor slider, the register split between dam and melody,
+used by both the live sketch and the neural decode — and the LAYOUT
+slider group (label / native range / mono value, the Photo tool's
 tone-row idiom), a hint line, and CLIP buttons (Replay / Save clip /
-Load clip). Replay is two-pass: a silent first pass lets the detector
-learn the room (drone, noise) over the whole clip, so the render pass
-starts converged — the status line shows "learning the room…" then
-"replaying…".
+Load clip). The old detector/drone selects and threshold sliders are
+gone: they tuned only the live sketch, and the neural decode needs
+none of them (it estimates the take's tuning center from its own
+pitch-bend data). Status during a decode: "transcribing… N%" then
+"transcribed N notes + M graces (neural)".
 The mic button while listening is --red text and border (red rule 5, a
 live capture). Right stage: the tape roll with the raw-pitch trace
 riding inside it (below), a transport row, then a NOTES mono event log

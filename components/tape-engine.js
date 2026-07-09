@@ -3,18 +3,19 @@
 // once, and this module owns all behavior imperatively. Element ids are
 // the contract between the two — change them together or not at all.
 //
-// Pipeline (all in the browser): mic → AudioWorklet (public/pcm-worklet.js,
-// raw PCM to the main thread) → decimate to ~22 kHz → windows to the
-// pitch worker (public/pitch-worker.js, MPM) → note tracker
-// (components/tape-events.js) → tape renderer (components/tape-renderer.js)
-// → exact printer rows, drawn on canvas in reading orientation and sent
-// verbatim to /api/tape/print. The preview IS the print bytes; there is
-// no parallel rendering.
+// Pipeline (all in the browser). LIVE: mic → AudioWorklet
+// (public/pcm-worklet.js, raw PCM to the main thread) → decimate to
+// ~22 kHz → windows to the pitch worker (public/pitch-worker.js) → v1
+// note tracker (components/tape-events.js) → a real-time SKETCH of the
+// tape and trace. FINAL: on Stop / Replay / Load clip, the recording is
+// transcribed by Basic Pitch (model in public/basic-pitch/) and decoded
+// by the shared pass-1/pass-2 modules (scripts/tape-eval/), then fed to
+// the tape renderer (components/tape-renderer.js) → exact printer rows,
+// drawn on canvas in reading orientation and sent verbatim to
+// /api/tape/print. The preview IS the print bytes; there is no parallel
+// rendering.
 //
-// The session is always recorded (decimated PCM in memory, ~10 min cap):
-// Replay re-runs the identical windows through the detector with the
-// CURRENT slider values and re-renders the whole tape — the tuning loop
-// that makes thresholds fixable without playing the phrase again.
+// The session is always recorded (decimated PCM in memory, ~10 min cap).
 
 import { createNoteTracker } from '@/components/tape-events.js';
 import {
@@ -22,6 +23,7 @@ import {
   KEY_SIGS,
   noteLabel,
 } from '@/components/tape-renderer.js';
+import { decorate, onsetAt } from '@/scripts/tape-eval/ornaments.mjs';
 import { skeletonize } from '@/scripts/tape-eval/skeleton.mjs';
 
 export function initTapeTool() {
@@ -43,8 +45,6 @@ export function initTapeTool() {
   const saveBtn = $('tapeSaveClipBtn');
   const loadInput = $('tapeLoadClip');
   const keySel = $('tapeKeySig');
-  const droneSel = $('tapeDrone');
-  const detectorSel = $('tapeDetector');
   const vis = $('tapeCanvas');
   const visWrap = $('tapeCanvasWrap');
   const trace = $('tapeTraceCanvas');
@@ -87,55 +87,16 @@ export function initTapeTool() {
     keySel.appendChild(o);
   });
 
-  // detector select: the harmonic-salience detector subtracts steady
-  // sounds (dam, noise) from the spectrum before finding the melody;
-  // the autocorrelation (MPM) detector is the original — marginally
-  // finer cents on clean solo takes, helpless against a drone.
-  let detectorMode = 'harm';
+  // v1 live-detector settings, fixed since the neural decode replaced
+  // the live tracker as the source of the final tape (the tracker only
+  // sketches the real-time trace now). The old Detection sliders and
+  // detector/drone selects are gone with them.
+  const detectorMode = 'harm'; // harmonic-salience: drone-robust
+  const droneMode = null; // the harmonic detector handles the dam
   let melodyFloor = 230; // Hz — above the dam (185-210 measured), below
-  // the melody's lowest note (B3, 247): the dam never becomes a
-  // candidate, so detection is melody-only while subtraction eats the
-  // dam freely
+  // the melody's lowest note (B3, 247). Also sets the neural skeleton's
+  // register floor, so it stays a user control
   let analysisGen = 0; // bumped per take: resets the worker's background
-  for (const [v, label] of [
-    ['harm', 'Harmonic · drone-robust'],
-    ['mpm', 'Autocorrelation · clean solo'],
-  ]) {
-    const o = document.createElement('option');
-    o.value = v;
-    o.textContent = label;
-    detectorSel.appendChild(o);
-  }
-  detectorSel.addEventListener('change', () => {
-    detectorMode = detectorSel.value;
-  });
-
-  // drone filter select: Off, Auto (track steady pitches), or a fixed
-  // dam note (G2..C5). Auto handles a dam that changes pitch mid-piece.
-  let droneMode = null; // null | 'auto' | midi number
-  for (const [v, label] of [
-    ['', 'Off'],
-    ['auto', 'Auto · track steady drones'],
-  ]) {
-    const o = document.createElement('option');
-    o.value = v;
-    o.textContent = label;
-    droneSel.appendChild(o);
-  }
-  for (let m = 43; m <= 72; m++) {
-    const o = document.createElement('option');
-    o.value = String(m);
-    o.textContent = `${noteLabel(m, 0)} · ${(440 * 2 ** ((m - 69) / 12)).toFixed(0)} Hz`;
-    droneSel.appendChild(o);
-  }
-  droneSel.addEventListener('change', () => {
-    droneMode =
-      droneSel.value === ''
-        ? null
-        : droneSel.value === 'auto'
-          ? 'auto'
-          : parseInt(droneSel.value, 10);
-  });
 
   // ---- sliders: id -> config key, with live application ----
   function bindSlider(id, apply, fmt) {
@@ -155,11 +116,6 @@ export function initTapeTool() {
       if (renderer) renderer.setConfig(keyVal(key, v));
     };
   }
-  function trackerCfg(key) {
-    return (v) => {
-      if (tracker) tracker.setParams(keyVal(key, v));
-    };
-  }
   function keyVal(k, v) {
     const o = {};
     o[k] = v;
@@ -172,37 +128,12 @@ export function initTapeTool() {
   bindSlider('tapeGlyphScale', layoutCfg('glyphScale'), (v) => `${v}×`);
   bindSlider('tapeBreathGap', layoutCfg('breathGapMs'), (v) => `${v} ms`);
   bindSlider(
-    'tapeClarity',
-    (v) => {
-      if (tracker) tracker.setParams({ clarityMin: v / 100 });
-    },
-    (v) => (v / 100).toFixed(2),
-  );
-  bindSlider(
     'tapeFloor',
     (v) => {
       melodyFloor = v;
     },
     (v) => `${v} Hz`,
   );
-  bindSlider('tapeTuning', trackerCfg('tuningCents'), (v) =>
-    v > 0 ? `+${v}¢` : `${v}¢`,
-  );
-  bindSlider('tapeOnsetHold', trackerCfg('onsetHoldMs'), (v) => `${v} ms`);
-  bindSlider('tapeRetrig', trackerCfg('retrigCents'), (v) => `±${v}¢`);
-  bindSlider('tapeChangeHold', trackerCfg('changeHoldMs'), (v) => `${v} ms`);
-  bindSlider('tapeFastHold', trackerCfg('changeFastMs'), (v) => `${v} ms`);
-  bindSlider('tapeOrnament', trackerCfg('ornamentCents'), (v) =>
-    v > 0 ? `±${v}¢` : 'off',
-  );
-  bindSlider(
-    'tapeRestCut',
-    (v) => {
-      if (tracker) tracker.setParams({ restFrac: v / 100 });
-    },
-    (v) => `${v}%`,
-  );
-  bindSlider('tapeOffMs', trackerCfg('offMs'), (v) => `${v} ms`);
 
   function layoutValues() {
     return {
@@ -214,17 +145,19 @@ export function initTapeTool() {
       keySig: parseInt(keySel.value, 10),
     };
   }
+  // fixed live-tracker settings (the old slider defaults): they shape
+  // only the real-time sketch, not the neural transcription
   function trackerValues() {
     return {
-      clarityMin: parseFloat($('tapeClarity').value) / 100,
-      tuningCents: parseFloat($('tapeTuning').value),
-      onsetHoldMs: parseFloat($('tapeOnsetHold').value),
-      retrigCents: parseFloat($('tapeRetrig').value),
-      changeHoldMs: parseFloat($('tapeChangeHold').value),
-      changeFastMs: parseFloat($('tapeFastHold').value),
-      ornamentCents: parseFloat($('tapeOrnament').value),
-      restFrac: parseFloat($('tapeRestCut').value) / 100,
-      offMs: parseFloat($('tapeOffMs').value),
+      clarityMin: 0.5,
+      tuningCents: 0,
+      onsetHoldMs: 50,
+      retrigCents: 60,
+      changeHoldMs: 80,
+      changeFastMs: 30,
+      ornamentCents: 45,
+      restFrac: 0.18,
+      offMs: 110,
     };
   }
   keySel.addEventListener('change', () => {
@@ -573,14 +506,12 @@ export function initTapeTool() {
   // detector parameters that ride along with every analysis window;
   // holdF0 tells the harmonic detector which comb is the melody being
   // tracked right now, so its background never learns (eats) a long
-  // held note
-  // The hold frequency is the note's TRUE played pitch: nominal shifted
-  // by the Tuning offset. A +30¢ player's F#4 sounds at 376 Hz, not 370
-  // — an off-center hold mask slowly eats the note's own harmonics.
+  // held note. (The old Tuning slider corrected this for sharp players;
+  // the live sketch tolerates the small mask offset, and the neural
+  // transcription estimates the take's tuning center on its own.)
   function holdFreq(trk) {
     if (!trk || trk.sounding === null) return 0;
-    const tune = parseFloat($('tapeTuning').value) || 0;
-    return 440 * 2 ** ((trk.sounding - 69) / 12) * 2 ** (tune / 1200);
+    return 440 * 2 ** ((trk.sounding - 69) / 12);
   }
 
   function analysisParams() {
@@ -793,31 +724,43 @@ export function initTapeTool() {
           statusEl.textContent = `transcribing… ${Math.round(pct * 100)}%`;
         },
       );
-      const events = neural.noteFramesToTime(
-        neural.addPitchBendsToNoteEvents(
-          contours,
-          neural.outputToNotesPoly(frames, onsets, 0.4, 0.3, 5),
-        ),
+      const frameEvents = neural.addPitchBendsToNoteEvents(
+        contours,
+        neural.outputToNotesPoly(frames, onsets, 0.4, 0.3, 5),
       );
+      const events = neural.noteFramesToTime(frameEvents);
       const notes = events
-        .map((e) => ({
+        .map((e, i) => ({
           t0: e.startTimeSeconds,
           t1: e.startTimeSeconds + e.durationSeconds,
           midi: e.pitchMidi,
           amp: e.amplitude,
           bends: e.pitchBends ?? [],
+          onset: onsetAt(onsets, frameEvents[i].startFrame, e.pitchMidi),
         }))
         .sort((a, b) => a.t0 - b.t0);
-      const skeleton = skeletonize(notes, {
+      const opts = {
         melodyLoMidi: Math.round(69 + 12 * Math.log2(melodyFloor / 440)),
-      });
-      for (const n of skeleton) {
-        evQueue.push({ type: 'on', midi: n.midi, tMs: n.t0 * 1000 });
+      };
+      // pass 1 (skeleton) + pass 2 (graces as small notes,
+      // rearticulation splits); the timeline is monophonic render-ready
+      const { skeleton, graces, timeline } = decorate(
+        notes,
+        skeletonize(notes, opts),
+        opts,
+      );
+      for (const n of timeline) {
+        evQueue.push({
+          type: 'on',
+          midi: n.midi,
+          tMs: n.t0 * 1000,
+          grace: n.grace,
+        });
         evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
       }
       evQueue.sort((a, b) => a.tMs - b.tMs);
       feedRenderer(Number.MAX_SAFE_INTEGER);
-      statusEl.textContent = `transcribed ${skeleton.length} notes (neural skeleton)`;
+      statusEl.textContent = `transcribed ${skeleton.length} notes + ${graces.length} graces (neural)`;
     } catch (e) {
       statusEl.textContent = `transcription failed: ${e.message}`;
     }
