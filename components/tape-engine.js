@@ -805,6 +805,7 @@ export function initTapeTool() {
           t1: e.startTimeSeconds + e.durationSeconds,
           midi: e.pitchMidi,
           amp: e.amplitude,
+          bends: e.pitchBends ?? [],
         }))
         .sort((a, b) => a.t0 - b.t0);
       const skeleton = skeletonize(notes, {

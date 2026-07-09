@@ -156,8 +156,12 @@ Ranked. The first item gates the rest.
 4. **Predominant-line selection** for overlapping melody-band notes
    (second voice, octave doubles): prefer continuity + strength —
    Melodia-style contour thinking at the note level.
-5. **Tuning re-snap from pitch bends.** Basic Pitch is A440-fixed;
-   estimate the take's offset from its own bend histogram and re-snap.
+5. **Tuning re-snap from pitch bends.** DONE for the sharp-side case
+   (2026-07-09): the take's bend center is estimated from its own
+   duration-weighted bend histogram, and sustained runs sitting about a
+   semitone below it re-snap down (a sharp-played D#4 with upward
+   vibrato is otherwise labeled E4). Guard rails: short low stretches
+   are slides, very deep sags are reverb decays — neither re-snaps.
    Flag: repertoire may be genuinely microtonal — equal temperament is
    an untested assumption.
 6. **Tempo-relative durations.** MIN_LEN/merge-gap scale with the
