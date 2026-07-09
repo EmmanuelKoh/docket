@@ -37,7 +37,8 @@ export const SKELETON_DEFAULTS = {
   peakAmp: 0.5, // a skeleton note's peak amplitude must reach this
   mergeGapSec: 0.15, // same-pitch segments this close are one note
   minLenSec: 0.12, // shorter notes belong to the ornament pass
-  crestMaxSec: 0.3, // upward-crest absorption: max crest length
+  crestMaxSec: 0.18, // upward-crest absorption: max crest length —
+  // real crest fragments run <=0.12s; a 0.2s+ upper neighbor is a note
   crestReachSec: 0.25, // ...and max distance from the parent note
   restSec: 0.4, // gaps at least this long are rests
   rescueDipSemis: 2, // alternation rescue: max dip below the neighbors
@@ -46,39 +47,53 @@ export const SKELETON_DEFAULTS = {
   resnapLowBins: 1.25, // re-snap: how far under the take's bend center
   // a segment must sit to count as "low" (bins are 1/3 semitone)
   resnapMaxBins: 2.5, // ...deeper than this is a reverb sag, not a note
-  resnapRunSec: 0.5, // ...low run must sustain this long to re-snap
+  resnapRunSec: 0.25, // ...low run must sustain this long to re-snap
+  // (a note-length run; sub-0.25s low stretches are approach slides)
 };
 
 // tuning re-snap (see header). notes must be time-sorted; returns a new
 // array, re-labeling sustained low runs one semitone down. The take's
 // bend center is the duration-weighted median of per-segment mean bends
 // over melody-band material.
+export const meanBend = (n) =>
+  n.bends?.length ? n.bends.reduce((a, x) => a + x, 0) / n.bends.length : null;
+
+// the take's own intonation center, in bend bins: duration-weighted
+// median of per-segment mean bends over melody-band material. Null when
+// the take carries no bend data.
+export function bendCenter(notes, o) {
+  const ranked = notes
+    .filter(
+      (n) =>
+        n.midi >= o.melodyLoMidi &&
+        n.midi <= o.melodyHiMidi &&
+        n.amp >= o.candidateAmp &&
+        meanBend(n) !== null,
+    )
+    .map((n) => ({ dur: n.t1 - n.t0, mean: meanBend(n) }))
+    .sort((a, b) => a.mean - b.mean);
+  if (!ranked.length) return null;
+  const half = ranked.reduce((a, s) => a + s.dur, 0) / 2;
+  let acc = 0;
+  for (const s of ranked) {
+    acc += s.dur;
+    if (acc >= half) return s.mean;
+  }
+  return ranked[ranked.length - 1].mean;
+}
+
 function resnapSharpRuns(notes, o) {
   const stats = notes.map((n) => ({
     n,
     dur: n.t1 - n.t0,
-    mean: n.bends?.length
-      ? n.bends.reduce((a, x) => a + x, 0) / n.bends.length
-      : null,
+    mean: meanBend(n),
     inBand:
       n.midi >= o.melodyLoMidi &&
       n.midi <= o.melodyHiMidi &&
       n.amp >= o.candidateAmp,
   }));
-  const ranked = stats
-    .filter((s) => s.inBand && s.mean !== null)
-    .sort((a, b) => a.mean - b.mean);
-  if (!ranked.length) return notes;
-  const half = ranked.reduce((a, s) => a + s.dur, 0) / 2;
-  let acc = 0;
-  let center = ranked[ranked.length - 1].mean;
-  for (const s of ranked) {
-    acc += s.dur;
-    if (acc >= half) {
-      center = s.mean;
-      break;
-    }
-  }
+  const center = bendCenter(notes, o);
+  if (center === null) return notes;
 
   // walk same-pitch runs; a maximal group of consecutive low segments
   // re-snaps when it sustains long enough and is not too deep overall
@@ -142,10 +157,19 @@ export function skeletonize(notes, opts = {}) {
 
   let merged = mergeRuns(mel, o.mergeGapSec);
 
-  // absorb upward crests (see header)
+  // absorb upward crests (see header). A crest is the LOWER note's own
+  // material, so its bends sit low against the take's center — that
+  // identifies it directly; length is only the fallback when the take
+  // carries no bend data (a real +1 neighbor's bends sit at the center)
+  const center = bendCenter(sorted, o);
+  const crestish = (n) => {
+    const mean = meanBend(n);
+    if (mean === null || center === null) return n.t1 - n.t0 <= o.crestMaxSec;
+    return mean <= center - o.resnapLowBins;
+  };
   for (let i = 0; i < merged.length; i++) {
     const n = merged[i];
-    if (!n || n.t1 - n.t0 > o.crestMaxSec) continue;
+    if (!n || !crestish(n)) continue;
     for (const j of [i - 1, i + 1]) {
       const nb = merged[j];
       if (
@@ -191,7 +215,10 @@ export function skeletonize(notes, opts = {}) {
   // leave two halves of one note adjacent again
   const gated = merged.filter(
     (n) =>
-      rescued.has(n) || (n.amp >= o.peakAmp && n.t1 - n.t0 >= o.minLenSec),
+      rescued.has(n) ||
+      // small epsilons: Basic Pitch times are frame-quantized and a
+      // 0.1199s note must not lose to a 0.12 threshold
+      (n.amp >= o.peakAmp - 1e-6 && n.t1 - n.t0 >= o.minLenSec - 1e-3),
   );
   const skeleton = mergeRuns(gated, o.mergeGapSec);
 
