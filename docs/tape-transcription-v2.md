@@ -163,11 +163,27 @@ Ranked. The first item gates the rest.
    against provisional truth, mean 0.96; exit code fails under 0.75.
    Every flagged clip becomes a fixture. Robustness is a number, not a
    vibe.
-2. **Input normalization.** Arbitrary Load-clip files: resample to
-   22050 via OfflineAudioContext (not linear interp), deliberate stereo
-   downmix, loudness normalization before inference. Skeleton
-   thresholds relative to the take's own amplitude distribution, never
-   absolute constants.
+2. **Input normalization.** Loudness DONE (2026-07-09,
+   scripts/tape-eval/normalize.mjs): every input reaches the model at
+   one calibration level (active-median frame RMS 0.025,
+   corpus-selected), because the whole evidence chain is
+   amplitude-shaped — a bare -6 dB gain change was measured to flip
+   note decisions (a confirmed G4 vanished). With normalization the
+   corpus scores IDENTICALLY at input gains 0.5x-4x
+   (TAPE_GAIN=<g> npm run tape:eval is the regression check). Cost:
+   mean F 0.98 -> 0.96 at the common level — take2's
+   rearticulation-dip region gains two razor-edge insertions, the next
+   tuning target. Still open from this item: stereo downmix and
+   resampling quality for arbitrary Load-clip files.
+   NEGATIVE RESULT (2026-07-09): classic late-reverb spectral
+   subtraction as a preprocessing stage (scripts/tape-eval/dereverb.mjs,
+   A/B via TAPE_DEREVERB=1 npm run tape:eval) made every fixture WORSE
+   (mean F 0.87 at best vs 0.98 raw, swept over rt60/strength): the
+   symbolic reverb rules already extract what the tail carries, and the
+   DSP's sustain-thinning fragments notes. The module stays in the
+   harness for future A/Bs — a maintainer-supplied neural-dereverbed
+   reference file would measure the ceiling before any heavier
+   dependency is considered.
 3. **Derived, not hardcoded, register split.** Identify the dam as the
    long-persistence track; derive or profile the melody band (bass
    duduk, other keys, no-dam solo takes must degrade gracefully).

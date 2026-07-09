@@ -24,6 +24,7 @@ import {
   noteLabel,
 } from '@/components/tape-renderer.js';
 import { annotate } from '@/scripts/tape-eval/marks.mjs';
+import { normalizeLoudness } from '@/scripts/tape-eval/normalize.mjs';
 import { decorate, onsetAt } from '@/scripts/tape-eval/ornaments.mjs';
 import { skeletonize } from '@/scripts/tape-eval/skeleton.mjs';
 
@@ -46,6 +47,9 @@ export function initTapeTool() {
   const saveBtn = $('tapeSaveClipBtn');
   const loadInput = $('tapeLoadClip');
   const keySel = $('tapeKeySig');
+  const viewSel = $('tapeView');
+  const traceModeSel = $('tapeTraceMode');
+  const speedSel = $('tapeSpeed');
   const vis = $('tapeCanvas');
   const visWrap = $('tapeCanvasWrap');
   const trace = $('tapeTraceCanvas');
@@ -98,6 +102,12 @@ export function initTapeTool() {
   // the melody's lowest note (B3, 247). Also sets the neural skeleton's
   // register floor, so it stays a user control
   let analysisGen = 0; // bumped per take: resets the worker's background
+
+  // ---- view state: what the stage shows, not what was analyzed ----
+  let viewMode = 'full'; // 'full' (ornaments + slides) | 'skeleton'
+  let traceMode = 'aligned'; // 'aligned' (tape rows) | 'linear' (time)
+  let traceZoom = 90; // linear-trace columns per second of audio
+  let lastDecode = null; // { notes, opts } of the newest neural decode
 
   // ---- sliders: id -> config key, with live application ----
   function bindSlider(id, apply, fmt) {
@@ -277,11 +287,29 @@ export function initTapeTool() {
     traceOffCtx = c;
   }
 
-  function drawTraceFrame(freq, clarity, soundingMidi, col = null) {
+  // every analyzed frame is kept, so the trace can be redrawn in either
+  // mode at any zoom without re-running the detector
+  let traceFrames = []; // [{ t, freq, clarity, sounding }]
+  let traceCols = 1; // rightmost drawn column (linear mode extent)
+
+  // aligned mode: one column per tape row (raw pitch sits directly
+  // under the note bar it produced, but glyph/gap rows cut the audio);
+  // linear mode: one continuous ribbon of time, traceZoom columns/sec
+  function traceCol(tMs, liveCol) {
+    if (traceMode === 'linear') return Math.round((tMs / 1000) * traceZoom);
+    if (liveCol !== null && liveCol !== undefined) return liveCol;
+    return renderer.rowForTime(tMs);
+  }
+
+  function drawTraceFrame(tMs, freq, clarity, soundingMidi, liveCol = null) {
     if (!renderer) return;
-    // live mode pins the frame to the newest tape row; a replay passes
-    // the row its timestamp maps to (the tape already exists in full)
-    const x = col !== null ? col : Math.max(0, renderer.rows.length - 1);
+    traceFrames.push({ t: tMs, freq, clarity, sounding: soundingMidi });
+    paintTraceFrame(tMs, freq, clarity, soundingMidi, liveCol);
+  }
+
+  function paintTraceFrame(tMs, freq, clarity, soundingMidi, liveCol = null) {
+    const x = Math.max(0, traceCol(tMs, liveCol));
+    traceCols = Math.max(traceCols, x + 1);
     growTraceOff(x + 1);
     if (freq) {
       const mf = 69 + 12 * Math.log2(freq / 440);
@@ -297,9 +325,24 @@ export function initTapeTool() {
     traceDirty = true;
   }
 
+  // redraw the whole trace from stored frames — used when the mode or
+  // zoom changes, or when the tape is re-rendered (aligned columns move)
+  function rebuildTrace() {
+    traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
+    traceCols = 1;
+    for (const f of traceFrames) {
+      paintTraceFrame(f.t, f.freq, f.clarity, f.sounding);
+    }
+    paintTrace();
+  }
+
   function paintTrace() {
     traceDirty = false;
-    if (trace.width !== vis.width) trace.width = vis.width;
+    const cols =
+      traceMode === 'linear' ? Math.max(1, traceCols) : Math.max(1, drawnRows);
+    // linear mode may outgrow the tape; the roll scrolls to the widest
+    const w = Math.max(vis.width, Math.ceil(cols * SCALE));
+    if (trace.width !== w) trace.width = w;
     if (trace.height !== TRACE_H) trace.height = TRACE_H;
     traceCtx.clearRect(0, 0, trace.width, trace.height);
     // faint reference rows at A3 / A4 / A5, the duduk-in-A anchors
@@ -309,7 +352,6 @@ export function initTapeTool() {
       traceCtx.fillRect(0, traceY(m), trace.width, 1);
     }
     traceCtx.globalAlpha = 1;
-    const cols = Math.max(1, drawnRows);
     traceCtx.drawImage(
       traceOff,
       0,
@@ -343,6 +385,8 @@ export function initTapeTool() {
     logEl.textContent = '';
     noteNowEl.textContent = '—';
     traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
+    traceFrames = [];
+    traceCols = 1;
     droneScore.clear(); // re-learned per take (and per replay)
     analysisGen++; // the worker forgets its background spectrum too
     evQueue = [];
@@ -466,7 +510,13 @@ export function initTapeTool() {
     renderer.advance(horizonMs);
     while (frameQueue.length && frameQueue[0].t <= horizonMs) {
       const f = frameQueue.shift();
-      drawTraceFrame(f.freq, f.clarity, f.sounding);
+      drawTraceFrame(
+        f.t,
+        f.freq,
+        f.clarity,
+        f.sounding,
+        Math.max(0, renderer.rows.length - 1),
+      );
     }
     if (renderer.rows.length) printBtn.disabled = false;
   }
@@ -715,7 +765,13 @@ export function initTapeTool() {
           bp: new bpModule.BasicPitch('/basic-pitch/model.json'),
         };
       }
-      const audio = await resampleTo22050(recorded.subarray(0, recLen), effSr);
+      // loudness-normalize to the corpus calibration level (robustness
+      // item 2): the whole evidence chain is amplitude-shaped, and this
+      // makes mic gain and clip level irrelevant to the transcription.
+      // Playback and the raw-pitch trace keep the original audio
+      const audio = normalizeLoudness(
+        await resampleTo22050(recorded.subarray(0, recLen), effSr),
+      );
       const frames = [];
       const onsets = [];
       const contours = [];
@@ -748,26 +804,8 @@ export function initTapeTool() {
       const opts = {
         melodyLoMidi: Math.round(69 + 12 * Math.log2(melodyFloor / 440)),
       };
-      // pass 1 (skeleton) + pass 2 (graces as small notes,
-      // rearticulation splits) + pass 3 (slide connectors, approximate-
-      // ornament squiggles); the timeline is monophonic render-ready
-      const decorated = decorate(notes, skeletonize(notes, opts), opts);
-      const { skeleton, graces } = decorated;
-      const timeline = annotate(notes, decorated, opts);
-      for (const n of timeline) {
-        evQueue.push({
-          type: 'on',
-          midi: n.midi,
-          tMs: n.t0 * 1000,
-          grace: n.grace,
-          slide: n.slide,
-          ornament: n.ornament,
-        });
-        evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
-      }
-      evQueue.sort((a, b) => a.tMs - b.tMs);
-      feedRenderer(Number.MAX_SAFE_INTEGER);
-      statusEl.textContent = `transcribed ${skeleton.length} notes + ${graces.length} graces (neural)`;
+      lastDecode = { notes, opts };
+      statusEl.textContent = renderDecoded(notes, opts);
     } catch (e) {
       statusEl.textContent = `transcription failed: ${e.message}`;
     }
@@ -776,6 +814,65 @@ export function initTapeTool() {
     traceReplay(); // fill the raw-pitch trace under the finished tape
   }
   replayBtn.addEventListener('click', neuralReplay);
+
+  // render the cached decode into the tape at the current view mode:
+  // 'full' = pass 1 + 2 + 3 (ornaments, splits, slides, squiggles);
+  // 'skeleton' = pass 1 only, the bare main-note melody
+  function renderDecoded(notes, opts) {
+    let timeline;
+    let label;
+    if (viewMode === 'skeleton') {
+      const skeleton = skeletonize(notes, opts);
+      timeline = skeleton;
+      label = `skeleton view — ${skeleton.length} main notes`;
+    } else {
+      const decorated = decorate(notes, skeletonize(notes, opts), opts);
+      timeline = annotate(notes, decorated, opts);
+      label = `transcribed ${decorated.skeleton.length} notes + ${decorated.graces.length} graces (neural)`;
+    }
+    for (const n of timeline) {
+      evQueue.push({
+        type: 'on',
+        midi: n.midi,
+        tMs: n.t0 * 1000,
+        grace: n.grace,
+        slide: n.slide,
+        ornament: n.ornament,
+      });
+      evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
+    }
+    evQueue.sort((a, b) => a.tMs - b.tMs);
+    feedRenderer(Number.MAX_SAFE_INTEGER);
+    return label;
+  }
+
+  // view toggles re-render from the cache — no re-transcription. The
+  // trace frames survive the reset; aligned columns move with the new
+  // tape, so the trace is rebuilt against it
+  function rerenderView() {
+    if (!lastDecode || micOn || replaying) return;
+    const frames = traceFrames;
+    resetTake(false);
+    traceFrames = frames;
+    statusEl.textContent = renderDecoded(lastDecode.notes, lastDecode.opts);
+    rebuildTrace();
+  }
+  viewSel.addEventListener('change', () => {
+    viewMode = viewSel.value;
+    rerenderView();
+  });
+  traceModeSel.addEventListener('change', () => {
+    traceMode = traceModeSel.value;
+    rebuildTrace();
+  });
+  bindSlider(
+    'tapeTraceZoom',
+    (v) => {
+      traceZoom = v;
+      if (traceMode === 'linear') rebuildTrace();
+    },
+    (v) => `${v} px/s`,
+  );
 
   // ---- trace backfill: after a neural decode, run the recording
   // through the v1 detector purely to draw the raw-pitch trace under
@@ -818,7 +915,7 @@ export function initTapeTool() {
         clarity: p.clarity,
         energy: p.energy,
       });
-      drawTraceFrame(p.freq, p.clarity, trk.sounding, renderer.rowForTime(m.t));
+      drawTraceFrame(m.t, p.freq, p.clarity, trk.sounding);
       if (f % 400 === 0) {
         paintTrace();
         await new Promise((r) => {
@@ -973,16 +1070,18 @@ export function initTapeTool() {
   let playStartedAt = 0; // playerCtx.currentTime when playback began
   let playGen = 0; // invalidates onended of killed sources
 
+  let playRate = 1; // varispeed: slower playback also lowers pitch
+
   const clipDur = () => (recLen ? recLen / effSr : 0);
   const fmtTime = (sec) => {
     const s = Math.max(0, sec);
     const m = Math.floor(s / 60);
-    return `${m}:${(s - m * 60).toFixed(1).padStart(4, '0')}`;
+    return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`;
   };
   const playPos = () =>
     playState === 'playing'
       ? Math.min(
-          playOffset + (playerCtx.currentTime - playStartedAt),
+          playOffset + (playerCtx.currentTime - playStartedAt) * playRate,
           clipDur(),
         )
       : playOffset;
@@ -1009,6 +1108,7 @@ export function initTapeTool() {
     buf.getChannelData(0).set(recorded.subarray(0, recLen));
     playSource = playerCtx.createBufferSource();
     playSource.buffer = buf;
+    playSource.playbackRate.value = playRate;
     playSource.connect(playerCtx.destination);
     const gen = ++playGen;
     playSource.onended = () => {
@@ -1069,18 +1169,36 @@ export function initTapeTool() {
     else playClip();
   });
   stopBtn.addEventListener('click', () => stopClip(false));
+  speedSel.addEventListener('change', () => {
+    const rate = parseFloat(speedSel.value) || 1;
+    if (playState === 'playing') {
+      // rebase the position math so the rate change takes effect cleanly
+      playOffset = playPos();
+      playStartedAt = playerCtx.currentTime;
+      playSource.playbackRate.value = rate;
+    }
+    playRate = rate;
+  });
 
   // scrubbing: the pointer position on the tape maps back to clip time
   let scrubbing = false;
   let scrubWasPlaying = false;
 
   function seekToEvent(e) {
-    const rect = vis.getBoundingClientRect();
-    const row = (e.clientX - rect.left) / SCALE;
-    playOffset = Math.max(
-      0,
-      Math.min(clipDur(), renderer.timeForRow(row) / 1000),
-    );
+    // a linear-mode trace has its own time axis; the tape keeps the
+    // row-mapped one
+    if (traceMode === 'linear' && e.target === trace) {
+      const rect = trace.getBoundingClientRect();
+      const sec = (e.clientX - rect.left) / SCALE / traceZoom;
+      playOffset = Math.max(0, Math.min(clipDur(), sec));
+    } else {
+      const rect = vis.getBoundingClientRect();
+      const row = (e.clientX - rect.left) / SCALE;
+      playOffset = Math.max(
+        0,
+        Math.min(clipDur(), renderer.timeForRow(row) / 1000),
+      );
+    }
     syncTransport();
   }
 

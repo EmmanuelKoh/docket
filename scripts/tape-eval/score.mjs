@@ -67,7 +67,21 @@ function align(truth, pred) {
 async function scoreFixture(truthPath) {
   const truth = JSON.parse(fs.readFileSync(truthPath, 'utf8'));
   const wav = truthPath.replace(/\.truth\.json$/, '.wav');
-  const notes = await transcribe(wav);
+  // A/B hooks: TAPE_GAIN=0.5 perturbs the input level BEFORE loudness
+  // normalization (scores must not move — the brittleness regression
+  // check); TAPE_DEREVERB=1 (+ TAPE_RT60 / TAPE_DRSTRENGTH) A/Bs the
+  // corpus-vetoed dereverb stage
+  const notes = await transcribe(wav, {
+    ...(process.env.TAPE_GAIN ? { gain: parseFloat(process.env.TAPE_GAIN) } : {}),
+    ...(process.env.TAPE_TARGET
+      ? { targetRms: parseFloat(process.env.TAPE_TARGET) }
+      : {}),
+    deReverb: process.env.TAPE_DEREVERB === '1',
+    ...(process.env.TAPE_RT60 ? { rt60: parseFloat(process.env.TAPE_RT60) } : {}),
+    ...(process.env.TAPE_DRSTRENGTH
+      ? { strength: parseFloat(process.env.TAPE_DRSTRENGTH) }
+      : {}),
+  });
   // pass 1 + pass 2's rearticulation splits — double-struck main notes
   // are part of the scored melody
   const { skeleton } = decorate(notes, skeletonize(notes));

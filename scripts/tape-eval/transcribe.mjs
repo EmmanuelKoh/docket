@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { dereverb } from './dereverb.mjs';
+import { normalizeLoudness } from './normalize.mjs';
 import { onsetAt } from './ornaments.mjs';
 
 const require = createRequire(import.meta.url);
@@ -82,9 +84,21 @@ function loadWav22k(wavPath) {
 // wav -> [{ t0, t1, midi, amp, bends, onset }] (seconds, sorted)
 export async function transcribe(
   wavPath,
-  { onsetThresh = 0.4, frameThresh = 0.3, minNoteLenFrames = 5 } = {},
+  {
+    onsetThresh = 0.4,
+    frameThresh = 0.3,
+    minNoteLenFrames = 5,
+    deReverb = false,
+    gain = 1, // perturbation A/B hook: pre-normalization level change
+    ...preOpts // forwarded to normalizeLoudness and dereverb
+  } = {},
 ) {
-  const { audio } = loadWav22k(wavPath);
+  let { audio } = loadWav22k(wavPath);
+  if (gain !== 1) {
+    audio = audio.map((x) => Math.max(-1, Math.min(1, x * gain)));
+  }
+  audio = normalizeLoudness(audio, preOpts);
+  if (deReverb) audio = dereverb(audio, 22050, preOpts);
   const bp = new BasicPitch(tf.loadGraphModel(ioHandler));
   const frames = [];
   const onsets = [];
