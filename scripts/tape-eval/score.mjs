@@ -17,7 +17,7 @@ import { transcribe } from './transcribe.mjs';
 import { skeletonize, skeletonSequence } from './skeleton.mjs';
 import { decorate } from './ornaments.mjs';
 import { annotate } from './marks.mjs';
-import { fineFrames, loadWavRaw } from './fine.mjs';
+import { fineFramesFor } from './fine.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLIPS = path.join(ROOT, 'data', 'clips');
@@ -87,10 +87,15 @@ async function scoreFixture(truthPath) {
   // pass 1 + pass 2's rearticulation splits + pass 3's fine-trace
   // re-strike splits — double-struck main notes are part of the scored
   // melody, however they were detected
-  const decorated = decorate(notes, skeletonize(notes));
-  const raw = loadWavRaw(wav);
-  const fine = await fineFrames(raw.audio, raw.sr);
-  const timeline = annotate(notes, decorated, {}, fine);
+  // a truth file may pin the Melody floor it was validated at (Hz,
+  // matching the browser slider); default matches the slider default
+  const floorHz = truth.melodyFloorHz ?? 230;
+  const opts = {
+    melodyLoMidi: Math.round(69 + 12 * Math.log2(floorHz / 440)),
+  };
+  const decorated = decorate(notes, skeletonize(notes, opts), opts);
+  const fine = await fineFramesFor(wav, { floor: floorHz });
+  const timeline = annotate(notes, decorated, opts, fine);
   const pred = skeletonSequence(timeline.filter((e) => !e.mark)).map(label);
   const { matches, rows } = align(truth.sequence, pred);
   const precision = pred.length ? matches / pred.length : 0;

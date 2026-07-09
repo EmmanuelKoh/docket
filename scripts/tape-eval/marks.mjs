@@ -123,11 +123,13 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
         }
       }
       if (up) {
+        const mf = 69 + 12 * Math.log2(f.freq / 440);
         if (run) {
           run.t1 = tSec;
           run.n++;
+          run.midiSum += mf;
         } else {
-          run = { t0: tSec, t1: tSec, n: 1 };
+          run = { t0: tSec, t1: tSec, n: 1, midiSum: mf };
         }
       } else {
         flush();
@@ -140,9 +142,11 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
       if (excursions[i].t0 - excursions[i - 1].t1 <= o.excMergeGapSec) {
         excursions[i - 1].t1 = excursions[i].t1;
         excursions[i - 1].n += excursions[i].n;
+        excursions[i - 1].midiSum += excursions[i].midiSum;
         excursions.splice(i, 1);
       }
     }
+    for (const x of excursions) x.pitch = x.midiSum / x.n;
   }
 
   // re-strike heads pass 1 dropped: a same-pitch fragment ending right
@@ -186,6 +190,45 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     }
   }
 
+  // bridge revival: a gate-failed candidate that exactly fills a short
+  // gap between two mains, CONFIRMED by the fine trace holding its
+  // pitch through the gap, is a real melody note that landed a hair
+  // under the amplitude gate — revive it. The fine-trace agreement is
+  // what makes this evidence rather than gate-lowering
+  if (fine.length) {
+    const revived = [];
+    const bySt = [...skeleton].sort((a, b) => a.t0 - b.t0);
+    for (let i = 1; i < bySt.length; i++) {
+      const a = bySt[i - 1];
+      const b = bySt[i];
+      const gap = b.t0 - a.t1;
+      if (gap < o.minLenSec || gap > o.restSec) continue;
+      const cand = sorted.find(
+        (n) =>
+          n.midi >= o.melodyLoMidi &&
+          n.midi <= o.melodyHiMidi &&
+          n.amp >= o.candidateAmp &&
+          n.t0 <= a.t1 + 0.05 &&
+          n.t1 >= b.t0 - 0.05,
+      );
+      if (!cand) continue;
+      const span = fine.filter(
+        (f) => f.t / 1000 >= a.t1 && f.t / 1000 <= b.t0,
+      );
+      const agree = span.filter(
+        (f) =>
+          f.freq &&
+          Math.abs(69 + 12 * Math.log2(f.freq / 440) - cand.midi) <= 0.7,
+      );
+      if (span.length >= 4 && agree.length >= span.length * 0.5) {
+        revived.push({ midi: cand.midi, t0: a.t1, t1: b.t0 });
+      }
+    }
+    if (revived.length) {
+      skeleton = [...skeleton, ...revived].sort((a, b) => a.t0 - b.t0);
+    }
+  }
+
   // ornamented re-strikes revealed by in-note excursions: an excursion
   // past a note's attack with substantial note remaining after it
   // re-strikes the note there — the note splits around the ornament.
@@ -218,6 +261,94 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     grace: false,
   }));
 
+  // validate excursions against the FINAL skeleton (detection ran
+  // before revivals could exist):
+  // - material at the sounding note's own pitch is that note's body,
+  //   not an ornament — UNLESS it ends at the attack of a
+  //   different-pitch main sitting excMinSemis below it, in which case
+  //   it is that note's lead-in ornament (the C#4 flicker before a B3)
+  // - a run ending exactly at a different-pitch attack with its pitch
+  //   strictly BETWEEN the flanking notes is the transition glide
+  //   itself, not an ornament
+  {
+    const noteAt = (t) => skeleton.find((m) => t >= m.t0 && t <= m.t1);
+    const valid = [];
+    for (const x of excursions) {
+      // hold-mask lag tail: a TINY run at the PREVIOUS note's pitch,
+      // starting right where that note ended — the detector's hold
+      // mask leaking over the next note's start, not an ornament
+      const prevMain = skeleton
+        .filter((m) => m.t1 <= x.t0 + 0.01 && x.t0 - m.t1 <= 0.1)
+        .pop();
+      if (
+        x.n <= 3 &&
+        prevMain &&
+        Math.abs(x.pitch - prevMain.midi) <= 0.7
+      ) {
+        continue;
+      }
+      // onset smear (the tail rule's mirror): a run AT the NEXT note's
+      // pitch, reaching its start — the fine trace hears the note
+      // before the neural boundary does; a note's own attack is not an
+      // ornament
+      const smearInto = skeleton.find(
+        (m) =>
+          m.t0 >= x.t0 - 0.01 &&
+          m.t0 - x.t1 <= 0.1 &&
+          Math.abs(x.pitch - m.midi) <= 0.7,
+      );
+      if (smearInto) continue;
+      // lead-in: the run pours into (and may overlap the start of) a
+      // different-pitch main sitting excMinSemis below it — that
+      // note's pre-strike ornament
+      const leadInto = skeleton.find(
+        (m) =>
+          m.t0 >= x.t0 &&
+          m.t0 - x.t1 <= 0.05 &&
+          x.pitch - m.midi >= o.excMinSemis,
+      );
+      const at = noteAt((x.t0 + x.t1) / 2);
+      if (at && x.pitch - at.midi < o.excMinSemis) {
+        if (leadInto) {
+          x.forceOwner = leadInto.t0;
+          valid.push(x);
+        }
+        continue;
+      }
+      // an excursion in a note's final moments, pouring into the next
+      // attack, decorates the NEXT note — not the note it technically
+      // overlaps (the C#4's last flicker is the B3's ornament)
+      if (leadInto && at && at.t1 - x.t1 <= 0.1 && leadInto.t0 !== at.t0) {
+        x.forceOwner = leadInto.t0;
+        valid.push(x);
+        continue;
+      }
+      // release wobble: an excursion in a note's dying moments with NO
+      // note following is the fade-out, not an ornament
+      if (
+        at &&
+        at.t1 - x.t1 <= 0.1 &&
+        !skeleton.some(
+          (m) => m.t0 >= x.t1 && m.t0 - x.t1 <= o.graceNearSec,
+        )
+      ) {
+        continue;
+      }
+      const next = skeleton.find((m) => Math.abs(m.t0 - x.t1) <= 0.05);
+      const prev = skeleton
+        .filter((m) => m.t1 <= x.t1 + 0.01 && m.t1 >= x.t0 - 0.2)
+        .pop();
+      if (next && prev && prev.midi !== next.midi) {
+        const lo = Math.min(prev.midi, next.midi) + 0.5;
+        const hi = Math.max(prev.midi, next.midi) - 0.5;
+        if (x.pitch > lo && x.pitch < hi) continue;
+      }
+      valid.push(x);
+    }
+    excursions.length = 0;
+    excursions.push(...valid);
+  }
+
   // every detected ornament (pass-2 residual or fine-trace excursion)
   // marks a main note with the ornament glyph — attached to the main
   // whose ATTACK it sits nearest, among the mains it overlaps or leads
@@ -231,6 +362,10 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     ...graces,
     ...excursions.map((x) => ({ ...x, exc: true })),
   ]) {
+    if (g.forceOwner !== undefined) {
+      owned.add(g.forceOwner);
+      continue;
+    }
     let bestAny = null;
     let bestOverlap = null;
     for (const m of skeleton) {
