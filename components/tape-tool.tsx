@@ -84,8 +84,8 @@ export function TapeTool() {
           <div className="tape-field">
             <span className="label">Notation</span>
             <select id="tapeView" className="tape-select" defaultValue="full">
-              <option value="full">Full — ornaments + slides</option>
-              <option value="skeleton">Skeleton — main notes only</option>
+              <option value="full">Full notation</option>
+              <option value="skeleton">Main notes only</option>
             </select>
           </div>
           <div className="tape-field">
@@ -146,17 +146,14 @@ export function TapeTool() {
             def={350}
           />
           <p className="tape-hint">
-            Layout applies to new tape as it prints — Replay re-renders the
-            whole take with the current values.
+            Changes re-render the finished take instantly; while recording they
+            apply to new tape only.
           </p>
         </div>
 
         <div className="tape-group">
           <span className="label">Clip</span>
           <div className="tape-btnrow">
-            <button type="button" className="btn small" id="tapeReplayBtn">
-              Replay
-            </button>
             <button type="button" className="btn small" id="tapeSaveClipBtn">
               Save clip
             </button>
@@ -170,9 +167,7 @@ export function TapeTool() {
 
       <div className="tape-stage">
         <div className="tape-stagehead">
-          <span className="label">
-            Tape — reading orientation, exact print bytes
-          </span>
+          <span className="label">Tape — prints exactly as shown</span>
           <span className="tape-now">
             <span className="label">Sounding</span>
             <span className="tape-val" id="tapeNoteNow">

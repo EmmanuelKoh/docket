@@ -20,6 +20,37 @@ export const NORMALIZE_DEFAULTS = {
   peakCeil: 0.98, // never push samples into clipping
 };
 
+// the browser records everything through a ~130 Hz high-pass (RBJ
+// biquad, room rumble/handling noise; the duduk's lowest note is well
+// above). The harness applies the same filter so Node and browser
+// analyze identical signals.
+export function highpass130(audio, sr) {
+  const w0 = (2 * Math.PI * 130) / sr;
+  const alpha = Math.sin(w0) / (2 * Math.SQRT1_2);
+  const cosw = Math.cos(w0);
+  const a0 = 1 + alpha;
+  const b0 = (1 + cosw) / 2 / a0;
+  const b1 = -(1 + cosw) / a0;
+  const b2 = (1 + cosw) / 2 / a0;
+  const a1 = (-2 * cosw) / a0;
+  const a2 = (1 - alpha) / a0;
+  const out = new Float32Array(audio.length);
+  let x1 = 0;
+  let x2 = 0;
+  let y1 = 0;
+  let y2 = 0;
+  for (let i = 0; i < audio.length; i++) {
+    const x = audio[i];
+    const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1;
+    x1 = x;
+    y2 = y1;
+    y1 = y;
+    out[i] = y;
+  }
+  return out;
+}
+
 // audio: Float32Array -> new Float32Array at the calibration loudness
 export function normalizeLoudness(audio, opts = {}) {
   const o = { ...NORMALIZE_DEFAULTS, ...opts };

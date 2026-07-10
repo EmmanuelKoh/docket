@@ -354,11 +354,11 @@ none of them (it estimates the take's tuning center from its own
 pitch-bend data). Status during a decode: "transcribing… N%" then
 "transcribed N notes + M graces (neural)".
 The mic button while listening is --red text and border (red rule 5, a
-live capture). Right stage: the tape roll with the raw-pitch trace
-riding inside it (below), a transport row (Play/Pause, Stop, a
-varispeed select 0.25×–1× — slower playback also lowers pitch — and
-the position readout at hundredths, m:ss.cc), then a NOTES mono event
-log beside status text and the Print take button.
+live capture). Right stage: titled "Tape — prints exactly as shown"; the tape roll
+with the raw-pitch trace riding inside it (below), a transport row
+(Play/Pause, Stop, a varispeed select 0.25×–1× — slower playback also
+lowers pitch — and the position readout at hundredths, m:ss.cc), then
+a NOTES mono event log beside status text and the Print take button.
 
 The pitch trace shares the tape's x-axis and scroll: it sits directly
 under the paper inside the same roll (hairline separator, --raised

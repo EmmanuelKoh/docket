@@ -264,6 +264,39 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
     }
     skeleton = split;
   }
+  // per-note vibrato width: the spread of its bends (p90 - p10, in
+  // bins). Wobble-merged notes carry their full re-expressed bend
+  // history, so a wide vibrato measures wide here
+  const vibratoSpread = (m) => {
+    const b = (m.bends ?? []).slice().sort((x, y) => x - y);
+    if (b.length < 8) return 0;
+    return b[Math.floor(b.length * 0.9)] - b[Math.floor(b.length * 0.1)];
+  };
+  const WIDE = 2; // bins — wide vibrato straddles a grid line
+
+  // junction merge, vibrato-gated (maintainer: "it's because the
+  // vibrato is wide"): a same-pitch junction INSIDE wide vibrato is
+  // the vibrato pulsing the onset head, not a re-strike — clean-
+  // context doubles (tight bends) keep their junctions
+  {
+    const merged = [];
+    for (const m of skeleton) {
+      const last = merged[merged.length - 1];
+      if (
+        last &&
+        last.midi === m.midi &&
+        m.t0 - last.t1 <= o.restrikeGapSec &&
+        (vibratoSpread(last) >= WIDE || vibratoSpread(m) >= WIDE)
+      ) {
+        last.t1 = m.t1;
+        last.bends = [...(last.bends ?? []), ...(m.bends ?? [])];
+      } else {
+        merged.push({ ...m });
+      }
+    }
+    skeleton = merged;
+  }
+
   const timeline = skeleton.map((m) => ({
     t0: m.t0,
     t1: m.t1,
@@ -383,6 +416,24 @@ export function annotate(rawNotes, decorated, opts = {}, fine = []) {
       skeleton.some((m) => m.midi === g.midi && g.t0 < m.t1 && g.t1 > m.t0)
     ) {
       continue;
+    }
+    // a grace whose ABSOLUTE pitch sits within the note it overlaps —
+    // when that note's vibrato is WIDE — is the vibrato's lower lobe,
+    // not an ornament. (In tight-vibrato context the same shape is a
+    // real rearticulation dip and stays.)
+    if (!g.exc && meanBend(g) !== null) {
+      const abs = g.midi + meanBend(g) / 3;
+      if (
+        skeleton.some(
+          (m) =>
+            g.t0 < m.t1 &&
+            g.t1 > m.t0 &&
+            Math.abs(abs - m.midi) <= 0.7 &&
+            vibratoSpread(m) >= WIDE,
+        )
+      ) {
+        continue;
+      }
     }
     let bestAny = null;
     let bestOverlap = null;

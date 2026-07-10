@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dereverb } from './dereverb.mjs';
-import { normalizeLoudness } from './normalize.mjs';
+import { highpass130, normalizeLoudness } from './normalize.mjs';
 import { onsetAt } from './ornaments.mjs';
 
 const require = createRequire(import.meta.url);
@@ -67,8 +67,11 @@ function loadWav22k(wavPath) {
   const wav = fs.readFileSync(wavPath);
   const srIn = wav.readUInt32LE(24);
   const n = (wav.length - 44) / 2;
-  const raw = new Float32Array(n);
+  let raw = new Float32Array(n);
   for (let i = 0; i < n; i++) raw[i] = wav.readInt16LE(44 + i * 2) / 32768;
+  // browser parity: everything the engine analyzes passed its 130 Hz
+  // high-pass at record/load time
+  raw = highpass130(raw, srIn);
   const SR = 22050;
   const outLen = Math.floor((n * SR) / srIn);
   const audio = new Float32Array(outLen);
@@ -81,8 +84,39 @@ function loadWav22k(wavPath) {
   return { audio, seconds: outLen / SR };
 }
 
+// disk cache: Basic Pitch inference is by far the slowest step of the
+// harness and its output is deterministic per (file, options) — cache
+// results under data/.tape-cache keyed by path+mtime+size+options
+const CACHE_DIR = path.join(__dirname, '..', '..', 'data', '.tape-cache');
+function cacheKey(kind, wavPath, opts) {
+  const st = fs.statSync(wavPath);
+  const raw = `${kind}:${wavPath}:${st.mtimeMs}:${st.size}:${JSON.stringify(opts)}`;
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) h = (h * 31 + raw.charCodeAt(i)) >>> 0;
+  return path.join(CACHE_DIR, `${kind}-${h.toString(16)}.json`);
+}
+export function cached(kind, wavPath, opts, compute) {
+  const key = cacheKey(kind, wavPath, opts);
+  try {
+    return JSON.parse(fs.readFileSync(key, 'utf8'));
+  } catch {
+    /* miss */
+  }
+  const result = compute();
+  const store = (r) => {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(key, JSON.stringify(r));
+    return r;
+  };
+  return result instanceof Promise ? result.then(store) : store(result);
+}
+
 // wav -> [{ t0, t1, midi, amp, bends, onset }] (seconds, sorted)
-export async function transcribe(
+export async function transcribe(wavPath, opts = {}) {
+  return cached('bp', wavPath, opts, () => transcribeUncached(wavPath, opts));
+}
+
+async function transcribeUncached(
   wavPath,
   {
     onsetThresh = 0.4,
