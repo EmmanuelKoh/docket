@@ -23,6 +23,20 @@ export interface TapeSettings {
   traceZoom: number; // linear-trace columns per second
 }
 
+// The selected note, as the inspector renders it — a snapshot the
+// controller rebuilds from the take document after every change.
+export interface TapeSelection {
+  id: string;
+  label: string; // "F♯4" in the current key
+  midi: number;
+  t0: number; // seconds
+  t1: number;
+  grace: boolean;
+  ornament: boolean; // arc at the attack
+  slide: boolean; // slide connector from the previous main note
+  canJoin: boolean; // a later main note exists to join with
+}
+
 export interface TapeState {
   // ---- transient session state (reset by the controller on mount) ----
   micOn: boolean;
@@ -37,6 +51,12 @@ export interface TapeState {
   canPrint: boolean; // the tape has rows
   printState: 'idle' | 'queuing';
   truncated: boolean; // preview hit its width cap (the print is whole)
+  hasTake: boolean; // a decoded take document exists (editing possible)
+  selection: TapeSelection | null;
+  // the selection band over the preview, in css px on the tape roll
+  selectionRect: { left: number; width: number; height: number } | null;
+  editCount: number; // ops applied to the take (nonzero = frozen)
+  redoCount: number;
 
   // ---- user settings (persist across mounts) ----
   viewMode: 'full' | 'skeleton';
@@ -58,6 +78,11 @@ export const tapeStore = createStore<TapeState>(() => ({
   canPrint: false,
   printState: 'idle',
   truncated: false,
+  hasTake: false,
+  selection: null,
+  selectionRect: null,
+  editCount: 0,
+  redoCount: 0,
 
   viewMode: 'full',
   traceMode: 'aligned',

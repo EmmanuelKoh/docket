@@ -67,7 +67,10 @@ plugins server-side. No process polls on its own timer except the device.
   and the take document (`doc.mjs` — derives the timeline via the
   tape-eval passes and holds edits/undo/versions; `npm run tape:doc`
   checks it). Only the canvases are imperative; controls are ordinary
-  React reading the store.
+  React reading the store. Editing (click a note → inspector strip)
+  re-renders the whole tape from the edited timeline; detection
+  freezes while edits exist ("Start over" re-derives, snapshotting
+  the edited tape into doc.versions first).
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.

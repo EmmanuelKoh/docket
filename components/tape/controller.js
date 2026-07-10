@@ -20,7 +20,14 @@ import { createTapeRenderer, noteLabel } from '@/components/tape-renderer.js';
 import { createAnalyzer } from './analyzer.js';
 import { createRecorder, synthDemoPcm } from './audio-io.js';
 import { transcribe } from './decode.js';
-import { createDoc, reDerive, skeletonOf } from './doc.mjs';
+import {
+  applyEdit,
+  createDoc,
+  reDerive,
+  redo,
+  skeletonOf,
+  undo,
+} from './doc.mjs';
 import { createPlayer } from './playback.js';
 import { tapeStore } from './store';
 import { createTapeView } from './tape-view.js';
@@ -64,6 +71,11 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     canPrint: false,
     printState: 'idle',
     truncated: false,
+    hasTake: false,
+    selection: null,
+    selectionRect: null,
+    editCount: 0,
+    redoCount: 0,
   });
 
   const recorder = createRecorder();
@@ -129,6 +141,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         if (scrubWasPlaying) player.play();
         scrubWasPlaying = false;
       },
+      onSelect: (id) => selectNote(id),
       onTruncated: (v) => set({ truncated: v }),
     },
   });
@@ -167,9 +180,61 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     frameQueue = [];
     view.reset();
     if (clearRecording) recorder.reset();
-    set({ log: [], noteNow: '—', canPrint: false });
-    player.invalidate(); // a new take invalidates the old playhead mapping
+    set({
+      log: [],
+      noteNow: '—',
+      canPrint: false,
+      hasTake: false,
+      selection: null,
+      selectionRect: null,
+    });
+    // the audio only changes when the recording is cleared/replaced —
+    // re-renders of the same take keep the player's position and cached
+    // buffer (the playhead mapping recomputes against the new rows), so
+    // an edit doesn't yank the playhead back to zero
+    if (clearRecording) player.invalidate();
+    else player.stop(true);
     syncAudioState();
+  }
+
+  // ---- selection: the note the inspector edits. The store carries a
+  // snapshot (label, times, flags) plus the preview band rect; both are
+  // rebuilt here after every render, because renders replace the
+  // renderer and its geometry. An id that no longer exists (removed,
+  // re-derived, skeleton view) simply clears the selection. ----
+  function selectNote(id) {
+    if (!doc || !id) {
+      set({ selection: null, selectionRect: null });
+      return;
+    }
+    const entry = doc.timeline.find((e) => e.id === id && !e.mark);
+    const rect = view.rectForNote(id);
+    if (!entry || !rect) {
+      set({ selection: null, selectionRect: null });
+      return;
+    }
+    const after = doc.timeline.slice(doc.timeline.indexOf(entry) + 1);
+    set({
+      selection: {
+        id,
+        label: noteLabel(entry.midi, renderer.config.keySig),
+        midi: entry.midi,
+        t0: entry.t0,
+        t1: entry.t1,
+        grace: !!entry.grace,
+        ornament: !!entry.ornament,
+        slide: !!entry.slide,
+        canJoin: after.some((e) => !e.mark),
+      },
+      selectionRect: rect,
+    });
+  }
+
+  function syncEditState() {
+    set({
+      editCount: doc ? doc.edits.length : 0,
+      redoCount: doc ? doc.redoStack.length : 0,
+    });
   }
 
   // ---- look-behind rendering: the live tape draws ~300ms behind the
@@ -353,7 +418,8 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         createdAt: Date.now(),
       });
       deriveStale = false;
-      set({ status: renderTimeline() });
+      set({ status: renderTimeline(), hasTake: true });
+      syncEditState();
     } catch (e) {
       set({ status: `transcription failed: ${e.message}` });
     }
@@ -406,6 +472,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // snapshotting first if it carries edits (freeze-on-edit recovery).
   function rerenderView() {
     if (!doc || recorder.micOn || decoding) return;
+    const selId = get().selection ? get().selection.id : null;
     const frames = traceFrames; // survive the reset
     resetTake(false);
     traceFrames = frames;
@@ -415,14 +482,33 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     if (tracing) traceAgain = true;
     if (deriveStale) {
       deriveStale = false;
-      doc = reDerive(doc, {
-        melodyFloorHz: settings().melodyFloor,
-        fineFrames: traceFrames,
-        savedAt: Date.now(),
-      });
+      // freeze-on-edit: an edited timeline is never re-derived behind
+      // the user's back (the fine frames stay drawn in the trace; the
+      // explicit "Start over" path re-derives and snapshots first)
+      if (!doc.edits.length) {
+        doc = reDerive(doc, {
+          melodyFloorHz: settings().melodyFloor,
+          fineFrames: traceFrames,
+          savedAt: Date.now(),
+        });
+      }
     }
-    set({ status: renderTimeline() });
+    set({ status: renderTimeline(), hasTake: true });
     view.rebuildTrace(traceFrames); // aligned columns moved with the tape
+    syncEditState();
+    selectNote(selId); // geometry moved; recompute (or clear) the band
+  }
+
+  // ---- editing: every op goes through the take document (doc.mjs) and
+  // re-renders the whole tape from the edited timeline — the preview
+  // and the print bytes stay the same rows by construction. ----
+  function applyDocOp(op, keepId) {
+    if (!doc || recorder.micOn || decoding) return;
+    const next = applyEdit(doc, op);
+    if (next === doc) return; // op didn't apply (see doc.mjs)
+    doc = next;
+    rerenderView();
+    selectNote(keepId ?? null);
   }
 
   // a re-render deferred because audio was playing when it was wanted —
@@ -585,6 +671,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     demo() {
       if (recorder.micOn || decoding) return;
       recorder.loadRaw(synthDemoPcm(recorder.sampleRate));
+      player.invalidate(); // new audio behind the same take flow
       syncAudioState();
       neuralDecode();
     },
@@ -601,6 +688,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       set({ status: 'decoding clip…' });
       try {
         await recorder.loadFile(file);
+        player.invalidate(); // new audio behind the same take flow
         syncAudioState();
         await neuralDecode();
       } catch (e) {
@@ -616,6 +704,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       player.stop(false);
     },
     setSetting(key, value) {
+      // freeze-on-edit: the floor changes the derivation, which would
+      // replace the edited timeline (the slider is disabled in the UI;
+      // this is the belt to that suspender)
+      if (key === 'melodyFloor' && doc && doc.edits.length) return;
       set((s) => ({ settings: { ...s.settings, [key]: value } }));
       if (key === 'melodyFloor') {
         // the register split changes the decode AND the trace analysis
@@ -643,6 +735,67 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     setSpeed(v) {
       set({ speed: v });
       player.setRate(v);
+    },
+
+    // ---- editing (Phase 2) ----
+    select: (id) => selectNote(id),
+    nudgePitch(delta) {
+      const sel = get().selection;
+      if (!sel) return;
+      const midi = Math.max(48, Math.min(91, sel.midi + delta));
+      if (midi === sel.midi) return;
+      applyDocOp({ op: 'setPitch', id: sel.id, midi }, sel.id);
+    },
+    toggleOrnament() {
+      const sel = get().selection;
+      if (sel) applyDocOp({ op: 'toggleOrnament', id: sel.id }, sel.id);
+    },
+    toggleSlide() {
+      const sel = get().selection;
+      if (sel) applyDocOp({ op: 'toggleSlide', id: sel.id }, sel.id);
+    },
+    splitAtPlayhead() {
+      const sel = get().selection;
+      if (!sel) return;
+      const t = player.pos();
+      if (!(t > sel.t0 + 0.02 && t < sel.t1 - 0.02)) return;
+      applyDocOp({ op: 'split', id: sel.id, t }, `${sel.id}a`);
+    },
+    joinNext() {
+      const sel = get().selection;
+      if (sel) applyDocOp({ op: 'join', id: sel.id }, sel.id);
+    },
+    removeNote() {
+      const sel = get().selection;
+      if (sel) applyDocOp({ op: 'remove', id: sel.id }, null);
+    },
+    undoEdit() {
+      if (!doc || recorder.micOn || decoding) return;
+      const next = undo(doc);
+      if (next === doc) return;
+      doc = next;
+      rerenderView();
+    },
+    redoEdit() {
+      if (!doc || recorder.micOn || decoding) return;
+      const next = redo(doc);
+      if (next === doc) return;
+      doc = next;
+      rerenderView();
+    },
+    // the explicit unfreeze: re-derive from the recording at the current
+    // floor. reDerive snapshots the edited tape into doc.versions first,
+    // so nothing is lost — the recovery UI is a later phase.
+    reread() {
+      if (!doc || recorder.micOn || decoding) return;
+      selectNote(null); // ids change wholesale; keep nothing selected
+      doc = reDerive(doc, {
+        melodyFloorHz: settings().melodyFloor,
+        fineFrames: traceFrames,
+        savedAt: Date.now(),
+      });
+      deriveStale = false;
+      rerenderView();
     },
     print,
     dispose() {

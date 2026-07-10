@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createTapeController } from '@/components/tape/controller.js';
-import { type TapeSettings, useTape } from '@/components/tape/store';
+import { type TapeSettings, tapeStore, useTape } from '@/components/tape/store';
 import { KEY_SIGS } from '@/components/tape-renderer.js';
 import { useSidebar } from '@/components/ui/sidebar';
 
@@ -28,6 +28,7 @@ function Slider(props: {
   min: number;
   max: number;
   fmt?: (v: number) => string;
+  disabled?: boolean;
 }) {
   const value = useTape((s) => s.settings[props.k]);
   return (
@@ -38,6 +39,7 @@ function Slider(props: {
         min={props.min}
         max={props.max}
         value={value}
+        disabled={props.disabled}
         onChange={(e) =>
           props.ctl?.setSetting(props.k, parseFloat(e.target.value))
         }
@@ -54,6 +56,7 @@ function Controls({ ctl }: { ctl: Controller | null }) {
   const keySig = useTape((s) => s.settings.keySig);
   const viewMode = useTape((s) => s.viewMode);
   const traceMode = useTape((s) => s.traceMode);
+  const editCount = useTape((s) => s.editCount);
 
   return (
     <div className="tape-controls">
@@ -110,7 +113,23 @@ function Controls({ ctl }: { ctl: Controller | null }) {
           min={120}
           max={500}
           fmt={(v) => `${v} Hz`}
+          disabled={editCount > 0}
         />
+        {editCount > 0 && (
+          <>
+            <p className="tape-hint">
+              Detection locks while the take has edits. Start over re-reads the
+              recording; the edited tape is kept as a snapshot.
+            </p>
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => ctl?.reread()}
+            >
+              Start over
+            </button>
+          </>
+        )}
       </div>
 
       <div className="tape-group">
@@ -247,6 +266,122 @@ function StageHead() {
   );
 }
 
+// the selected note's band — DOM over the preview, never in the canvas
+// (the canvas holds exact print bytes)
+function SelectionBand() {
+  const rect = useTape((s) => s.selectionRect);
+  if (!rect) return null;
+  return (
+    <div
+      className="tape-selection"
+      style={{ left: rect.left, width: rect.width, height: rect.height }}
+    />
+  );
+}
+
+// the editing strip: what the selected note is, and what can be done to
+// it. Shown once a take is decoded; before a selection it teaches the
+// click affordance. Undo/redo live here and work without a selection.
+function Inspector({ ctl }: { ctl: Controller | null }) {
+  const hasTake = useTape((s) => s.hasTake);
+  const selection = useTape((s) => s.selection);
+  const editCount = useTape((s) => s.editCount);
+  const redoCount = useTape((s) => s.redoCount);
+  const playTime = useTape((s) => s.playTime);
+  const viewMode = useTape((s) => s.viewMode);
+  if (!hasTake) return null;
+  const canSplit =
+    !!selection &&
+    playTime > selection.t0 + 0.02 &&
+    playTime < selection.t1 - 0.02;
+  return (
+    <div className="tape-inspector">
+      {selection ? (
+        <>
+          <span className="tape-val">
+            {selection.label} · {fmtTime(selection.t0)}–{fmtTime(selection.t1)}
+          </span>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => ctl?.nudgePitch(-1)}
+          >
+            Pitch −
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => ctl?.nudgePitch(1)}
+          >
+            Pitch +
+          </button>
+          <button
+            type="button"
+            className={selection.ornament ? 'btn small pressed' : 'btn small'}
+            onClick={() => ctl?.toggleOrnament()}
+          >
+            Ornament
+          </button>
+          <button
+            type="button"
+            className={selection.slide ? 'btn small pressed' : 'btn small'}
+            onClick={() => ctl?.toggleSlide()}
+          >
+            Slide from prev
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={!canSplit}
+            title={canSplit ? undefined : 'seek inside the note first'}
+            onClick={() => ctl?.splitAtPlayhead()}
+          >
+            Split at playhead
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            disabled={!selection.canJoin}
+            onClick={() => ctl?.joinNext()}
+          >
+            Join next
+          </button>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => ctl?.removeNote()}
+          >
+            Remove
+          </button>
+        </>
+      ) : (
+        <span className="tape-hint">
+          {viewMode === 'full'
+            ? 'click a note on the tape to edit it'
+            : 'switch to Full notation to edit'}
+        </span>
+      )}
+      <span className="tape-inspector-spacer" />
+      <button
+        type="button"
+        className="btn small"
+        disabled={!editCount}
+        onClick={() => ctl?.undoEdit()}
+      >
+        Undo{editCount ? ` (${editCount})` : ''}
+      </button>
+      <button
+        type="button"
+        className="btn small"
+        disabled={!redoCount}
+        onClick={() => ctl?.redoEdit()}
+      >
+        Redo
+      </button>
+    </div>
+  );
+}
+
 function Playhead({
   elRef,
 }: {
@@ -374,6 +509,30 @@ export function TapeTool() {
     return () => c.dispose();
   }, []);
 
+  // editing shortcuts — skipped while a form control has focus
+  useEffect(() => {
+    if (!ctl) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return;
+      if (e.key === 'Escape') {
+        ctl.select(null);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) ctl.redoEdit();
+        else ctl.undoEdit();
+      } else if (
+        (e.key === 'Backspace' || e.key === 'Delete') &&
+        tapeStore.getState().selection
+      ) {
+        e.preventDefault();
+        ctl.removeNote();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ctl]);
+
   return (
     <div className="tape-tool">
       <Controls ctl={ctl} />
@@ -382,9 +541,11 @@ export function TapeTool() {
         <div className="tape-roll" ref={wrapRef}>
           <canvas ref={canvasRef} />
           <canvas ref={traceRef} className="tape-trace" height={110} />
+          <SelectionBand />
           <Playhead elRef={playheadRef} />
         </div>
         <Transport ctl={ctl} />
+        <Inspector ctl={ctl} />
         <Bottom ctl={ctl} />
       </div>
     </div>

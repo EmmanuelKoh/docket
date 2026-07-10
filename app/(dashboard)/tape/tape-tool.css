@@ -37,6 +37,13 @@
 .btn.disabled:hover {
   border-color: var(--border);
 }
+/* a toggle that is ON (the inspector's Ornament / Slide buttons):
+   monochrome inversion — red stays reserved for live/failure states */
+.btn.pressed {
+  background: var(--ink);
+  color: var(--raised);
+  border-color: var(--ink);
+}
 /* the mic while listening is the one live/armed thing on the page —
    register red, per the red-usage rules (an active capture, like a
    printing job) */
@@ -172,6 +179,34 @@
 }
 .tape-playhead.live {
   background: var(--red);
+}
+
+/* the selected note: an ink-wash band over the tape pane only — a DOM
+   overlay like the playhead, never drawn into the canvas (exact print
+   bytes). Height is set inline to the tape pane's height so the band
+   stops above the pitch trace. */
+.tape-selection {
+  position: absolute;
+  top: 0;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-left: 1px solid var(--ink-muted);
+  border-right: 1px solid var(--ink-muted);
+  pointer-events: none;
+}
+
+/* the editing strip under the transport: selected-note facts, the edit
+   actions, and undo/redo pushed to the right */
+.tape-inspector {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tape-inspector .tape-val {
+  text-align: left;
+}
+.tape-inspector-spacer {
+  margin-left: auto;
 }
 
 .tape-transport {

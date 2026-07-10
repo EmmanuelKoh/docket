@@ -263,6 +263,15 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     (e) => {
       if (e.target === wrap) return;
       if (!hooks.isSeekable?.()) return;
+      // clicking the tape also selects the note under the pointer
+      // (hit-test by row range only — notes are monophonic, so time is
+      // unambiguous; the trace pane below only seeks)
+      if (e.target === canvas && renderer) {
+        const rect = canvas.getBoundingClientRect();
+        const row = (e.clientX - rect.left) / SCALE;
+        const hit = renderer.notes.find((g) => row >= g.r0 && row <= g.r1);
+        hooks.onSelect?.(hit ? hit.id : null);
+      }
       scrubbing = true;
       hooks.onScrubStart?.();
       wrap.setPointerCapture(e.pointerId);
@@ -321,12 +330,27 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     paintTrace();
   }
 
+  // css-px band over a note's rows — the React selection overlay
+  // (drawn as DOM over the preview; the canvas holds exact print bytes
+  // and is never marked)
+  function rectForNote(id) {
+    if (!renderer || id === null || id === undefined) return null;
+    const g = renderer.notes.find((n) => n.id === id);
+    if (!g) return null;
+    return {
+      left: Math.round(g.r0 * SCALE),
+      width: Math.max(2, Math.round((g.r1 - g.r0) * SCALE)),
+      height: Math.round(576 * SCALE),
+    };
+  }
+
   raf = requestAnimationFrame(frame);
 
   return {
     attachRenderer(r) {
       renderer = r;
     },
+    rectForNote,
     reset,
     paintTraceFrame,
     rebuildTrace,

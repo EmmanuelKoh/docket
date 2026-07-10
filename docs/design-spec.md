@@ -385,6 +385,28 @@ scrub surface (crosshair cursor, hint right-aligned in the transport
 row): dragging pauses and seeks, releasing resumes if it was playing.
 While playing the roll auto-scrolls to keep the bar in view.
 
+Editing: once a take is decoded, clicking a note on the tape selects
+it — the same click still seeks. The selection is an ink-wash band
+(8% ink, hairline --ink-muted edges) over the tape pane only, drawn as
+a DOM overlay like the playhead, never into the canvas (exact print
+bytes). An inspector strip under the transport shows the selected note
+in mono ("A♯4 · 0:00.07–0:02.23") with its actions: Pitch −/+,
+Ornament and Slide-from-prev toggles (a pressed toggle inverts to ink
+on raised — red stays reserved), Split at playhead (enabled while the
+playhead rests inside the note; edits keep the playback position),
+Join next, Remove, and Undo (n) / Redo pushed to the right. Before a
+selection the strip teaches the affordance ("click a note on the tape
+to edit it"); the Main-notes-only view doesn't edit ("switch to Full
+notation to edit"). Keyboard: Esc deselects, Cmd/Ctrl-Z and
+Shift-Cmd-Z undo/redo, Backspace/Delete removes the selected note.
+Every edit re-renders the whole tape from the edited timeline, so the
+preview and the print bytes remain the same rows. Freeze-on-edit:
+while a take has edits, the Melody floor slider disables with a hint
+and a Start over button appears — it re-reads the recording, keeping
+the edited tape as a snapshot; undoing every edit unlocks the slider
+again. Background re-derivation (the trace backfill finishing) never
+replaces an edited timeline.
+
 Print take queues the rendered rows verbatim through /api/tape/print
 (source "tape"); the button reads "Queuing…" while in flight and the
 status line answers in plain words ("sent to the print queue", never a
