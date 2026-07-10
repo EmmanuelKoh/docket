@@ -189,16 +189,27 @@ function mergeWobble(mel, o) {
       continue;
     }
     const chain = [mel[i]];
+    const skipped = [];
     let sum = a0;
     let j = i + 1;
     while (j < mel.length) {
       const n = mel[j];
+      if (Math.abs(n.midi - mel[i].midi) > 1) {
+        // another voice interleaved (Basic Pitch is polyphonic) —
+        // skip past it; it re-emits untouched
+        skipped.push(n);
+        j++;
+        continue;
+      }
       const abs = absOf(n);
       if (
         abs === null ||
         n.t0 - chain[chain.length - 1].t1 > o.mergeGapSec ||
-        Math.abs(n.midi - mel[i].midi) > 1 ||
-        Math.abs(abs - sum / chain.length) > 0.7
+        Math.abs(abs - sum / chain.length) > 0.7 ||
+        // a SECOND sustained piece is a real note, not a vibrato blip
+        // — the chain may hold only one (the held note it decorates)
+        (n.t1 - n.t0 > 0.25 &&
+          chain.some((c) => c.t1 - c.t0 > 0.25))
       ) {
         break;
       }
@@ -244,13 +255,14 @@ function mergeWobble(mel, o) {
         ),
         onset: chain[0].onset,
       });
+      out.push(...skipped);
       i = j;
     } else {
       out.push(mel[i]);
       i++;
     }
   }
-  return out;
+  return out.sort((a, b) => a.t0 - b.t0);
 }
 
 function mergeRuns(notes, gapSec) {
@@ -388,19 +400,29 @@ export function skeletonize(notes, opts = {}) {
   // the opening note's resonance ringing for seconds beneath the
   // melody — surfacing wherever the melody breathes. Drop it entirely,
   // then re-merge the pieces the drops re-expose
-  const truncated = new Set();
+  // deterministic order with longer notes first at onset ties: the
+  // longer note is the backdrop (under-voice); the articulated melody
+  // riding on it truncates it, not the other way round
+  skeleton.sort(
+    (a, b) => a.t0 - b.t0 || b.t1 - b.t0 - (a.t1 - a.t0),
+  );
+  const truncated = new Map(); // note -> original end
   for (let i = 1; i < skeleton.length; i++) {
     if (skeleton[i].t0 < skeleton[i - 1].t1) {
+      if (!truncated.has(skeleton[i - 1])) {
+        truncated.set(skeleton[i - 1], skeleton[i - 1].t1);
+      }
       skeleton[i - 1].t1 = skeleton[i].t0;
-      truncated.add(skeleton[i - 1]);
     }
   }
   return mergeRuns(
-    skeleton.filter(
+    skeleton.filter((n) => {
+      const kept = n.t1 - n.t0;
+      if (!truncated.has(n)) return kept > 0.02;
       // 0.01 of slack: a real note whose head is squeezed to exactly
       // minLenSec by a neighbor must not die to frame quantization
-      (n) => n.t1 - n.t0 > (truncated.has(n) ? o.minLenSec - 0.01 : 0.02),
-    ),
+      return kept > o.minLenSec - 0.01;
+    }),
     o.mergeGapSec,
   );
 }
