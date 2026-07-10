@@ -23,6 +23,18 @@ export interface TapeSettings {
   traceZoom: number; // linear-trace columns per second
 }
 
+// A saved take's meta record, as the takes list renders it.
+export interface TakeMeta {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  seconds: number;
+  sampleRate: number;
+  noteCount: number;
+  hasAudio: boolean;
+}
+
 // The selected note, as the inspector renders it — a snapshot the
 // controller rebuilds from the take document after every change.
 export interface TapeSelection {
@@ -57,6 +69,13 @@ export interface TapeState {
   selectionRect: { left: number; width: number; height: number } | null;
   editCount: number; // ops applied to the take (nonzero = frozen)
   redoCount: number;
+  takes: TakeMeta[] | null; // saved takes; null until the first fetch
+  persistBusy: boolean; // a save/load/delete is in flight
+  // the saved take this session came from (saved or loaded): Save then
+  // updates it in place. Cleared when the audio genuinely changes.
+  currentTake: { id: string; name: string } | null;
+  // the most recent soft delete, undoable from the takes list
+  lastDeleted: { id: string; name: string } | null;
 
   // ---- user settings (persist across mounts) ----
   viewMode: 'full' | 'skeleton';
@@ -83,6 +102,10 @@ export const tapeStore = createStore<TapeState>(() => ({
   selectionRect: null,
   editCount: 0,
   redoCount: 0,
+  takes: null,
+  persistBusy: false,
+  currentTake: null,
+  lastDeleted: null,
 
   viewMode: 'full',
   traceMode: 'aligned',

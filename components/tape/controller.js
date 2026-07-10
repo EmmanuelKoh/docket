@@ -28,6 +28,14 @@ import {
   skeletonOf,
   undo,
 } from './doc.mjs';
+import {
+  deleteTake as apiDeleteTake,
+  loadTake as apiLoadTake,
+  restoreTake as apiRestoreTake,
+  saveTake as apiSaveTake,
+  updateTake as apiUpdateTake,
+  fetchTakes,
+} from './persist.js';
 import { createPlayer } from './playback.js';
 import { tapeStore } from './store';
 import { createTapeView } from './tape-view.js';
@@ -76,6 +84,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     selectionRect: null,
     editCount: 0,
     redoCount: 0,
+    persistBusy: false,
+    currentTake: null,
+    lastDeleted: null,
   });
 
   const recorder = createRecorder();
@@ -191,9 +202,14 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     // the audio only changes when the recording is cleared/replaced —
     // re-renders of the same take keep the player's position and cached
     // buffer (the playhead mapping recomputes against the new rows), so
-    // an edit doesn't yank the playhead back to zero
-    if (clearRecording) player.invalidate();
-    else player.stop(true);
+    // an edit doesn't yank the playhead back to zero. A cleared
+    // recording also unties the session from its saved take.
+    if (clearRecording) {
+      player.invalidate();
+      set({ currentTake: null });
+    } else {
+      player.stop(true);
+    }
     syncAudioState();
   }
 
@@ -647,8 +663,131 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     set({ printState: 'idle' });
   }
 
+  // ---- saved takes (persistence, see persist.js / lib/tape-store.js).
+  // The list is fetched once on mount and after each mutation — never
+  // polled (metered stores; see docs/store-costs.md). ----
+  async function refreshTakes() {
+    try {
+      const takes = await fetchTakes();
+      if (!disposed) set({ takes });
+    } catch {
+      if (!disposed) set({ takes: [] });
+    }
+  }
+
+  // Save: when the session is tied to a saved take (currentTake), update
+  // it in place — document/settings/name only, no audio re-upload; when
+  // untied (or asNew), create a fresh record and tie to it.
+  async function persistTake(name, asNew) {
+    if (!doc || !recorder.length || recorder.micOn || decoding) return false;
+    if (get().persistBusy) return false;
+    set({ persistBusy: true });
+    let ok = false;
+    try {
+      const cur = get().currentTake;
+      const noteCount = doc.timeline.filter((e) => !e.mark).length;
+      const onStatus = (msg) => set({ status: msg });
+      const take =
+        cur && !asNew
+          ? await apiUpdateTake(cur.id, {
+              name,
+              noteCount,
+              settings: settings(),
+              doc,
+              onStatus,
+            })
+          : await apiSaveTake({
+              name,
+              seconds: recorder.seconds,
+              sampleRate: recorder.sampleRate,
+              noteCount,
+              settings: settings(),
+              doc,
+              wav: recorder.toWavBlob(),
+              onStatus,
+            });
+      set({
+        status: `saved "${take.name}"`,
+        currentTake: { id: take.id, name: take.name },
+      });
+      ok = true;
+      refreshTakes();
+    } catch (e) {
+      set({ status: `save failed: ${e.message}` });
+    }
+    set({ persistBusy: false });
+    return ok;
+  }
+
+  async function loadTakeById(id) {
+    if (recorder.micOn || decoding || get().persistBusy) return;
+    set({ persistBusy: true, status: 'loading take…' });
+    try {
+      const loaded = await apiLoadTake(id);
+      // the saved controls first — the renderer reads them on reset
+      if (loaded.settings) {
+        set((s) => ({ settings: { ...s.settings, ...loaded.settings } }));
+        view.setTraceZoom(get().settings.traceZoom);
+      }
+      if (loaded.audio) await recorder.loadFile(loaded.audio);
+      else recorder.reset();
+      player.invalidate();
+      doc = loaded.doc;
+      deriveStale = false;
+      resetTake(false);
+      set({
+        status: `loaded "${loaded.take.name}" — ${renderTimeline()}`,
+        hasTake: true,
+        currentTake: { id: loaded.take.id, name: loaded.take.name },
+      });
+      syncEditState();
+      syncAudioState();
+      traceBackfill(); // no-op without audio; refills the trace with it
+    } catch (e) {
+      set({ status: `load failed: ${e.message}` });
+    }
+    set({ persistBusy: false });
+  }
+
+  async function deleteTakeById(id) {
+    if (get().persistBusy) return;
+    set({ persistBusy: true });
+    try {
+      const name = (get().takes || []).find((t) => t.id === id)?.name || 'take';
+      await apiDeleteTake(id);
+      set((s) => ({
+        takes: (s.takes || []).filter((t) => t.id !== id),
+        // deleting the take this session came from unties it — the next
+        // Save creates a fresh record instead of updating a ghost
+        currentTake: s.currentTake?.id === id ? null : s.currentTake,
+        // soft delete: undoable from the list for the session, and the
+        // record survives server-side for 30 days regardless
+        lastDeleted: { id, name },
+        status: `deleted "${name}" — kept for 30 days`,
+      }));
+    } catch (e) {
+      set({ status: `delete failed: ${e.message}` });
+    }
+    set({ persistBusy: false });
+  }
+
+  async function undeleteTake() {
+    const gone = get().lastDeleted;
+    if (!gone || get().persistBusy) return;
+    set({ persistBusy: true });
+    try {
+      const take = await apiRestoreTake(gone.id);
+      set({ lastDeleted: null, status: `restored "${take.name}"` });
+      await refreshTakes();
+    } catch (e) {
+      set({ status: `restore failed: ${e.message}` });
+    }
+    set({ persistBusy: false });
+  }
+
   // ---- boot ----
   resetTake(true);
+  refreshTakes();
 
   // ---- public API (what the React handlers call) ----
   return {
@@ -672,6 +811,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       if (recorder.micOn || decoding) return;
       recorder.loadRaw(synthDemoPcm(recorder.sampleRate));
       player.invalidate(); // new audio behind the same take flow
+      set({ currentTake: null }); // genuinely a new take
       syncAudioState();
       neuralDecode();
     },
@@ -689,6 +829,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       try {
         await recorder.loadFile(file);
         player.invalidate(); // new audio behind the same take flow
+        set({ currentTake: null }); // genuinely a new take
         syncAudioState();
         await neuralDecode();
       } catch (e) {
@@ -797,6 +938,12 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       deriveStale = false;
       rerenderView();
     },
+    // ---- saved takes (Phase 3) ----
+    saveTake: (name) => persistTake(name, false),
+    saveTakeAsNew: (name) => persistTake(name, true),
+    loadTakeById,
+    deleteTakeById,
+    undeleteTake,
     print,
     dispose() {
       disposed = true;

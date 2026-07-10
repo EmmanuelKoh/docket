@@ -70,7 +70,12 @@ plugins server-side. No process polls on its own timer except the device.
   React reading the store. Editing (click a note → inspector strip)
   re-renders the whole tape from the edited timeline; detection
   freezes while edits exist ("Start over" re-derives, snapshotting
-  the edited tape into doc.versions first).
+  the edited tape into doc.versions first). Saved takes:
+  `lib/tape-store.js` (meta in one Redis key, document JSON + lossless
+  WAV in Blob; json driver = files in `data/tape/`) behind
+  `/api/tape/takes*`; hosted audio uploads go browser→Blob via a
+  client-upload token (`/api/tape/takes/upload`) because WAVs exceed
+  the ~4.5MB route cap.
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.

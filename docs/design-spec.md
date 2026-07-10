@@ -342,8 +342,24 @@ take), key signature select (mono), then a single DETECTION control —
 the Melody floor slider, the register split between dam and melody,
 used by both the live sketch and the neural decode — a VIEW group, the
 LAYOUT slider group (label / native range / mono value, the Photo
-tool's tone-row idiom), a hint line, and CLIP buttons (Save clip /
-Load clip). The View group re-renders from the cached decode,
+tool's tone-row idiom), a hint line, a TAKES group (persistence: a
+name input + save button in one row, then the saved-takes list —
+name, "m:ss.cc · N notes" in mono, Load, and a ✕ delete behind a
+confirm — deletes are SOFT: the record is tombstoned and hidden for
+30 days before its payloads are purged (lazily, on list reads), the
+status line says so ("deleted "x" — kept for 30 days"), and an
+underlined inline "undo" in the hint line restores it; "no saved
+takes yet" as the empty hint; saving round-trips
+the whole take document with its edits, versions, and layout, plus
+the recording as lossless WAV, so a loaded take comes back frozen if
+it was edited and re-transcribes identically. A session saved or
+loaded stays TIED to its record: the button reads "Save" and updates
+in place without re-uploading audio, the name field renames on save,
+a "Save as new" button forks, and the tied row's name renders bold.
+The tie clears when the audio genuinely changes — New take, a fresh
+mic recording, Demo, Load clip — and the button reads "Save take"
+again), and CLIP buttons (Save clip / Load clip). The View group
+re-renders from the cached decode,
 never re-transcribing: a Notation select (Full — ornaments + slides /
 Skeleton — main notes only, the bare pass-1 melody) and a Pitch trace
 select (Aligned under the tape — one column per tape row, so the raw

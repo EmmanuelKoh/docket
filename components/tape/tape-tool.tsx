@@ -214,6 +214,8 @@ function Controls({ ctl }: { ctl: Controller | null }) {
         </p>
       </div>
 
+      <Takes ctl={ctl} />
+
       <div className="tape-group">
         <span className="label">Clip</span>
         <div className="tape-btnrow">
@@ -243,6 +245,120 @@ function Controls({ ctl }: { ctl: Controller | null }) {
           </label>
         </div>
       </div>
+    </div>
+  );
+}
+
+// saved takes: name + save the current take, and the list to load or
+// delete from. The document round-trips whole (edits, versions, layout),
+// audio rides along as a lossless WAV. A session that was saved or
+// loaded stays tied to its record: Save updates it in place (no audio
+// re-upload; renaming the field renames the take), Save as new forks it.
+function Takes({ ctl }: { ctl: Controller | null }) {
+  const takes = useTape((s) => s.takes);
+  const busy = useTape((s) => s.persistBusy);
+  const hasTake = useTape((s) => s.hasTake);
+  const hasAudio = useTape((s) => s.hasAudio);
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  const current = useTape((s) => s.currentTake);
+  const lastDeleted = useTape((s) => s.lastDeleted);
+  const [name, setName] = useState('');
+  const canSave = hasTake && hasAudio && !micOn && !decoding && !busy;
+
+  // the name field follows the tied take (load, save, untie)
+  const currentId = current?.id ?? null;
+  const currentName = current?.name ?? '';
+  useEffect(() => {
+    setName(currentName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  return (
+    <div className="tape-group">
+      <span className="label">Takes</span>
+      <div className="tape-btnrow">
+        <input
+          className="tape-name"
+          type="text"
+          placeholder="name this take"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn small"
+          disabled={!canSave}
+          onClick={() => ctl?.saveTake(name.trim() || 'Take')}
+        >
+          {current ? 'Save' : 'Save take'}
+        </button>
+        {current && (
+          <button
+            type="button"
+            className="btn small"
+            disabled={!canSave}
+            onClick={() => ctl?.saveTakeAsNew(name.trim() || 'Take')}
+          >
+            Save as new
+          </button>
+        )}
+      </div>
+      {takes && takes.length > 0 && (
+        <div className="tape-takes">
+          {takes.map((t) => (
+            <div
+              key={t.id}
+              className={
+                t.id === currentId ? 'tape-take-row current' : 'tape-take-row'
+              }
+            >
+              <span className="tape-take-name" title={t.name}>
+                {t.name}
+              </span>
+              <span className="tape-take-sub">
+                {fmtTime(t.seconds)} · {t.noteCount} notes
+              </span>
+              <button
+                type="button"
+                className="btn small"
+                disabled={busy || micOn || decoding}
+                onClick={() => ctl?.loadTakeById(t.id)}
+              >
+                Load
+              </button>
+              <button
+                type="button"
+                className="btn small"
+                disabled={busy}
+                aria-label={`Delete ${t.name}`}
+                onClick={() => {
+                  if (window.confirm(`Delete "${t.name}"?`))
+                    ctl?.deleteTakeById(t.id);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {takes && takes.length === 0 && (
+        <p className="tape-hint">no saved takes yet</p>
+      )}
+      {lastDeleted && (
+        <p className="tape-hint">
+          deleted “{lastDeleted.name}” —{' '}
+          <button
+            type="button"
+            className="tape-undo"
+            disabled={busy}
+            onClick={() => ctl?.undeleteTake()}
+          >
+            undo
+          </button>
+        </p>
+      )}
     </div>
   );
 }

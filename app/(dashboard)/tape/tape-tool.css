@@ -132,6 +132,69 @@
   margin: 0;
 }
 
+/* the take-name input rides in a button row and matches the buttons */
+.tape-name {
+  flex: 1;
+  min-width: 0;
+  background: var(--raised);
+  color: var(--ink);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+}
+.tape-name::placeholder {
+  color: var(--ink-faint);
+}
+
+/* saved takes: compact rows — name, duration · notes, Load, delete */
+.tape-takes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.tape-take-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.tape-take-name {
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the take this session is tied to (Save updates it in place) */
+.tape-take-row.current .tape-take-name {
+  font-weight: 600;
+}
+
+/* the soft-delete undo: an inline text action in the hint line */
+.tape-undo {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.tape-undo:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.tape-take-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
 .tape-stage {
   flex: 1;
   min-width: 0;
