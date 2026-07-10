@@ -28,6 +28,15 @@
 .btn:disabled:hover {
   border-color: var(--border);
 }
+/* a <label> styled as a button (the Load clip file input) can't match
+   :disabled — the class variant gives it the same silenced look */
+.btn.disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.btn.disabled:hover {
+  border-color: var(--border);
+}
 /* the mic while listening is the one live/armed thing on the page —
    register red, per the red-usage rules (an active capture, like a
    printing job) */

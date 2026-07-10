@@ -330,6 +330,13 @@ export function createTapeRenderer(config) {
   let deferredArcs = []; // time-anchored ornament arcs awaiting rows
   let started = false;
 
+  // Per-note geometry for the editing UI's hit-testing: which rows each
+  // note's bar occupies (its accidental/gap rows excluded) and where it
+  // sits on the staff. Purely a record — rows are not affected. The id
+  // comes from the take document when a decode is being rendered (marks
+  // .id); live-sketch notes carry null.
+  const noteGeom = []; // { id, midi, step, grace, r0, r1, t0, t1 }
+
   // Audio-time ↔ tape-row map for the player's playhead and scrubbing.
   // The tape is NOT linear in time (silence compresses to a breath mark,
   // key signatures and accidentals occupy rows that represent no time),
@@ -564,7 +571,14 @@ export function createTapeRenderer(config) {
       }
     }
     const led = ledgerSteps(sp.step);
-    cur = { midi, step: sp.step, onMs: tMs, rowsEmitted: 0, grace: !!grace };
+    cur = {
+      midi,
+      step: sp.step,
+      onMs: tMs,
+      rowsEmitted: 0,
+      grace: !!grace,
+      id: marks.id ?? null,
+    };
     if (sp.glyph) {
       // main accidentals a hair under full size; grace accidentals
       // shrink with their notehead (same 0.6 ratio)
@@ -602,6 +616,16 @@ export function createTapeRenderer(config) {
       cur.rowsEmitted++;
     }
     pushSpan(cur.rStart, cur.onMs, tMs);
+    noteGeom.push({
+      id: cur.id,
+      midi: cur.midi,
+      step: cur.step,
+      grace: cur.grace,
+      r0: cur.rStart,
+      r1: rows.length,
+      t0: cur.onMs,
+      t1: tMs,
+    });
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);
     if (cur.arc) paintOrnamentArc(cur.arc.center, cur.arc.step);
@@ -667,6 +691,7 @@ export function createTapeRenderer(config) {
   return {
     rows,
     timeline,
+    notes: noteGeom,
     width: WIDTH,
     noteOn,
     noteOff,

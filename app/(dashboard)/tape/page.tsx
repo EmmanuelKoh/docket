@@ -2,10 +2,11 @@
 // workbench (see components/content-column.tsx): mic in, note events
 // out, and a scrolling preview of the EXACT raster rows the printer
 // would receive, shown in reading orientation (staff horizontal, time
-// left to right). Markup in components/tape-tool.tsx, behavior in
-// components/tape-engine.js, styles in ./tape-tool.css.
+// left to right). The tool lives in components/tape/ (React controls
+// over a zustand store, an imperative canvas island, and the take
+// document); styles in ./tape-tool.css.
 
-import { TapeTool } from '@/components/tape-tool';
+import { TapeTool } from '@/components/tape/tape-tool';
 import './tape-tool.css';
 
 export default function TapePage() {

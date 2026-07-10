@@ -60,8 +60,14 @@ plugins server-side. No process polls on its own timer except the device.
   raster rows). The renderer is pure JS and its rows ARE the print bytes:
   the preview canvas and `/api/tape/print` (→ `createRawJob`, a job with
   `template: null` that Reprint refuses) consume the same arrays; never
-  add a second rendering path. Markup/engine follow the Photo tool's
-  id-contract pattern (`components/tape-tool.tsx` + `tape-engine.js`).
+  add a second rendering path. The tool lives in `components/tape/`:
+  React controls (`tape-tool.tsx`) over a zustand store (`store.ts`),
+  an imperative controller (`controller.js`) that owns the session and
+  the canvas island (`tape-view.js`), audio/decode/playback modules,
+  and the take document (`doc.mjs` — derives the timeline via the
+  tape-eval passes and holds edits/undo/versions; `npm run tape:doc`
+  checks it). Only the canvases are imperative; controls are ordinary
+  React reading the store.
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.

@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "biome check app components",
     "migrate": "node scripts/migrate-json-to-redis.js",
-    "tape:eval": "node scripts/tape-eval/score.mjs"
+    "tape:eval": "node scripts/tape-eval/score.mjs",
+    "tape:doc": "node scripts/test-tape-doc.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -29,7 +30,8 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "satori": "^0.12.1",
-    "satori-html": "^0.3.2"
+    "satori-html": "^0.3.2",
+    "zustand": "^5.0.14"
   },
   "license": "MIT",
   "repository": {

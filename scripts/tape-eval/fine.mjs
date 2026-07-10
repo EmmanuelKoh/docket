@@ -15,8 +15,9 @@ import { highpass130 } from './normalize.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// the browser trace backfill's fixed tracker settings (tape-engine.js
-// trackerValues) — the tracker only supplies holdF0, the hold mask that
+// the browser trace backfill's fixed tracker settings (trackerValues in
+// components/tape/controller.js) — the tracker only supplies holdF0, the
+// hold mask that
 // stops the detector's background from eating a held note. Keep in sync
 // or Node and browser frames diverge.
 const TRACKER = {

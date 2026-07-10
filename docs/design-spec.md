@@ -317,8 +317,8 @@ breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
 sized to the staff; the take opens with bare paper, then the clef and
 key signature before the first note. Monophonic transcription in two
 regimes: while the mic is live, a lightweight pitch tracker sketches
-the tape and trace in real time; when the take ends (Stop, Replay, or
-Load clip) the recording is transcribed by a neural model (Basic
+the tape and trace in real time; when the take ends (Stop or Load
+clip) the recording is transcribed by a neural model (Basic
 Pitch, bundled, in-browser) and decoded into main notes,
 rearticulation splits, slide connectors (a thin diagonal between
 pitches; a dip scoop for a same-pitch slide), and ornament marks (a
@@ -333,15 +333,17 @@ preview canvas shows the exact raster rows the printer would receive,
 in reading orientation (staff horizontal, time flowing left to right,
 new tape entering at the right; the strip auto-follows unless the user
 scrolls back). The tape sits on white in both themes, receipts are
-paper.
+paper. A take past the preview's width cap (~14 minutes of sounding
+tape) keeps printing whole; the stage header grows a hint saying the
+preview is cut off, never silently.
 
 Left column (300px): session buttons (Start mic / Demo phrase / New
 take), key signature select (mono), then a single DETECTION control —
 the Melody floor slider, the register split between dam and melody,
 used by both the live sketch and the neural decode — a VIEW group, the
 LAYOUT slider group (label / native range / mono value, the Photo
-tool's tone-row idiom), a hint line, and CLIP buttons (Replay / Save
-clip / Load clip). The View group re-renders from the cached decode,
+tool's tone-row idiom), a hint line, and CLIP buttons (Save clip /
+Load clip). The View group re-renders from the cached decode,
 never re-transcribing: a Notation select (Full — ornaments + slides /
 Skeleton — main notes only, the bare pass-1 melody) and a Pitch trace
 select (Aligned under the tape — one column per tape row, so the raw
@@ -351,8 +353,9 @@ Trace stretch slider in px/s for analysis; clicking a linear trace
 seeks on its own time axis). The old detector/drone selects and threshold sliders are
 gone: they tuned only the live sketch, and the neural decode needs
 none of them (it estimates the take's tuning center from its own
-pitch-bend data). Status during a decode: "transcribing… N%" then
-"transcribed N notes + M graces (neural)".
+pitch-bend data). Status during a decode: "transcribing… N%" then a
+plain count, "N notes · M ornaments"; while the decode runs, the
+session, clip, and transport controls disable rather than race it.
 The mic button while listening is --red text and border (red rule 5, a
 live capture). Right stage: titled "Tape — prints exactly as shown"; the tape roll
 with the raw-pitch trace riding inside it (below), a transport row
@@ -383,9 +386,11 @@ row): dragging pauses and seeks, releasing resumes if it was playing.
 While playing the roll auto-scrolls to keep the bar in view.
 
 Print take queues the rendered rows verbatim through /api/tape/print
-(source "tape"); the job appears in Queue and History like any other,
-but carries no template, so Reprint declines it with a pointer back to
-the tool.
+(source "tape"); the button reads "Queuing…" while in flight and the
+status line answers in plain words ("sent to the print queue", never a
+raw job id). The job appears in Queue and History like any other, but
+carries no template, so Reprint declines it with a pointer back to the
+tool.
 
 ### Queue
 Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).
