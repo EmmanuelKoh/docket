@@ -13,9 +13,7 @@ import { getSessionCookie } from 'better-auth/cookies';
 import { type NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const authed =
-    getSessionCookie(request) || request.cookies.has('docket_session');
-  if (!authed) {
+  if (!getSessionCookie(request)) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
   return NextResponse.next();

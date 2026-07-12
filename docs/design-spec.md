@@ -549,11 +549,8 @@ older →", 12px.
 
 ### Login
 Same paper page, centered small card: DOCKET wordmark, then the account
-form (email field, password field, one outline "Sign in" button). Under
-the form a quiet 12px ink-faint text toggle ("use owner password" /
-"use an account") swaps in the legacy single-password form, which stays
-until the accounts transition completes. Errors are 12px --red under the
-form. There is nothing else on the page.
+form (email field, password field, one outline "Sign in" button). Errors
+are 12px --red under the form. There is nothing else on the page.
 
 ### Invite (public, /invite/[token])
 The login card's twin: wordmark, then name / email / password fields and

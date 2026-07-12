@@ -1,9 +1,7 @@
-// GET /logout — clears BOTH doors: the Better Auth session (revoked
-// server-side, its cookies cleared) and the legacy HMAC cookie, then
-// returns to /login. Same contract as the legacy dashboard's /logout.
+// GET /logout — revokes the Better Auth session server-side, clears its
+// cookies, and returns to /login.
 
 import { getAuth } from '@/lib/auth-server.js';
-import { clearSessionCookie } from '@/lib/session.js';
 
 export async function GET(req: Request) {
   const headers = new Headers({ Location: '/login' });
@@ -18,9 +16,8 @@ export async function GET(req: Request) {
       headers.append('Set-Cookie', cookie);
     }
   } catch {
-    // No Better Auth session to revoke — fine, still clear the legacy one.
+    // No session to revoke — still land on /login.
   }
 
-  headers.append('Set-Cookie', clearSessionCookie());
   return new Response(null, { status: 302, headers });
 }
