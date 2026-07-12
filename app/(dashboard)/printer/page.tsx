@@ -18,18 +18,32 @@ import pkg from '@/package.json';
 import { agoText } from '../../_lib/format';
 import {
   ClaimDeviceForm,
+  LeaveDeviceButton,
   PairingWatcher,
+  RemoveMemberButton,
   RevokeDeviceButton,
+  ShareDeviceButton,
 } from './devices-client';
+
+type DeviceRow = {
+  id: string;
+  name: string | null;
+  pairedAt: Date | null;
+  role: 'owner' | 'member';
+  primaryOwnerId: string;
+  shareCode: string | null;
+  members: { ownerId: string; email: string }[];
+};
 
 export default async function PrinterPage() {
   const owner = await sessionOwner();
   if (!owner) redirect('/login');
-  const paired = await listDevices(owner);
-  const pairingPending = paired.some(
-    (d: { pairedAt: Date | null }) => !d.pairedAt,
-  );
-  const device = await getState(owner, 'device');
+  const paired: DeviceRow[] = await listDevices(owner);
+  const pairingPending = paired.some((d) => d.pairedAt === null);
+  // The online heartbeat lives on each device's primary owner's slot;
+  // members read the same slot, so a shared printer shows online for all.
+  const presenceOwner = paired[0]?.primaryOwnerId ?? owner;
+  const device = await getState(presenceOwner, 'device');
   const lastSeen = device?.lastSeenAt as string | undefined;
   const online =
     !!lastSeen && Date.now() - new Date(lastSeen).getTime() <= 90 * 1000;
@@ -85,29 +99,48 @@ export default async function PrinterPage() {
         {pairingPending ? <PairingWatcher /> : null}
         <h2 className="text-[13px] font-semibold text-ink">Devices</h2>
         <ul className="mt-3">
-          {paired.map(
-            (d: { id: string; name: string | null; pairedAt: Date | null }) => (
-              <li
-                key={d.id}
-                className="flex items-baseline gap-2 border-b-[0.5px] border-border py-2"
-              >
+          {paired.map((d) => (
+            <li
+              key={d.id}
+              className="flex flex-col border-b-[0.5px] border-border py-2"
+            >
+              <div className="flex items-baseline gap-2">
                 <span className="text-sm font-medium text-ink">
                   {d.name || 'printer'}
                 </span>
                 <span className="leader" aria-hidden />
                 <span className="text-xs text-ink-faint">
                   {d.pairedAt
-                    ? `paired ${agoText(d.pairedAt.toISOString())}`
+                    ? `${d.role === 'member' ? 'shared with you · ' : ''}paired ${agoText(d.pairedAt.toISOString())}`
                     : 'pairing…'}
                 </span>
-                <RevokeDeviceButton id={d.id} />
-              </li>
-            ),
-          )}
+                {d.role === 'owner' ? (
+                  <span className="flex items-baseline gap-2">
+                    <ShareDeviceButton id={d.id} initial={d.shareCode} />
+                    <RevokeDeviceButton id={d.id} />
+                  </span>
+                ) : (
+                  <LeaveDeviceButton id={d.id} />
+                )}
+              </div>
+              {d.role === 'owner' && d.members.length > 0 ? (
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-xs text-ink-faint">
+                  <span>also prints for</span>
+                  {d.members.map((m) => (
+                    <span key={m.ownerId} className="flex items-baseline gap-1">
+                      {m.email}
+                      <RemoveMemberButton id={d.id} member={m.ownerId} />
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </li>
+          ))}
           {paired.length === 0 ? (
             <li className="py-2 text-xs text-ink-faint">
-              No paired devices. A new printer prints its pairing code on boot —
-              enter it below.
+              No devices. A new printer prints its pairing code on boot; a
+              housemate&apos;s printer takes a share code from its owner. Either
+              goes in the box below.
             </li>
           ) : null}
         </ul>

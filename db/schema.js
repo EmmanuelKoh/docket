@@ -103,10 +103,28 @@ export const device = pgTable('device', {
   tokenPlain: text('token_plain'),
   pairCode: text('pair_code'),
   pairCodeExpiresAt: timestamp('pair_code_expires_at'),
+  // Share code: minted by the owner, shown in the dashboard, single-use.
+  // Another signed-in user enters it to JOIN the device as a member (their
+  // queue and plugins ride the same printer). Distinct from the pair code,
+  // which transfers ownership.
+  shareCode: text('share_code'),
+  shareCodeExpiresAt: timestamp('share_code_expires_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   pairedAt: timestamp('paired_at'),
   revokedAt: timestamp('revoked_at'),
 });
+
+// Extra owners a device prints and ticks for, beyond device.ownerId. Both
+// sides consented: the owner minted the share code, the member typed it.
+export const deviceMember = pgTable(
+  'device_member',
+  {
+    deviceId: text('device_id').notNull(),
+    ownerId: text('owner_id').notNull(),
+    addedAt: timestamp('added_at').notNull().defaultNow(),
+  },
+  t => [primaryKey({ columns: [t.deviceId, t.ownerId] })],
+);
 
 // ---- record stores (phase 4: Postgres as system of record) ----
 // Owner ids are plain text throughout (a user id, or the legacy owner).

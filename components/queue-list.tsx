@@ -1,23 +1,36 @@
 'use client';
 
 // The live queue list. Server renders the initial data; this component
-// then re-fetches /api/queue every 3 seconds WHILE THE TAB IS VISIBLE —
-// the same visibility guard the legacy htmx fragment used, because hidden
-// tabs polling forever is exactly the store-cost failure mode
-// docs/store-costs.md exists to prevent. Job cards per spec: thumbnail,
-// name + "source · created HH:MM:SS", status mono (printing = red),
-// rail = "claimed Ns" for inflight or Cancel for queued only.
+// then re-fetches /api/queue while the tab is visible, at a cadence that
+// follows the human: every 3s while they are active on the page, easing
+// to 30s after two idle minutes, and stopping entirely after thirty —
+// each poll is a function invocation and a Postgres read, and a tab
+// parked on a second monitor must not bill around the clock
+// (docs/store-costs.md). Any interaction resumes the fast cadence; the
+// quiet "refresh" control re-fetches on demand and doubles as the resume
+// affordance while paused. Job cards per spec: thumbnail, name +
+// "source · created HH:MM:SS", status mono (printing = red), rail =
+// "claimed Ns" for inflight or Cancel for queued only.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { QueueJob } from '@/app/_lib/queue-data';
 import { Button } from '@/components/ui/button';
 
 const POLL_MS = 3000;
+const EASE_AFTER_MS = 2 * 60 * 1000;
+const EASE_POLL_MS = 30_000;
+const PAUSE_AFTER_MS = 30 * 60 * 1000;
+
+type PollMode = 'live' | 'eased' | 'paused';
 
 export function QueueList({ initial }: { initial: QueueJob[] }) {
   const [jobs, setJobs] = useState<QueueJob[]>(initial);
+  const [mode, setMode] = useState<PollMode>('live');
+  const lastActivity = useRef(Date.now());
+  const lastFetch = useRef(Date.now());
 
   const refresh = useCallback(async () => {
+    lastFetch.current = Date.now();
     try {
       const res = await fetch('/api/queue');
       if (!res.ok) return;
@@ -28,11 +41,38 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
     }
   }, []);
 
+  const manualRefresh = useCallback(() => {
+    lastActivity.current = Date.now();
+    setMode('live');
+    refresh();
+  }, [refresh]);
+
   useEffect(() => {
+    const bump = () => {
+      lastActivity.current = Date.now();
+    };
+    window.addEventListener('pointerdown', bump);
+    window.addEventListener('keydown', bump);
+    document.addEventListener('visibilitychange', bump);
+
     const t = setInterval(() => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState !== 'visible') return;
+      const idle = Date.now() - lastActivity.current;
+      if (idle > PAUSE_AFTER_MS) {
+        setMode('paused');
+        return;
+      }
+      const eased = idle > EASE_AFTER_MS;
+      setMode(eased ? 'eased' : 'live');
+      const cadence = eased ? EASE_POLL_MS : POLL_MS;
+      if (Date.now() - lastFetch.current >= cadence - 100) refresh();
     }, POLL_MS);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('pointerdown', bump);
+      window.removeEventListener('keydown', bump);
+      document.removeEventListener('visibilitychange', bump);
+    };
   }, [refresh]);
 
   // cancel a queued job; requeue an inflight one (a stuck claim back to
@@ -52,16 +92,39 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
   const cancel = (id: string) => act('/api/jobs/cancel', id);
   const requeue = (id: string) => act('/api/jobs/requeue', id);
 
+  const statusLine = (
+    <div className="flex items-baseline justify-end gap-2 text-xs text-ink-faint">
+      <span className="font-mono">
+        {mode === 'paused'
+          ? 'paused'
+          : mode === 'eased'
+            ? 'updates every 30s'
+            : 'updates every 3s'}
+      </span>
+      <button
+        type="button"
+        onClick={manualRefresh}
+        className="transition-colors hover:text-ink"
+      >
+        refresh
+      </button>
+    </div>
+  );
+
   if (!jobs.length) {
     return (
-      <div className="rounded-md border-[0.5px] border-border bg-raised px-5 py-8 text-center text-sm text-ink-faint">
-        No jobs waiting.
+      <div className="space-y-3">
+        {statusLine}
+        <div className="rounded-md border-[0.5px] border-border bg-raised px-5 py-8 text-center text-sm text-ink-faint">
+          No jobs waiting.
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {statusLine}
       {jobs.map((job) => (
         <div
           key={job.id}
