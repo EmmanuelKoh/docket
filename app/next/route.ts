@@ -8,38 +8,40 @@
 //   2. A safety check queries Redis at most every 60s per server instance
 //      regardless, so a stale flag delays a print by at most 60s.
 
-import { OWNER_ID, STORE_DRIVER } from '@/config.js';
+import { STORE_DRIVER } from '@/config.js';
 import { readQueueSignal, signalsConfigured } from '@/lib/change-signal.js';
 import { recordDeviceSeen } from '@/lib/device-presence.js';
 import { nextJob } from '@/lib/job-store.js';
-import { deviceAuthorized, unauthorized } from '../_lib/device-auth';
+import { deviceAuth, unauthorized } from '../_lib/device-auth';
 
 export const dynamic = 'force-dynamic';
 
 const SAFETY_CHECK_MS = 60_000;
-let lastRealCheckAt = 0; // per warm instance; cold starts always check
+const lastRealCheckAt = new Map<string, number>(); // per owner per warm instance
 
 export async function GET(req: Request) {
-  if (!deviceAuthorized(req)) return unauthorized();
+  const dev = await deviceAuth(req);
+  if (!dev) return unauthorized();
+  const owner = dev.ownerId;
 
-  recordDeviceSeen();
+  recordDeviceSeen(owner);
 
   // The flag only guards the metered store; the json driver (local dev) is
   // free to query directly and never maintains flags.
   if (
     STORE_DRIVER === 'redis' &&
     signalsConfigured() &&
-    Date.now() - lastRealCheckAt < SAFETY_CHECK_MS
+    Date.now() - (lastRealCheckAt.get(owner) || 0) < SAFETY_CHECK_MS
   ) {
-    const hasWork = await readQueueSignal(OWNER_ID);
+    const hasWork = await readQueueSignal(owner);
     if (hasWork === false) {
       return new Response(null, { status: 204 }); // zero Redis commands
     }
     // true or unknown (null): fall through to the real claim.
   }
 
-  lastRealCheckAt = Date.now();
-  const job = await nextJob();
+  lastRealCheckAt.set(owner, Date.now());
+  const job = await nextJob(owner);
   if (!job) {
     return new Response(null, { status: 204 });
   }

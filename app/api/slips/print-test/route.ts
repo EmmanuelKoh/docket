@@ -3,10 +3,7 @@
 // the maintainer iterates on physical output, so every slip page can
 // put paper through the printer in one click.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { getSlip } from '@/app/_lib/slip-data';
 import { createJob } from '@/lib/job-store.js';
 import { getTemplates } from '@/lib/store.js';
@@ -14,15 +11,16 @@ import { getTemplates } from '@/lib/store.js';
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
 
   const slug = new URL(req.url).searchParams.get('slug') || '';
-  const slip = await getSlip(slug);
+  const slip = await getSlip(owner, slug);
   if (!slip?.primaryTemplate) {
     return Response.json({ error: 'slip not found' }, { status: 404 });
   }
 
-  const templates = await getTemplates();
+  const templates = await getTemplates(owner);
   const t = templates.find(
     (x: { name: string }) => x.name === slip.primaryTemplate,
   );
@@ -36,7 +34,7 @@ export async function POST(req: Request) {
   try {
     const data =
       typeof t.data === 'string' ? JSON.parse(t.data || '{}') : t.data || {};
-    const result = await createJob({
+    const result = await createJob(owner, {
       template: t.template,
       data,
       name: `${t.name} (test)`,

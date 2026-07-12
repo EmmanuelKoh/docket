@@ -14,22 +14,23 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { listJobs } from '@/lib/job-store.js';
-import { sessionValid } from '../_lib/dashboard-session';
+import { getSessionIdentity } from '../_lib/dashboard-session';
 import type { JobSummary } from '../_lib/format';
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  if (!(await sessionValid())) redirect('/login');
+  const identity = await getSessionIdentity();
+  if (!identity) redirect('/login');
 
-  const jobs = (await listJobs(1000)) as JobSummary[];
+  const jobs = (await listJobs(identity.userId, 1000)) as JobSummary[];
   const queueCount = jobs.filter(
     (j) => j.status === 'queued' || j.status === 'inflight',
   ).length;
 
   return (
     <SidebarProvider>
-      <AppSidebar queueCount={queueCount} />
+      <AppSidebar queueCount={queueCount} isAdmin={identity.role === 'admin'} />
       <SidebarInset className="bg-transparent">
         <header className="flex items-center justify-between border-b-[1.5px] border-b-ink px-4 py-3">
           <SidebarTrigger className="text-ink-faint hover:text-ink" />

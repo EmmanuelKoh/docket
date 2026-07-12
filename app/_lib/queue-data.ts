@@ -29,11 +29,11 @@ function queueJobData(j: JobSummary): QueueJob {
   };
 }
 
-export async function queueData(): Promise<{
+export async function queueData(ownerId: string): Promise<{
   jobs: QueueJob[];
   count: number;
 }> {
-  const jobs = (await listJobs(1000)) as JobSummary[];
+  const jobs = (await listJobs(ownerId, 1000)) as JobSummary[];
   // Oldest first — top of the list is next to print.
   const live = jobs
     .filter((j) => j.status === 'queued' || j.status === 'inflight')

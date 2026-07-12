@@ -3,14 +3,20 @@
 A thermal-receipt platform: a hosted server (Vercel) renders Liquid+HTML
 templates into ESC/POS bytes; an ESP32 appliance polls for jobs and prints
 them on a Rongta RP850 over serial. Plugins print autonomously (World Cup
-goals, a daily morning brief); a password-protected dashboard manages it all.
+goals, a daily morning brief); a multi-user dashboard (invite-only
+accounts, one docket per owner, printers paired by printed code) manages
+it all.
 
 ## Architecture in one line
 
-`plugins/studio/photo → createJob (renders at creation, bytes stored) →
-queue (Redis, atomic claim + 120s lease) → ESP32 polls /next → serial →
-printer → /ack`. The ESP32 also POSTs `/tick` every 30s, which runs due
-plugins server-side. No process polls on its own timer except the device.
+`plugins/studio/photo → createJob (renders at creation, bytes stored;
+record row in Postgres) → queue (Redis, atomic claim + 120s lease) → ESP32
+polls /next → serial → printer → /ack`. Every stored record belongs to an
+owner (a user id), derived per request from the session or the device's
+pairing token. The ESP32 also POSTs `/tick` every 30s, which runs ITS
+owner's due plugins server-side; idle /next and /tick answer from
+per-owner Blob flags at zero store commands. No process polls on its own
+timer except the device.
 
 ## Layout
 
@@ -32,13 +38,31 @@ plugins server-side. No process polls on its own timer except the device.
   encoded as memorize-then-print chunks (`GS *`/`GS /`), **rotated 180°
   with a flush cut** so the printer's mechanical top leader becomes bottom
   margin. Text receipts use the classic single raster, byte-stable.
-- `lib/`: store facades. `STORE_DRIVER=json` (local files in `data/`) or
-  `redis` (Upstash + Vercel Blob for job png/bytes). Everything carries
-  `ownerId` (single owner `default` for now); all Redis keys namespaced
-  `rp:{owner}:...`. Never touch Redis/files outside `lib/`.
-  Upstash bills per command and every hosting service has a meter, so read
-  `docs/store-costs.md` (per-path costs, quota math rule, rejected
-  approaches) before adding any polled or timer-driven query.
+- `db/` + `lib/db.js`: Postgres, the system of record (Drizzle schema in
+  `db/schema.js`, generated SQL in `db/migrations/`). Neon when
+  DATABASE_URL is set; PGlite (embedded, `data/pg/`) locally with no cloud
+  account, auto-migrating on first use. Holds users/sessions/invites
+  (Better Auth), devices, templates, job records, tape-take meta, and
+  plugin config truth. HARD RULE: nothing on the device cadence (/next,
+  idle /tick) touches Postgres, or Neon never scales to zero.
+- `lib/`: store facades. Every function takes an explicit `ownerId` first
+  (derived from the session via `app/_lib/dashboard-session.ts`, or from
+  the device token). Redis (`STORE_DRIVER=redis`, Upstash) keeps the hot
+  path only: job queue + lease, plugin due-index + runtime state, device
+  token mirror; keys namespaced `rp:{owner}:...`. `STORE_DRIVER=json`
+  swaps those for local equivalents (no queue lease, inline artifacts).
+  Vercel Blob holds artifacts (`jobs/{owner}/...`, `tape/{owner}/...`) and
+  the per-owner queue/tick flags. Never touch Redis/Postgres/files outside
+  `lib/`. Upstash bills per command, Neon bills CU-hours, and every
+  hosting service has a meter, so read `docs/store-costs.md` (per-path
+  costs, quota math rule, rejected approaches) before adding any polled or
+  timer-driven query.
+- `lib/devices.js`: printer pairing. An unpaired device POSTs /pair,
+  prints its code, the owner claims it on the Printer page; tokens are
+  sha256-at-rest with a memory-cache + Redis-mirror hot path. Registration
+  and plugin-template seeding run on the Slips page view
+  (`lib/plugin-setup.js`), never on ticks — a new owner's plugins activate
+  on their first Slips visit.
 - `plugins/`: registry plugins. Each exports `id`, `defaults` (may set
   `enabled: false`; `schedule` is `{every: seconds}` or
   `{at: "HH:MM", timezone}`, see `lib/schedule.js`), optional
@@ -91,11 +115,26 @@ plugins server-side. No process polls on its own timer except the device.
 
 ## Auth model
 
-- Dashboard pages, `/studio`, and JSON APIs (`/templates`, `/jobs`,
-  `/preview`): stateless HMAC session cookie (`DASHBOARD_PASSWORD` +
-  `SESSION_SECRET`).
-- Device endpoints (`/next`, `/ack`, `/nack`, `/tick`): Bearer
-  `DEVICE_TOKEN` ONLY, never the cookie (the ESP32 can't log in).
+- Dashboard pages and JSON APIs: Better Auth sessions (email+password,
+  invite-only signup, admin role mints invites on /users). Session checks
+  are served from a signed cookie cache (zero DB reads per page view).
+  The seam is `app/_lib/dashboard-session.ts`: every page/route resolves
+  `{ userId, role }` there, and `owner = userId` scopes all store calls.
+  TRANSITION: the legacy HMAC cookie door (`DASHBOARD_PASSWORD` +
+  `SESSION_SECRET`) still works and resolves to the `OWNER_ID` owner;
+  delete it (login form's owner mode, `/login/submit`, `lib/session.js`)
+  once the original owner has an account and data is migrated.
+- Device endpoints (`/next`, `/ack`, `/nack`, `/tick`): per-device Bearer
+  tokens from pairing ONLY, never the cookie (the ESP32 can't log in).
+  The device's token resolves to its owner. TRANSITION: the shared
+  `DEVICE_TOKEN` env still works and maps to `OWNER_ID`.
+- `/ingest`: per-owner token in the message-ingest plugin config (shown
+  on its Slips page). TRANSITION: `INGEST_TOKEN` env maps to `OWNER_ID`.
+- `/pair` is deliberately unauthenticated (an unpaired device has no
+  credentials); authority is the printed code + a signed-in claimer.
+- middleware.ts only does an optimistic cookie-presence redirect for
+  pages; real enforcement is the layout, each route's owner check, and
+  owner-scoped queries in `lib/` — never middleware alone.
 
 ## Design
 
@@ -119,12 +158,26 @@ script.
 
 - Local dev: `npm run dev` (+ `node agent/heartbeat.js` and
   `node agent/printer-agent.js` only if the ESP32 isn't covering those).
-  Login needs `DASHBOARD_PASSWORD`/`SESSION_SECRET` in `.env`.
+  Accounts: `node scripts/create-user.js "Name" email` makes an admin
+  (prompts for the password with hidden input; stop the dev server first
+  if on PGlite — it is single-process). The legacy
+  door also works with `DASHBOARD_PASSWORD`/`SESSION_SECRET` in `.env`.
+  Schema changes: edit `db/schema.js`, `npm run db:generate`, commit the
+  migration; PGlite applies it automatically, Neon via `npm run
+  db:migrate`.
 - Everything hot-reloads under `npm run dev` (LiquidJS now runs only
   inside the render core, per render).
-- Templates seed **only if missing** (from `reference/*-templates.json` on
-  tick). Editing a seeded template's reference file requires syncing the
-  stored copy (local `data/templates.json`, hosted via studio or a POST).
+- Templates seed **only if missing**, per owner (starters on first
+  template read, plugin templates from `reference/*-templates.json` on
+  Slips page view). Editing a seeded template's reference file requires
+  syncing the stored copy (in Postgres now; via studio or a POST).
+- One-time accounts migration, in order, all idempotent: deploy;
+  create your account (invite yourself via the legacy door, or
+  `scripts/create-user.js` against prod DATABASE_URL); `npm run
+  db:migrate`; `npm run migrate:pg default`; `node
+  scripts/migrate-owner.js default <your-user-id>`; set `OWNER_ID` env to
+  your user id (keeps the legacy device/ingest tokens routing correctly);
+  pair the printer to retire the shared token.
 - Firmware test loop: point `secrets.h` at the laptop
   (`http://<mac-ip>:3000`), flash, **power-cycle the printer after
   flashing** (see field notes), test, point back at production.

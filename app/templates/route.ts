@@ -1,10 +1,7 @@
 // /templates — CRUD for saved templates, used by the Studio
 // (components/studio-editor.tsx) and the Photo tool.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import {
   deleteTemplate,
   getTemplates,
@@ -13,16 +10,18 @@ import {
 } from '@/lib/store.js';
 
 export async function GET(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   try {
-    return Response.json(await getTemplates());
+    return Response.json(await getTemplates(owner));
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   try {
     const { name, template, data } = (await req.json().catch(() => ({}))) || {};
     if (!name || !template) {
@@ -32,7 +31,7 @@ export async function POST(req: Request) {
       );
     }
     try {
-      const templates = await saveTemplate({ name, template, data });
+      const templates = await saveTemplate(owner, { name, template, data });
       return Response.json(templates);
     } catch (err) {
       if (isReadOnly()) {
@@ -49,7 +48,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   try {
     const name = new URL(req.url).searchParams.get('name') || '';
     if (!name) {
@@ -59,7 +59,7 @@ export async function DELETE(req: Request) {
       );
     }
     try {
-      const templates = await deleteTemplate(name);
+      const templates = await deleteTemplate(owner, name);
       return Response.json(templates);
     } catch (err) {
       if (isReadOnly()) {

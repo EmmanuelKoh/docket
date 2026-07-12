@@ -182,10 +182,10 @@ function templateSlip(name: string): Slip {
 
 // All slips: system plugins first (registry order), then standalone
 // templates (every stored template no plugin claims).
-export async function listSlips(): Promise<Slip[]> {
+export async function listSlips(ownerId: string): Promise<Slip[]> {
   const [records, templates] = await Promise.all([
-    ensureRegistered() as Promise<PluginRecord[]>,
-    getTemplates() as Promise<{ name: string }[]>,
+    ensureRegistered(ownerId) as Promise<PluginRecord[]>,
+    getTemplates(ownerId) as Promise<{ name: string }[]>,
   ]);
 
   const owned = new Set(
@@ -203,8 +203,11 @@ export async function listSlips(): Promise<Slip[]> {
   return slips;
 }
 
-export async function getSlip(slug: string): Promise<Slip | null> {
-  const slips = await listSlips();
+export async function getSlip(
+  ownerId: string,
+  slug: string,
+): Promise<Slip | null> {
+  const slips = await listSlips(ownerId);
   return slips.find((r) => r.slug === slug) || null;
 }
 

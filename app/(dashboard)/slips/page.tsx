@@ -10,10 +10,14 @@
 
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { sessionOwner } from '@/app/_lib/dashboard-session';
 import { groupByCategory, listSlips } from '../../_lib/slip-data';
 
 export default async function SlipsPage() {
-  const slips = await listSlips();
+  const owner = await sessionOwner();
+  if (!owner) redirect('/login');
+  const slips = await listSlips(owner);
   const groups = groupByCategory(slips);
 
   return (

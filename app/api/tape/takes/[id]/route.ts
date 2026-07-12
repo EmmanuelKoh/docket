@@ -4,10 +4,7 @@
 //   DELETE → remove the take and its payloads
 // Cookie session like the other dashboard JSON APIs.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import {
   attachTakeAudio,
   deleteTake,
@@ -22,15 +19,16 @@ const MAX_BODY = 4 * 1024 * 1024; // stay clear of the platform request cap
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   const { id } = await params;
   if (!SAFE_ID.test(id)) {
     return Response.json({ error: 'no such take' }, { status: 404 });
   }
   try {
-    const take = await getTake(id);
+    const take = await getTake(owner, id);
     if (!take) return Response.json({ error: 'no such take' }, { status: 404 });
-    const payload = (await getTakePayload(id)) || {};
+    const payload = (await getTakePayload(owner, id)) || {};
     return Response.json({ take, ...payload });
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });
@@ -42,7 +40,8 @@ export async function GET(req: Request, { params }: Params) {
 // step after a client upload ({ audioUrl }), or an undelete
 // ({ restore: true } — deletes are soft tombstones for 30 days).
 export async function PATCH(req: Request, { params }: Params) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   const { id } = await params;
   if (!SAFE_ID.test(id)) {
     return Response.json({ error: 'no such take' }, { status: 404 });
@@ -61,7 +60,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (body.restore === true) {
     try {
-      return Response.json({ take: await restoreTake(id) });
+      return Response.json({ take: await restoreTake(owner, id) });
     } catch (err) {
       return Response.json({ error: (err as Error).message }, { status: 404 });
     }
@@ -69,7 +68,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   if (body.doc && typeof body.doc === 'object') {
     try {
-      const take = await updateTake(id, {
+      const take = await updateTake(owner, id, {
         name: typeof body.name === 'string' ? body.name : undefined,
         noteCount: Number(body.noteCount),
         payload: { settings: body.settings, doc: body.doc },
@@ -99,7 +98,7 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   try {
     return Response.json({
-      take: await attachTakeAudio(id, audioUrl as string),
+      take: await attachTakeAudio(owner, id, audioUrl as string),
     });
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });
@@ -107,13 +106,14 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(req: Request, { params }: Params) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   const { id } = await params;
   if (!SAFE_ID.test(id)) {
     return Response.json({ error: 'no such take' }, { status: 404 });
   }
   try {
-    await deleteTake(id);
+    await deleteTake(owner, id);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });

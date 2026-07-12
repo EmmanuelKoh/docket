@@ -26,16 +26,35 @@ export const STORE_DRIVER  = (process.env.STORE_DRIVER || 'json').toLowerCase();
 export const OWNER_ID      = process.env.OWNER_ID || 'default';
 export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
 
-// Shared secret for device-facing endpoints (/next, /ack, /nack). The default
-// keeps local dev working out of the box; set a long random value anywhere
-// the server is reachable from outside your machine.
-export const DEVICE_TOKEN = process.env.DEVICE_TOKEN || 'dev-token';
+// Postgres (Neon) — system of record for users, devices, and record
+// metadata; Redis stays the hot path (queue, due-index, mirrors). Unset
+// locally = lib/db.js falls back to PGlite, an embedded Postgres in
+// data/pg/, so dev works with no cloud account (the json-driver
+// equivalent for SQL).
+export const DATABASE_URL = process.env.DATABASE_URL || '';
+
+// Legacy shared device secret (/next, /ack, /nack, /tick) — the
+// transition fallback while printers move to per-device pairing tokens
+// (lib/devices.js). The dev-token default only ever applies locally:
+// hosted deployments get no default, so the old insecure out-of-the-box
+// token cannot exist in production.
+export const DEVICE_TOKEN =
+  process.env.DEVICE_TOKEN || (process.env.VERCEL ? '' : 'dev-token');
 
 // Dashboard door. DASHBOARD_PASSWORD is what you type at /login;
 // SESSION_SECRET signs the stateless session cookie. No defaults — both must
 // be set (locally in .env, hosted in the Vercel env vars) for login to work.
 export const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
 export const SESSION_SECRET = process.env.SESSION_SECRET || '';
+
+// Better Auth (user accounts). The secret signs its session cookies —
+// falls back to SESSION_SECRET so hosted deployments need no new var
+// (Better Auth itself refuses to boot in production with none set, and
+// uses a fixed dev secret locally). BETTER_AUTH_URL pins the canonical
+// origin in production; unset locally, the origin is inferred per request.
+export const BETTER_AUTH_SECRET =
+  process.env.BETTER_AUTH_SECRET || process.env.SESSION_SECRET || '';
+export const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || '';
 
 // Heartbeat — seconds between /tick POSTs from agent/heartbeat.js. Each tick
 // runs whichever registered plugins are enabled and due.

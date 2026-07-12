@@ -3,13 +3,15 @@
 // updates everything: record, next-due time, due-index. Invalid input
 // saves nothing and returns the error for the inline red line.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { getSlip, parseConfigField } from '@/app/_lib/slip-data';
-import { OWNER_ID } from '@/config.js';
-import { getPlugin, reschedule, upsertPlugin } from '@/lib/plugin-registry.js';
+import {
+  getPlugin,
+  reschedule,
+  savePluginConfig,
+  syncTickSignal,
+  upsertPlugin,
+} from '@/lib/plugin-registry.js';
 import { validateSchedule } from '@/lib/schedule.js';
 import { PLUGINS } from '@/plugins/index.js';
 
@@ -20,10 +22,11 @@ type PluginModule = {
 };
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
 
   const id = new URL(req.url).searchParams.get('id') || '';
-  const record = await getPlugin(OWNER_ID, id);
+  const record = await getPlugin(owner, id);
   if (!record) return Response.json({ error: 'not found' }, { status: 404 });
 
   const body = (await req.json().catch(() => ({}))) || {};
@@ -64,8 +67,11 @@ export async function POST(req: Request) {
   if (error) return Response.json({ error }, { status: 400 });
 
   const updated = { ...record, schedule, config };
-  // One save updates everything: record, next-due time, due-index.
+  // One save updates everything: record, next-due time, due-index — and
+  // the Postgres config truth.
   if (!passive && updated.enabled) reschedule(updated);
   await upsertPlugin(updated, { create: false });
-  return Response.json({ slip: await getSlip(id) });
+  await savePluginConfig(updated);
+  await syncTickSignal(owner);
+  return Response.json({ slip: await getSlip(owner, id) });
 }

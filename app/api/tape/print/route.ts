@@ -4,10 +4,7 @@
 // no Liquid, no Satori, no font tracing needed. Cookie session like the
 // other dashboard JSON APIs.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { createRawJob } from '@/lib/job-store.js';
 
 // Vercel's request cap is ~4.5MB; a very long take (base64-inflated)
@@ -15,7 +12,8 @@ import { createRawJob } from '@/lib/job-store.js';
 const MAX_B64 = 3 * 1024 * 1024;
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
 
   const body = await req.json().catch(() => null);
   if (!body) return Response.json({ error: 'invalid JSON' }, { status: 400 });
@@ -34,7 +32,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await createRawJob({
+    const result = await createRawJob(owner, {
       name: typeof name === 'string' && name ? name : 'Tape take',
       source: 'tape',
       bytes: Buffer.from(bytes, 'base64'),
