@@ -15,7 +15,11 @@
 // The preview IS the print bytes; there is no parallel rendering.
 
 import { createNoteTracker } from '@/components/tape-events.js';
-import { createTapeRenderer, noteLabel } from '@/components/tape-renderer.js';
+import {
+  createTapeRenderer,
+  mughamKey,
+  noteLabel,
+} from '@/components/tape-renderer.js';
 
 import { createAnalyzer } from './analyzer.js';
 import { createRecorder, synthDemoPcm } from './audio-io.js';
@@ -1007,6 +1011,26 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       player.stop(false);
     },
     setSetting(key, value) {
+      // scale system: mugham selections derive the EFFECTIVE printed
+      // signature (best-fit, see mughamKey); keySig stays the single
+      // truth the renderer and note labels read
+      if (
+        key === 'scaleSystem' ||
+        key === 'mughamMode' ||
+        key === 'mughamTonic'
+      ) {
+        set((s) => ({ settings: { ...s.settings, [key]: value } }));
+        const s = settings();
+        if (s.scaleSystem === 'mugham') {
+          const { sharps } = mughamKey(s.mughamMode, s.mughamTonic);
+          if (sharps !== s.keySig) {
+            set((st) => ({ settings: { ...st.settings, keySig: sharps } }));
+            renderer?.setConfig({ keySig: sharps });
+            scheduleRerender();
+          }
+        }
+        return;
+      }
       // the floor is per phrase: it re-derives only the ACTIVE phrase.
       // Freeze-on-edit: a phrase with edits keeps its floor (the slider
       // is disabled in the UI; this is the belt to that suspender)

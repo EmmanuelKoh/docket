@@ -375,8 +375,19 @@ forks; the tie clears when the audio genuinely changes (New take,
 fresh recording, Demo, Load clip). Saving round-trips the whole song
 document (phrases, edits, versions, layout) plus the recording as
 lossless WAV, so a loaded take comes back frozen where edited and
-re-transcribes identically. Below the list: the key signature select
-(the one always-visible setting), then COLLAPSIBLE groups
+re-transcribes identically. Below the list: the KEY picker (the one
+always-visible setting) — a system select (Western — major / minor,
+or Mugham — Rast, Shur, Segah…). Western lists every signature named
+with its relative minor ("G major / E minor · 1♯"). Mugham offers the
+seven principal modes (Rast, Shur, Segah, Shushtar, Chahargah,
+Bayati-Shiraz, Humayun) on a chosen tonic; each pick derives the
+best-fit printed signature (most shared pitches, ties to fewer
+accidentals then flats) and a hint states it plainly ("Segah on A —
+prints as F major / D minor · 1♭"). Neutral quarter-tone degrees
+round to the nearest semitone for now — the paper shows plain
+accidentals, the playing supplies the intonation; the interval rows
+are data in tape-renderer.js (MUGHAM_MODES), correctable one line per
+mode. Then COLLAPSIBLE groups
 (details/summary, ▸/▾ markers, closed by default — settings earn
 space only when open): DETECTION (the Melody floor slider, value
 shown as "230 Hz / A♯3" — a note name, not bare Hz), VIEW (Notation:

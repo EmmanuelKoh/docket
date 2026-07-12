@@ -14,7 +14,10 @@ import { createStore } from 'zustand/vanilla';
 
 export interface TapeSettings {
   melodyFloor: number; // Hz — detector register floor (see controller)
-  keySig: number; // sharps count, -7..+7
+  keySig: number; // sharps count, -7..+7 (the EFFECTIVE signature)
+  scaleSystem: 'western' | 'mugham'; // how the key is chosen
+  mughamMode: string; // MUGHAM_MODES id (when scaleSystem = mugham)
+  mughamTonic: number; // tonic pitch class 0-11 (C = 0)
   msPerRow: number;
   staffGap: number;
   noteDots: number;
@@ -22,6 +25,11 @@ export interface TapeSettings {
   breathGapMs: number;
   traceZoom: number; // linear-trace columns per second
 }
+
+// settings keys the generic slider control may bind (numbers only)
+export type TapeSliderKey = {
+  [K in keyof TapeSettings]: TapeSettings[K] extends number ? K : never;
+}[keyof TapeSettings];
 
 // A saved take's meta record, as the takes list renders it.
 export interface TakeMeta {
@@ -126,6 +134,9 @@ export const tapeStore = createStore<TapeState>(() => ({
   settings: {
     melodyFloor: 230,
     keySig: 0,
+    scaleSystem: 'western',
+    mughamMode: 'shur',
+    mughamTonic: 9, // A — the duduk at hand
     msPerRow: 20,
     staffGap: 28,
     noteDots: 26,

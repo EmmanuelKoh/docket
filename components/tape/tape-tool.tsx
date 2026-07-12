@@ -25,8 +25,18 @@ import {
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { createTapeController } from '@/components/tape/controller.js';
 import { floorToMidi } from '@/components/tape/doc.mjs';
-import { type TapeSettings, tapeStore, useTape } from '@/components/tape/store';
-import { KEY_SIGS, noteLabel } from '@/components/tape-renderer.js';
+import {
+  type TapeSliderKey,
+  tapeStore,
+  useTape,
+} from '@/components/tape/store';
+import {
+  KEY_SIGS,
+  MUGHAM_MODES,
+  mughamKey,
+  noteLabel,
+  TONIC_NAMES,
+} from '@/components/tape-renderer.js';
 import { useSidebar } from '@/components/ui/sidebar';
 
 type Controller = ReturnType<typeof createTapeController>;
@@ -39,7 +49,7 @@ const fmtTime = (sec: number) => {
 
 function Slider(props: {
   ctl: Controller | null;
-  k: keyof TapeSettings;
+  k: TapeSliderKey;
   label: string;
   min: number;
   max: number;
@@ -261,6 +271,82 @@ function Projects({ ctl }: { ctl: Controller | null }) {
   );
 }
 
+// the key: Western major/minor signatures, or the mugham modes (Rast,
+// Shur, Segah, …) on a chosen tonic — a mugham pick derives the
+// best-fit printed signature, shown in the hint underneath
+function KeyPicker({
+  ctl,
+  keySig,
+}: {
+  ctl: Controller | null;
+  keySig: number;
+}) {
+  const system = useTape((s) => s.settings.scaleSystem);
+  const mode = useTape((s) => s.settings.mughamMode);
+  const tonic = useTape((s) => s.settings.mughamTonic);
+  const sigName =
+    KEY_SIGS.find((k: { sharps: number }) => k.sharps === keySig)?.name ?? '';
+
+  return (
+    <div className="tape-field">
+      <span className="label">Key</span>
+      <select
+        className="tape-select"
+        value={system}
+        onChange={(e) => ctl?.setSetting('scaleSystem', e.target.value)}
+      >
+        <option value="western">Western — major / minor</option>
+        <option value="mugham">Mugham — Rast, Shur, Segah…</option>
+      </select>
+      {system === 'western' ? (
+        <select
+          className="tape-select"
+          value={keySig}
+          onChange={(e) =>
+            ctl?.setSetting('keySig', parseInt(e.target.value, 10))
+          }
+        >
+          {KEY_SIGS.map((k: { sharps: number; name: string }) => (
+            <option key={k.sharps} value={k.sharps}>
+              {k.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <>
+          <select
+            className="tape-select"
+            value={mode}
+            onChange={(e) => ctl?.setSetting('mughamMode', e.target.value)}
+          >
+            {MUGHAM_MODES.map((m: { id: string; name: string }) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="tape-select"
+            value={tonic}
+            onChange={(e) =>
+              ctl?.setSetting('mughamTonic', parseInt(e.target.value, 10))
+            }
+          >
+            {TONIC_NAMES.map((t: string, pc: number) => (
+              <option key={t} value={pc}>
+                on {t}
+              </option>
+            ))}
+          </select>
+          <p className="tape-hint">
+            {mughamKey(mode, tonic).name} — prints as {sigName}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Controls({ ctl }: { ctl: Controller | null }) {
   const micOn = useTape((s) => s.micOn);
   const decoding = useTape((s) => s.decoding);
@@ -303,22 +389,7 @@ function Controls({ ctl }: { ctl: Controller | null }) {
 
       <Projects ctl={ctl} />
 
-      <div className="tape-field">
-        <span className="label">Key signature</span>
-        <select
-          className="tape-select"
-          value={keySig}
-          onChange={(e) =>
-            ctl?.setSetting('keySig', parseInt(e.target.value, 10))
-          }
-        >
-          {KEY_SIGS.map((k: { sharps: number; name: string }) => (
-            <option key={k.sharps} value={k.sharps}>
-              {k.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <KeyPicker ctl={ctl} keySig={keySig} />
 
       <Group
         title={

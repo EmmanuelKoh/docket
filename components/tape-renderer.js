@@ -22,16 +22,86 @@
 // Tape page exposes it as sliders.
 
 // ---- key signatures ----
-// sharps: -7 (Cb major) .. 0 (C) .. +7 (C# major)
+// sharps: -7 (Cb major) .. 0 (C) .. +7 (C# major); each named with its
+// relative minor (same signature, minor tonic a minor third down)
 export const KEY_SIGS = [];
 {
   const flats = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+  const flatMinors = ['Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D'];
   const sharps = ['G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
-  for (let i = 7; i >= 1; i--)
-    KEY_SIGS.push({ sharps: -i, name: `${flats[7 - i]} major · ${i}♭` });
-  KEY_SIGS.push({ sharps: 0, name: 'C major · no accidentals' });
-  for (let i = 1; i <= 7; i++)
-    KEY_SIGS.push({ sharps: i, name: `${sharps[i - 1]} major · ${i}♯` });
+  const sharpMinors = ['E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#'];
+  for (let i = 7; i >= 1; i--) {
+    KEY_SIGS.push({
+      sharps: -i,
+      name: `${flats[7 - i]} major / ${flatMinors[7 - i]} minor · ${i}♭`,
+    });
+  }
+  KEY_SIGS.push({ sharps: 0, name: 'C major / A minor' });
+  for (let i = 1; i <= 7; i++) {
+    KEY_SIGS.push({
+      sharps: i,
+      name: `${sharps[i - 1]} major / ${sharpMinors[i - 1]} minor · ${i}♯`,
+    });
+  }
+}
+
+// ---- mugham / maqam modes (12-TET approximations) ----
+// Interval rows in semitones from the tonic, neutral (quarter-tone)
+// degrees rounded to the nearest semitone — the paper shows plain
+// accidentals and the player's intonation supplies the rest. These
+// rows are SEEDED DRAFTS in the Hajibeyov tradition; correct any mode
+// by ear by editing its one line.
+export const MUGHAM_MODES = [
+  { id: 'rast', name: 'Rast', steps: [0, 2, 4, 5, 7, 9, 10] },
+  { id: 'shur', name: 'Shur', steps: [0, 2, 3, 5, 7, 8, 10] },
+  { id: 'segah', name: 'Segah', steps: [0, 1, 3, 5, 7, 8, 10] },
+  { id: 'shushtar', name: 'Shushtar', steps: [0, 2, 3, 6, 7, 8, 11] },
+  { id: 'chahargah', name: 'Chahargah', steps: [0, 1, 4, 5, 7, 8, 11] },
+  { id: 'bayati-shiraz', name: 'Bayati-Shiraz', steps: [0, 2, 3, 5, 7, 8, 11] },
+  { id: 'humayun', name: 'Humayun', steps: [0, 1, 4, 5, 7, 8, 10] },
+];
+
+// tonic pitch classes for the mugham selects (C = 0)
+export const TONIC_NAMES = [
+  'C',
+  'D♭',
+  'D',
+  'E♭',
+  'E',
+  'F',
+  'F♯',
+  'G',
+  'A♭',
+  'A',
+  'B♭',
+  'B',
+];
+
+// Best-fit printed signature for a mode on a tonic: the signature whose
+// diatonic set covers the most of the mode's pitches (ties: fewer
+// accidentals, then flats). Out-of-signature degrees print as ordinary
+// accidentals via spellNote, exactly like out-of-key notes today.
+export function mughamKey(modeId, tonicPc) {
+  const mode = MUGHAM_MODES.find((m) => m.id === modeId) || MUGHAM_MODES[0];
+  const pcs = new Set(mode.steps.map((s) => (s + tonicPc) % 12));
+  let best = { sharps: 0, score: -1 };
+  for (let s = -7; s <= 7; s++) {
+    const majTonic = (((s * 7) % 12) + 12) % 12;
+    let score = 0;
+    for (const d of [0, 2, 4, 5, 7, 9, 11]) {
+      if (pcs.has((majTonic + d) % 12)) score++;
+    }
+    const better =
+      score > best.score ||
+      (score === best.score &&
+        (Math.abs(s) < Math.abs(best.sharps) ||
+          (Math.abs(s) === Math.abs(best.sharps) && s < best.sharps)));
+    if (better) best = { sharps: s, score };
+  }
+  return {
+    sharps: best.sharps,
+    name: `${mode.name} on ${TONIC_NAMES[((tonicPc % 12) + 12) % 12]}`,
+  };
 }
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
