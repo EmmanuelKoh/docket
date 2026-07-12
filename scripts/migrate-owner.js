@@ -125,25 +125,50 @@ async function migrateRedis() {
 
 // Postgres record stores (phase 4): flip ownerId on every table that
 // carries one. Runs for both drivers — Postgres is always present.
+//
+// The destination owner may already hold rows with the same business key
+// (templates and plugin configs seed themselves for a new account on
+// first page view; a test print mints job-1). The MIGRATED data is the
+// real data — colliding destination rows are fresh seeds or test runs —
+// so those are deleted before the flip.
 async function migratePostgres() {
-  const { eq } = await import('drizzle-orm');
+  const { and, eq, inArray } = await import('drizzle-orm');
   const { getDb } = await import('../lib/db.js');
   const schema = await import('../db/schema.js');
   const db = await getDb();
   let moved = 0;
+  // [label, table, ownerId column, business-key column within an owner]
   const tables = [
-    ['template', schema.template, schema.template.ownerId],
-    ['job', schema.job, schema.job.ownerId],
-    ['tape_take', schema.tapeTake, schema.tapeTake.ownerId],
-    ['plugin_config', schema.pluginConfig, schema.pluginConfig.ownerId],
-    ['device', schema.device, schema.device.ownerId],
+    ['template', schema.template, schema.template.ownerId, schema.template.name],
+    ['job', schema.job, schema.job.ownerId, schema.job.id],
+    ['tape_take', schema.tapeTake, schema.tapeTake.ownerId, null],
+    ['plugin_config', schema.pluginConfig, schema.pluginConfig.ownerId, schema.pluginConfig.pluginId],
+    ['device', schema.device, schema.device.ownerId, null],
   ];
-  for (const [label, table, col] of tables) {
+  for (const [label, table, col, keyCol] of tables) {
     if (dryRun) {
       const rows = await db.select().from(table).where(eq(col, from));
       if (rows.length) console.log(`pg ${label}: ${rows.length} row(s) (dry run)`);
       moved += rows.length;
       continue;
+    }
+    if (keyCol) {
+      const incoming = await db
+        .select({ key: keyCol })
+        .from(table)
+        .where(eq(col, from));
+      if (incoming.length) {
+        const displaced = await db
+          .delete(table)
+          .where(and(eq(col, to), inArray(keyCol, incoming.map(r => r.key))))
+          .returning({ key: keyCol });
+        if (displaced.length) {
+          console.log(
+            `pg ${label}: replaced ${displaced.length} seeded/duplicate row(s) ` +
+              `already under '${to}' (${displaced.map(r => r.key).join(', ')})`,
+          );
+        }
+      }
     }
     const updated = await db
       .update(table)
