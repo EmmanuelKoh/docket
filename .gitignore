@@ -27,6 +27,9 @@ data/
 # Per-phase teaching notes for the multi-user build (private, not shipped)
 learning/
 
+# Claude Code working files (local settings, plans, worktrees)
+.claude/
+
 # Python bytecode
 __pycache__/
 *.pyc
