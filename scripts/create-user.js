@@ -29,6 +29,8 @@ try {
     body: { name, email, password, role },
   });
   console.log(`created ${role} account ${res.user.id} for ${email}`);
+  // The open PGlite handle keeps the event loop alive; exit explicitly.
+  process.exit(0);
 } catch (err) {
   console.error('failed:', err.body?.message || err.message);
   process.exit(1);
