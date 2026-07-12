@@ -56,7 +56,7 @@ export default async function PrinterPage() {
               key={r.label}
               className="grid grid-cols-[110px_minmax(0,1fr)] items-baseline gap-3"
             >
-              <span className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+              <span className="text-[13px] font-semibold text-ink">
                 {r.label}
               </span>
               <span className="font-mono text-[12.5px] text-ink-muted">

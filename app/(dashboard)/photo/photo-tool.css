@@ -5,37 +5,40 @@
    page used — do not rename classes here without updating it. Tokens come
    from app/globals.css. */
 
+/* material controls (design-spec — material & type): flat, square,
+   ink-framed; hover inverts like thermal print */
 .btn {
   display: inline-block;
-  background: var(--raised);
+  background: transparent;
   color: var(--ink);
-  border: 0.5px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
   cursor: pointer;
 }
 .btn:hover {
-  border-color: var(--ink-faint);
+  background: var(--ink);
+  color: var(--raised);
 }
 .btn.small {
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 11px;
+  font-size: 13px;
 }
 .btn:disabled {
-  color: var(--ink-faint);
+  border-color: var(--border);
+  color: var(--ink-muted);
   cursor: default;
 }
 .btn:disabled:hover {
-  border-color: var(--border);
+  background: transparent;
+  color: var(--ink-muted);
 }
 
 .label {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  font-size: 13px;
+  color: var(--ink);
 }
 
 .editable {
@@ -79,7 +82,7 @@
   text-align: center;
   min-height: 110px;
   border: 1px dashed var(--dash);
-  border-radius: 6px;
+  border-radius: 0;
   cursor: pointer;
   font-size: 13px;
   color: var(--ink);
@@ -115,7 +118,7 @@
   display: block;
   width: 100%;
   border: 0.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
   background: #000;
   /* NO image-rendering: pixelated — the canvas holds a 576-dot dither
      shown smaller, smooth-scaled just like the rendered preview img, so
@@ -181,7 +184,7 @@
   display: block;
   max-width: 100%;
   border: 0.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
   touch-action: none; /* the canvas owns drags — don't scroll the page */
   cursor: crosshair;
 }
@@ -197,7 +200,7 @@
 .seg {
   display: inline-flex;
   border: 0.5px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   overflow: hidden;
 }
 .seg button {
@@ -284,13 +287,11 @@
 
 .auto-toggle {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 10.5px;
   background: var(--raised);
   color: var(--ink-muted);
   border: 0.5px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 1px 7px;
   cursor: pointer;
 }
@@ -308,7 +309,7 @@
   width: 100%;
   height: 40px;
   border: 0.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
 }
 .level-track {
   position: relative;
@@ -329,7 +330,7 @@
   top: 2px;
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 0;
   pointer-events: none; /* the track owns the drag */
 }
 .level-handle.black {
@@ -371,7 +372,7 @@
   -webkit-appearance: none;
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--ink);
   margin-top: -4.5px;
 }
@@ -383,7 +384,7 @@
   width: 10px;
   height: 10px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--ink);
 }
 
@@ -409,7 +410,7 @@
 .photo-roll {
   background: #ffffff;
   border: 0.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 0;
   max-width: 400px;
 }
 /* physical paper: the printable 576 dots sit inside 80mm stock (624) with

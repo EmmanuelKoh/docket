@@ -85,7 +85,7 @@ export function SlipSystemPanel({ initial }: { initial: Slip }) {
           />
         </button>
         <span
-          className={`rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em] ${slip.enabled ? 'text-ink-muted' : 'text-ink-faint'}`}
+          className={`rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] ${slip.enabled ? 'text-ink-muted' : 'text-ink-faint'}`}
         >
           {slip.enabled ? 'enabled' : 'off'}
         </span>
@@ -100,9 +100,7 @@ export function SlipSystemPanel({ initial }: { initial: Slip }) {
       <div
         className={`rounded-md border-[0.5px] border-border bg-raised px-4 py-4 ${dim}`}
       >
-        <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-          Parameters
-        </div>
+        <div className="text-[13px] font-semibold text-ink">Parameters</div>
         <div className="mt-3 space-y-3">
           {slip.scheduleType === 'every' ? (
             <Row label="schedule">
@@ -192,9 +190,7 @@ function Row({
 }) {
   return (
     <div className="grid grid-cols-[110px_minmax(0,1fr)] items-baseline gap-3">
-      <span className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-        {label}
-      </span>
+      <span className="text-[13px] font-semibold text-ink">{label}</span>
       {children}
     </div>
   );

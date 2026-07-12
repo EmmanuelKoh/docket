@@ -9,17 +9,25 @@ extending the mockup files.
 Two-color register ribbon: everything is one neutral gray ramp (monochrome),
 plus a single deep "register red" used only where an old receipt printer would
 ink red: attention and motion. Paper-flat, hairline rules, no shadows, no
-gradients. Data is monospace; labels are small letterspaced caps.
+gradients, ZERO border radius — the chrome borrows from the machine
+(July 2026 "material" pass, first proven on the Tape studio and then
+applied app-wide): flat square controls, ink borders on primary
+actions, hover/pressed states that INVERT like thermal print.
 
-Name/wordmark: DOCKET, mono font, 14px, weight 500, letter-spacing 0.14em.
+Name/wordmark: DOCKET, mono font, 14px, weight 500, letter-spacing 0.14em
+(the wordmark is the one letterspaced thing in the product).
 
 ## Fonts (standalone stacks, no external dependencies required)
 
---font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif
+ONE typeface: the receipt mono carries the entire app. --font-sans keeps
+its NAME (so utilities don't churn) but its VALUE is the mono stack:
+
+--font-sans: ui-monospace, "SF Mono", Menlo, Consolas, monospace
 --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace
 
-Weights: 400 and 500 only. Mono is for DATA VALUES only (counts, job names,
-timestamps, config JSON, intervals), never for labels or body copy.
+Weights: 400, 500/600 for emphasis, 700 for knockout banners and section
+titles. NO uppercase, NO letter-spacing (wordmark excepted): section
+labels are 13px --ink at semibold weight — hierarchy by weight alone.
 
 Icons: any single icon set, outline style, 14-15px, colored --ink-faint.
 (The mockups used Tabler icons via webfont; self-host or swap freely.)
@@ -92,40 +100,44 @@ Green is not used anywhere.
   dock). Everything else is --ink-muted.
 - Major blocks: 20px apart. Section title block: 16px/500 title,
   12px --ink-faint subtitle 3px below.
-- Cards: --raised bg, 0.5px --border, radius 6px, padding 16px 18px,
-  12px gap between cards.
+- Cards: --raised bg, 0.5px --border, radius 0 (square everywhere),
+  padding 16px 18px, 12px gap between cards.
 - Card detail line: separated by 1px dashed --dash, 14px padding above and
   below, fields 24px apart. Inline-editable values get 1px dotted
   --ink-faint underline.
-- List containers: one --raised box, radius 6px; rows inside at 16px 20px
+- List containers: one --raised box, radius 0; rows inside at 16px 20px
   with 0.5px --hairline separators (no per-row cards).
 - Rows: 24px column gap, 16px 20px padding; right meta column fixed 118px, right-aligned, mono
   12px, never wraps ("canceled · 33m" is the sizing case), so timestamps
   rail-align down the page. Rows with a thumbnail TOP-ALIGN all content to
   the media (text centered against tall media floats in dead space); only
   single-line rows center vertically.
-- Labels: 11px, letter-spacing 0.12em, UPPERCASE, --ink-faint.
+- Labels: 13px, --ink, semibold — sentence case, no letter-spacing
+  (the old 11px caps idiom is retired everywhere).
 - Body 13px; meta/sub 12px; stat numbers 28px mono.
 - Dashed divider between major page zones: 1px dashed --dash, inside the
   gutters.
 
 ## Components
 
-Buttons: outline only, 0.5px --border, radius 6px, --raised or --page bg,
---ink text 12-12.5px, padding 6px 12px (4px 10px for in-row buttons).
-No filled buttons anywhere.
+Buttons: flat and square — 1px --ink border, transparent bg, --ink text
+13px, padding 8px 14px (6px 11px small); hover/pressed INVERT like
+thermal print (--ink fill, --raised text). Disabled drops to a --border
+frame with --ink-muted text. The only steady fills are inversion states
+and knockout banners; red frames/fills belong to live/destructive
+states only.
 
 Toggle: 34x20 pill, 16px knob inset 2px. On: --ink fill, knob --page.
 Off: --border fill, knob white/raised.
 
-Status chip (plugins only): 11px caps, 0.06em tracking, 2px 8px, 0.5px
---border, radius 4px. ENABLED = --ink-muted text; OFF = --ink-faint.
+Status chip (plugins only): 11px sentence case, 2px 8px, 0.5px
+--border, radius 0. enabled = --ink-muted text; off = --ink-faint.
 Job statuses are plain mono text, not chips: "printing"/"failed" in --red,
 "queued"/"done" in --ink-muted / --ink-faint.
 
 Thumbnails (real job/template preview PNGs at build time): landscape to
 match the artifact (receipts are wider than tall). 130x86 in list rows,
-158x108 in queue cards; 0.5px --border, radius 2px, object-fit contain.
+158x108 in queue cards; 0.5px --border, radius 0, object-fit contain.
 Background is always #fff in BOTH themes: receipts are paper, and a theme
 background would letterbox dark bars around them in darkroom mode.
 Hovering any list thumbnail floats a 288px-wide peek of the same PNG

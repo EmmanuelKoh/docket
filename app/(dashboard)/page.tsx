@@ -72,9 +72,7 @@ export default async function OverviewPage() {
     <div className="space-y-5">
       {/* latest print */}
       <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-          Latest print
-        </div>
+        <div className="text-[13px] font-semibold text-ink">Latest print</div>
         {last ? (
           <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-start">
             <ReceiptPreview
@@ -109,9 +107,7 @@ export default async function OverviewPage() {
             key={s.label}
             className={`p-4 ${i > 0 ? 'border-l-[0.5px] border-l-hairline max-sm:odd:border-l-0' : ''} ${i >= 2 ? 'max-sm:border-t-[0.5px] max-sm:border-t-hairline' : ''}`}
           >
-            <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-              {s.label}
-            </div>
+            <div className="text-[13px] font-semibold text-ink">{s.label}</div>
             <div
               className={`mt-2 font-mono text-[28px] leading-none ${s.red ? 'text-red' : 'text-ink'}`}
             >
@@ -144,9 +140,7 @@ export default async function OverviewPage() {
       {/* recent */}
       <section>
         <div className="flex items-baseline justify-between">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-            Recent
-          </div>
+          <div className="text-[13px] font-semibold text-ink">Recent</div>
           <Link
             href="/history"
             className="text-xs text-ink-muted hover:text-ink"

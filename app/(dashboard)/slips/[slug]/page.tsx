@@ -43,10 +43,10 @@ export default async function SlipPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+            <span className="rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] text-ink-muted">
               {slip.kind}
             </span>
-            <span className="rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+            <span className="rounded-[4px] border-[0.5px] border-border px-2 py-0.5 text-[11px] text-ink-muted">
               liquid
             </span>
             {slip.kind === 'template' ? (
@@ -59,9 +59,7 @@ export default async function SlipPage({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         {/* preview stage */}
         <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-            Preview
-          </div>
+          <div className="text-[13px] font-semibold text-ink">Preview</div>
           <div className="mt-3">
             {slip.primaryTemplate ? (
               <ReceiptPreview
@@ -84,9 +82,7 @@ export default async function SlipPage({
           <SlipSystemPanel initial={slip} />
         ) : (
           <section className="h-fit rounded-md border-[0.5px] border-border bg-raised px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-              Template
-            </div>
+            <div className="text-[13px] font-semibold text-ink">Template</div>
             <p className="mt-2 text-xs text-ink-muted">
               A stored template. Edit the Liquid source and default data in the
               Studio; print it from there or with Print test.
@@ -103,9 +99,7 @@ export default async function SlipPage({
 
       {/* templates */}
       <section>
-        <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-          Templates
-        </div>
+        <div className="text-[13px] font-semibold text-ink">Templates</div>
         <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised">
           {slip.templates.length ? (
             slip.templates.map((name, i) => (
@@ -133,9 +127,7 @@ export default async function SlipPage({
       {/* state */}
       {slip.kind === 'system' ? (
         <section>
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-            State
-          </div>
+          <div className="text-[13px] font-semibold text-ink">State</div>
           <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised px-5 py-4">
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
               {clip(JSON.stringify(slip.state || {}, null, 2), 1200)}

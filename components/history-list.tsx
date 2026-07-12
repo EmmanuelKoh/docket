@@ -118,7 +118,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
               <div className="bg-page px-5 py-4 sm:pl-[162px]">
                 <div className="grid gap-5 sm:grid-cols-[auto_1fr_1fr]">
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Printed
                     </div>
                     <div className="mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
@@ -130,7 +130,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Template
                     </div>
                     <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
@@ -142,7 +142,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     </pre>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Data
                     </div>
                     <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
