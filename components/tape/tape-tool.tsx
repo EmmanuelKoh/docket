@@ -241,7 +241,7 @@ function Projects({ ctl }: { ctl: Controller | null }) {
           </Fragment>
         ))}
         {takes && takes.length === 0 && !hasTake && (
-          <p className="tape-hint">record, load a clip, or try the demo</p>
+          <p className="tape-hint">no saved takes yet</p>
         )}
       </div>
       {lastDeleted && (
@@ -290,14 +290,6 @@ function Controls({ ctl }: { ctl: Controller | null }) {
               <Mic size={13} /> Record
             </>
           )}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={micOn || decoding}
-          onClick={() => ctl?.demo()}
-        >
-          Demo phrase
         </button>
         <button
           type="button"
@@ -651,16 +643,21 @@ function TraceCanvas({
   );
 }
 
-// a friendly note on the bare paper before anything is on tape
-function EmptyOverlay() {
+// a friendly note on the bare paper before anything is on tape — also
+// where the demo phrase lives, out of the main controls' way
+function EmptyOverlay({ ctl }: { ctl: Controller | null }) {
   const show = useTape(
     (s) => !s.hasTake && !s.hasAudio && !s.micOn && !s.decoding,
   );
   if (!show) return null;
   return (
     <div className="tape-empty">
-      nothing on tape yet — press Record, try the Demo phrase, or open a saved
-      take
+      <span>
+        nothing on tape yet — press Record, open a saved take, or{' '}
+        <button type="button" className="tape-demo" onClick={() => ctl?.demo()}>
+          try the demo phrase
+        </button>
+      </span>
     </div>
   );
 }
@@ -832,7 +829,7 @@ export function TapeTool() {
           <TraceCanvas elRef={traceRef} />
           <SelectionBand />
           <Playhead elRef={playheadRef} />
-          <EmptyOverlay />
+          <EmptyOverlay ctl={ctl} />
         </div>
         <Transport ctl={ctl} />
         <Inspector ctl={ctl} />

@@ -15,7 +15,7 @@ export default function TapePage() {
       <div>
         <h1 className="text-base font-medium text-ink">Tape</h1>
         <p className="mt-0.5 text-xs text-ink-muted">
-          Live transcription — play, tune the detector, print the take.
+          Record a take, edit its notes and phrases, print the tape.
         </p>
       </div>
       <div className="rounded-md border-[0.5px] border-border bg-raised p-4 sm:p-5">

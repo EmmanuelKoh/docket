@@ -315,7 +315,12 @@ Full-bleed workbench at /tape (sidebar collapses on entry, like the
 Studio). Notation glyphs (treble clef, key signature, accidentals,
 breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
 sized to the staff; the take opens with bare paper, then the clef and
-key signature before the first note. Monophonic transcription in two
+key signature before the first note. Before anything is on tape, the
+paper carries a centered fixed-gray note ("nothing on tape yet —
+press Record, open a saved take, or try the demo phrase" — the demo
+is a clickable underlined action there). The canvases track the
+roll's width via a ResizeObserver (the app sidebar collapses after
+mount). Monophonic transcription in two
 regimes: while the mic is live, a lightweight pitch tracker sketches
 the tape and trace in real time; when the take ends (Stop or Load
 clip) the recording is transcribed by a neural model (Basic
@@ -340,9 +345,23 @@ no live-note readout, and no event log — the tape itself is the
 answer; the only permanent stage text is the transport and the
 transient status line.
 
-Left column (300px), project-first: session buttons (Start mic / Demo
-phrase / New take), then the TAKES list — every saved take is a
-PROJECT. Rows are plain text (name + mono duration; no note counts),
+Tape type discipline (receipt-plain, scoped to this page): TWO text
+sizes (13px for words, 12px for asides), TWO colors (--ink and
+--ink-muted), sans for words with mono reserved for numbers and
+times, no uppercase and no letter-spacing — section titles differ by
+weight (600) alone. Buttons run larger than the global kit (8/14px
+padding, 6/11px small, 4px radius) with lucide icons where a symbol
+is universal: Record carries a mic (stop-square + red while live),
+the transport is icon-only Play/Pause/Stop, pitch nudges are
+chevrons, Cut before carries scissors, Remove is a trash can,
+Undo/Redo are the curved arrows (tooltips carry the shortcuts), and
+the print buttons carry the printer glyph. Domain actions (Ornament,
+Slide from prev, Split at playhead, Join next) stay as words.
+
+Left column (300px), project-first: session buttons (Record / New
+take — the demo phrase is NOT a main button; it lives as an
+underlined action inside the empty-paper note), then the TAKES list —
+every saved take is a PROJECT. Rows are plain text (name + mono duration; no note counts),
 clicking a row opens it, the open row renders bold and expands to its
 PHRASE LIST (see Phrases below) indented under a hairline; an unsaved
 session shows as a bold "unsaved take" row. A ✕ per row deletes

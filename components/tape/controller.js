@@ -408,11 +408,11 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     resetTake(true);
     set({ status: 'starting mic…' });
     try {
-      const sr = await recorder.startMic({
+      await recorder.startMic({
         onBlock: pumpAnalysis,
-        onCap: () => stopMic('recording cap reached'),
+        onCap: () => stopMic('recording stopped — 10 minute limit'),
       });
-      set({ micOn: true, status: `listening — ${Math.round(sr)} Hz analysis` });
+      set({ micOn: true, status: 'recording…' });
     } catch (e) {
       set({ status: `mic failed: ${e.message}` });
     }
