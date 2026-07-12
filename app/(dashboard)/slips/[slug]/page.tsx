@@ -5,7 +5,8 @@
 // and, for system slips, the STATE debug record.
 
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { sessionOwner } from '@/app/_lib/dashboard-session';
 import { DeleteTemplateButton } from '@/components/delete-template-button';
 import { PrintTestButton } from '@/components/print-test-button';
 import {
@@ -23,8 +24,10 @@ export default async function SlipPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const owner = await sessionOwner();
+  if (!owner) redirect('/login');
   const { slug } = await params;
-  const slip = await getSlip(decodeURIComponent(slug));
+  const slip = await getSlip(owner, decodeURIComponent(slug));
   if (!slip) notFound();
 
   return (

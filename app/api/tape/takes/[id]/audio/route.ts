@@ -5,10 +5,7 @@
 //   PUT → local-driver upload (dev has no platform request cap; hosted
 //         audio goes browser → Blob via the client-upload flow instead)
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import {
   audioUploadMode,
   getTakeAudio,
@@ -21,14 +18,17 @@ const MAX_WAV = 64 * 1024 * 1024;
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: Request, { params }: Params) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   const { id } = await params;
   if (!SAFE_ID.test(id)) {
     return Response.json({ error: 'no such take' }, { status: 404 });
   }
   try {
-    const audio: { url?: string; buffer?: Buffer } | null =
-      await getTakeAudio(id);
+    const audio: { url?: string; buffer?: Buffer } | null = await getTakeAudio(
+      owner,
+      id,
+    );
     if (audio?.url) return Response.redirect(audio.url, 302);
     const buf = audio?.buffer;
     if (!buf) {
@@ -49,7 +49,8 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function PUT(req: Request, { params }: Params) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   if (audioUploadMode() !== 'direct') {
     return Response.json(
       { error: 'hosted audio uploads go straight to Blob' },
@@ -65,7 +66,7 @@ export async function PUT(req: Request, { params }: Params) {
     return Response.json({ error: 'audio too large' }, { status: 413 });
   }
   try {
-    return Response.json({ take: await saveTakeAudio(id, buf) });
+    return Response.json({ take: await saveTakeAudio(owner, id, buf) });
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });
   }

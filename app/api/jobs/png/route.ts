@@ -3,14 +3,12 @@
 // equivalent is GET /jobs?png=ID). A job's PNG never changes, so short
 // private caching keeps repeat paints free.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { getJobPng } from '@/lib/job-store.js';
 
 export async function GET(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
 
   const id = new URL(req.url).searchParams.get('job');
   if (!id) {
@@ -20,7 +18,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const png = await getJobPng(id);
+  const png = await getJobPng(owner, id);
   if (!png) return new Response(null, { status: 404 });
 
   return new Response(new Uint8Array(png), {

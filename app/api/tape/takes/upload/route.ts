@@ -5,14 +5,12 @@
 // PATCH /api/tape/takes/{id}. Cookie session gates who can mint tokens.
 
 import { handleUpload } from '@vercel/blob/client';
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { audioUploadMode } from '@/lib/tape-store.js';
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   if (audioUploadMode() !== 'client') {
     return Response.json(
       { error: 'client upload needs the redis driver' },
@@ -26,7 +24,7 @@ export async function POST(req: Request) {
       body,
       request: req,
       onBeforeGenerateToken: async (pathname) => {
-        if (!pathname.startsWith('tape/')) {
+        if (!pathname.startsWith(`tape/${owner}/`)) {
           throw new Error('unexpected upload path');
         }
         return {

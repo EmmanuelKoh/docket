@@ -24,6 +24,9 @@ jobs/*
 # Runtime template store (seeded from reference/starter-templates.json)
 data/
 
+# Per-phase teaching notes for the multi-user build (private, not shipped)
+learning/
+
 # Python bytecode
 __pycache__/
 *.pyc

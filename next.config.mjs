@@ -14,9 +14,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: [
+    '@electric-sql/pglite',
+    '@neondatabase/serverless',
     '@resvg/resvg-js',
     '@upstash/redis',
     '@vercel/blob',
+    'drizzle-orm',
     'liquidjs',
     'node-ical',
     'pngjs',

@@ -11,7 +11,7 @@ import { renderToPreview } from '@/render/render-core.js';
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  if (!(await requestSessionValid(req))) return unauthorizedJson();
 
   const { template, data } = (await req.json().catch(() => ({}))) || {};
   if (!template) {

@@ -20,6 +20,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <Preferences.h>
 
 // ---------------- configuration ----------------
 // Credentials live in secrets.h (gitignored — this repo is public).
@@ -30,7 +31,14 @@
 const char* WIFI_SSID    = SECRET_WIFI_SSID;
 const char* WIFI_PASS    = SECRET_WIFI_PASS;
 const char* SERVER_URL   = SECRET_SERVER_URL;
-const char* DEVICE_TOKEN = SECRET_DEVICE_TOKEN;
+
+// The device token. Three sources, in order:
+//   1. flash (NVS) — written by the pairing flow, survives reboots
+//   2. SECRET_DEVICE_TOKEN from secrets.h — the dev/legacy fallback
+//   3. pairing: no token anywhere -> POST /pair, PRINT the code, poll
+//      until the owner claims it on the dashboard's Printer page
+String deviceToken = "";
+Preferences prefs;
 
 // Serial link to the printer. Set the RP850's DIP switches to 115200.
 const uint32_t PRINTER_BAUD = 115200;
@@ -93,7 +101,7 @@ bool httpBegin(HTTPClient& http, const String& path) {
 }
 
 void addAuth(HTTPClient& http) {
-  http.addHeader("Authorization", String("Bearer ") + DEVICE_TOKEN);
+  http.addHeader("Authorization", String("Bearer ") + deviceToken);
 }
 
 // POST helper for /ack, /nack, /tick. Returns HTTP code (or negative).
@@ -104,6 +112,110 @@ int post(const String& path) {
   int code = http.POST("");
   http.end();
   return code;
+}
+
+// ---- pairing ----
+
+// Stable hardware id from the wifi MAC: "esp32-AABBCCDDEEFF".
+String hardwareId() {
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  return "esp32-" + mac;
+}
+
+// Pull "field":"value" out of a small JSON body — enough for /pair's
+// responses without a JSON library.
+String jsonField(const String& body, const char* field) {
+  String needle = String("\"") + field + "\":\"";
+  int i = body.indexOf(needle);
+  if (i < 0) return "";
+  i += needle.length();
+  int j = body.indexOf('"', i);
+  if (j < 0) return "";
+  return body.substring(i, j);
+}
+
+// Print the pairing code as a small receipt so the owner can read it.
+void printPairingCode(const String& code) {
+  Printer.write(0x1B); Printer.write('@');            // init
+  Printer.write(0x1B); Printer.write('a'); Printer.write(1); // center
+  Printer.print("DOCKET PAIRING\n\n");
+  Printer.write(0x1D); Printer.write('!'); Printer.write(0x11); // double size
+  Printer.print(code + "\n");
+  Printer.write(0x1D); Printer.write('!'); Printer.write((uint8_t)0x00);
+  Printer.print("\nenter this code on the\ndashboard Printer page\n");
+  Printer.print("\n\n\n\n\n");
+  Printer.write(0x1D); Printer.write('V'); Printer.write(1);  // partial cut
+  Printer.flush();
+}
+
+// POST /pair. Without a code: request one. With a code: poll for the
+// token. Returns the response body ("" on 204/errors), sets httpCode.
+String postPair(const String& code, int& httpCode) {
+  HTTPClient http;
+  if (!httpBegin(http, "/pair")) { httpCode = -1; return ""; }
+  http.addHeader("Content-Type", "application/json");
+  String body = String("{\"hardwareId\":\"") + hardwareId() + "\"";
+  if (code.length()) body += String(",\"code\":\"") + code + "\"";
+  body += "}";
+  httpCode = http.POST(body);
+  String resp = httpCode == 200 ? http.getString() : "";
+  http.end();
+  return resp;
+}
+
+// Blocking pairing loop: request a code, print it, poll until claimed.
+// A code lives ~15 minutes; when it expires we mint and print a fresh one.
+void pairUntilTokened() {
+  while (deviceToken.length() == 0) {
+    int codeStatus;
+    String resp = postPair("", codeStatus);
+    String code = jsonField(resp, "code");
+    if (codeStatus != 200 || code.length() == 0) {
+      Serial.printf("pair: can't get code (%d) — retrying in 15s\n", codeStatus);
+      blink(2, 120);
+      delay(15000);
+      continue;
+    }
+    Serial.println("pair: code " + code + " — printing it");
+    printPairingCode(code);
+
+    uint32_t codeBorn = millis();
+    while (deviceToken.length() == 0 && millis() - codeBorn < 14UL * 60 * 1000) {
+      delay(5000);
+      int pollStatus;
+      String pollResp = postPair(code, pollStatus);
+      if (pollStatus == 200) {
+        String token = jsonField(pollResp, "token");
+        if (token.length()) {
+          deviceToken = token;
+          prefs.putString("token", deviceToken);
+          Serial.println("pair: claimed — token stored");
+          blink(4, 60);
+          return;
+        }
+      } else if (pollStatus != 204) {
+        Serial.printf("pair poll: %d\n", pollStatus);
+      }
+      blink(1, 30); // pairing heartbeat
+    }
+    // code expired unclaimed — loop mints and prints a fresh one
+  }
+}
+
+// Persistent 401s with a PAIRED token mean it was revoked (or the server
+// was reset): forget it and re-enter pairing. The threshold rides out a
+// misconfigured deploy; secrets.h tokens are never wiped (fix those by
+// flashing).
+int auth401s = 0;
+void noteAuthResult(int code) {
+  if (code != 401) { if (code > 0) auth401s = 0; return; }
+  auth401s++;
+  if (auth401s >= 10 && prefs.getString("token", "").length()) {
+    Serial.println("token revoked? clearing stored token, re-pairing");
+    prefs.remove("token");
+    ESP.restart();
+  }
 }
 
 // ---- printer status (DLE EOT real-time probes) ----
@@ -182,7 +294,8 @@ long streamToPrinter(WiFiClient* body, long expected) {
 
 void doTick() {
   int code = post("/tick");
-  if (code == 401) { Serial.println("tick: 401 — check DEVICE_TOKEN"); blink(2, 120); }
+  noteAuthResult(code);
+  if (code == 401) { Serial.println("tick: 401 — check token"); blink(2, 120); }
   else if (code != 200) Serial.printf("tick: %d\n", code);
   else Serial.println("tick: ok");
 }
@@ -208,8 +321,9 @@ void doPoll() {
   http.collectHeaders(headerKeys, 1);
 
   int code = http.GET();
+  noteAuthResult(code);
   if (code == 204) { http.end(); return; }              // queue empty
-  if (code == 401) { http.end(); Serial.println("next: 401 — check DEVICE_TOKEN"); blink(2, 120); return; }
+  if (code == 401) { http.end(); Serial.println("next: 401 — check token"); blink(2, 120); return; }
   if (code != 200) { http.end(); Serial.printf("next: %d\n", code); backoffUntil = millis() + 15000; return; }
 
   String jobId = http.header("X-Job-Id");
@@ -265,6 +379,18 @@ void setup() {
   Serial.print("wifi: ");
   Serial.println(WiFi.localIP());
   blink(3, 60);                                          // connected!
+
+  // Token: flash first, secrets.h second, pairing last.
+  prefs.begin("docket", false);
+  deviceToken = prefs.getString("token", "");
+  if (deviceToken.length() == 0 && strlen(SECRET_DEVICE_TOKEN) > 0) {
+    deviceToken = SECRET_DEVICE_TOKEN;
+    Serial.println("token: using secrets.h (dev/legacy)");
+  }
+  if (deviceToken.length() == 0) {
+    Serial.println("token: none — entering pairing");
+    pairUntilTokened();
+  }
 }
 
 void loop() {

@@ -27,16 +27,22 @@ polling, throttled presence, POLL_MS 5s (takes effect at the next reflash).
 |---|---|---|---|
 | `GET /next` claim | every poll | 3s polls: 28,800/day | queue flag says "empty" → 0 Redis; ~1 safety claim/60s = 1,440/day |
 | `GET /next` last-seen write | every poll | 28,800 | throttled to 1/60s = 1,440 |
-| `POST /tick`, nothing due | every 30s | 4-6 cmds = ~14,000 | one atomic due-claim = 2,880 |
+| `POST /tick`, nothing due | every 30s | 4-6 cmds = ~14,000 | tick flag says "nothing due" → 0 Redis; ~1 safety claim/5min = 288/day |
 | World Cup runs (enabled) | every 60s | 4 per run = 5,760 | 3 per run = 4,320 |
 | Morning-brief | 288 wake-ups/day | 4 each = 1,152 | 1 real run/day ≈ 3 |
 | Dashboard queue refresh | every 3s per tab | ~2 per refresh, 24/7 = 57,600/tab | only while tab visible ≈ ~1,200 |
 | **Total (Redis)** | | **~130K/day ≈ 4M/mo** (one open tab) | **~11K/day ≈ 330K/mo (under the 500K free tier; ~200K/mo once the World Cup plugin is off)** |
 
-Blob flag reads add ~520K/mo × $0.40/M ≈ $0.21/mo (writes are ~2 per print,
-which is negligible). Idle cost per plugin is zero: only actual runs cost
-commands, so cost scales with each plugin's schedule, not with how many
-plugins exist.
+Blob flag reads are effectively free: measured July 12 2026 on the
+production store, ~14K flag reads per 12h moved the Simple Operations
+meter barely at all (508/10K used after ten days) — cache-busted reads of
+tiny flags bill as downloads/data transfer (~100MB/mo against the 10GB
+cap, ~1%). The binding Blob meter is Advanced Operations (WRITES): 2K/mo
+on the Hobby store, shared with print artifacts (2-3 puts per print) and
+tape saves. Flag writes must therefore be rare and deduplicated — see the
+tick flag's active/idle write policy below. Idle cost per plugin is zero:
+only actual runs cost commands, so cost scales with each plugin's
+schedule, not with how many plugins exist.
 
 Tape takes (added July 2026) follow the templates pattern: the meta list
 is one Redis key, so a list read is 1 command and a save/attach/delete is
@@ -51,7 +57,20 @@ soft (tombstone, purged lazily on list reads after 30 days), so a
 deleted take's blobs linger up to a month — a few MB of grace-period
 storage, no extra commands except the rare purge itself.
 
-### The queue flag (Blob-backed change signal)
+### Multi-user scaling rule (accounts, 2026)
+
+Every cost above is per owner, and owners multiply: each household's
+device polls on its own. The budget survives because both hot paths now
+idle on Blob flags (queue flag for /next, tick flag for /tick) at zero
+Redis commands, so an idle device costs ~9K commands/month (presence
+writes plus safety checks) instead of ~300K. Postgres (Neon) has its own
+meter, CU-hours, with the matching rule: nothing on the device cadence
+may touch Postgres, or the database never scales to zero (an always-on
+0.25 CU instance is ~180 CU-hours/month against the 100 free). Postgres
+wakes for dashboard traffic and actual prints only. Registration and
+template seeding run on the Slips page view, never on ticks.
+
+### The queue and tick flags (Blob-backed change signals)
 
 `/next` polls read a tiny per-owner flag file in Vercel Blob ("does the
 queue have work?") and only run the Redis claim when it says yes or is
@@ -63,6 +82,24 @@ over Edge Config for the meter (no read cap). Probed July 2026 against the
 production store with scripts/blob-staleness-probe.mjs: an overwritten
 flag is visible to a cache-busted fetch in 46-184ms; plain fetches can lag
 ~2s on the CDN, so the reader always cache-busts.
+
+The tick flag (tick-flag/{owner}.json) applies the same idea to /tick: it
+holds the owner's earliest nextDueAt, refreshed by everything that changes
+the schedule (toggle, config save, registration, and any tick that ran
+something). An idle tick reads the flag and returns without touching
+Redis. The safety valve is a real due-claim at least once per 5 minutes
+per warm instance, so a lost flag write delays a plugin run by at most 5
+minutes, once, and can never silently stop a plugin.
+
+Because blob WRITES are the scarce meter (2K/mo Advanced Operations on
+Hobby), the tick flag is written in two modes rather than after every
+run: a plugin due within 10 minutes writes the stable value 0 ("check
+every tick") exactly once and the dedup suppresses the rest, however
+often the plugin runs; a far-off next run writes the timestamp quantized
+to the minute (floor, so checks resume up to 60s early). A World Cup day
+costs one flag write; a morning-brief-only owner costs about one per day.
+Naively writing each post-run nextDueAt would have burned ~1,440 puts/day
+at every:60s and tripped Hobby's 30-day Blob lockout in under two days.
 
 Vercel function invocations are separate: `/next` + `/tick` at 5s/30s ≈
 20K/day ≈ 620K/mo against the 1M Hobby cap (was ~960K/mo at 3s polls).

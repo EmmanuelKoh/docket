@@ -548,8 +548,38 @@ mono 11.5px --ink-muted) and DATA (the JSON), plus a Reprint button
 older →", 12px.
 
 ### Login
-Same paper page, centered small card: DOCKET wordmark, password field,
-one outline button "Sign in". There is nothing else on the page.
+Same paper page, centered small card: DOCKET wordmark, then the account
+form (email field, password field, one outline "Sign in" button). Under
+the form a quiet 12px ink-faint text toggle ("use owner password" /
+"use an account") swaps in the legacy single-password form, which stays
+until the accounts transition completes. Errors are 12px --red under the
+form. There is nothing else on the page.
+
+### Invite (public, /invite/[token])
+The login card's twin: wordmark, then name / email / password fields and
+one outline "Create account" button. Email is read-only when the invite
+is pinned to an address. A dead link renders the card with one ink-faint
+sentence instead of the form ("This invite link is invalid, already
+used, or expired…").
+
+### Printer — Devices section
+Below the status card, a "Devices" ledger section (13px semibold ink
+heading): one row per paired device — name (14px medium ink), dotted
+leader, "paired {ago}" rail in 12px ink-faint, small outline "Revoke"
+button. Empty state: one ink-faint sentence explaining that a new
+printer prints its pairing code on boot. Below the list, the claim
+form: mono uppercase code input + name input + outline "Pair" button;
+errors 12px --red on their own line.
+
+### Users (admin only)
+Two ledger sections, "Accounts" and "Invites", 13px semibold ink
+headings. Rows are one baseline flex: name (14px medium ink), dotted
+leader, rail in 12px ink-faint (email · admin; or expiry). Invite rows
+carry two small outline buttons right of the rail: "Copy link" (flips to
+"Copied" for 1.5s) and "Revoke". Below the invites list, one inline form:
+optional email input + outline "New invite" button. Non-admins see a
+single ink-faint sentence. The sidebar shows Users (lucide Users icon)
+to admins only, after Printer.
 
 ## Voice
 

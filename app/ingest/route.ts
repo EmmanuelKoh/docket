@@ -2,13 +2,22 @@
 // Receives messages forwarded from a phone, asks Gemini what tasks the
 // message contains, and prints a slip for each. Gemini groups related
 // items onto one task and splits unrelated tasks apart, so one message can
-// print several slips. See api/ingest.js for the full commentary on auth
-// (a dedicated INGEST_TOKEN, rotatable without touching the printer), the
-// message-ingest plugin record, and the "task:" override.
+// print several slips.
+//
+// Auth (phase 5): each owner's message-ingest plugin carries its own
+// ingestToken in its config (minted at registration, visible/rotatable on
+// the Slips page) — the token routes the message to its owner. The
+// legacy INGEST_TOKEN env keeps working for the original owner during
+// the transition. Ingest is push traffic (a human sent a text), so the
+// Postgres lookup here is fine — the device-cadence rule guards the
+// polling paths, not this.
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { sql } from 'drizzle-orm';
 import { INGEST_TOKEN, OWNER_ID } from '@/config.js';
+import { pluginConfig } from '@/db/schema.js';
+import { getDb } from '@/lib/db.js';
 import { createJob } from '@/lib/job-store.js';
 import { getPlugin, upsertPlugin } from '@/lib/plugin-registry.js';
 import { getTemplates, saveTemplate } from '@/lib/store.js';
@@ -38,12 +47,12 @@ const TASK_TEMPLATE_FILE = path.join(
 // live in its registry record, editable on the Plugins page. /tick registers
 // it on first run, but this endpoint can be hit first, so seed the record
 // from defaults if missing.
-async function getIngestRecord() {
-  let record = await getPlugin(OWNER_ID, messageIngest.id);
+async function getIngestRecord(ownerId: string) {
+  let record = await getPlugin(ownerId, messageIngest.id);
   if (!record) {
     record = {
       id: messageIngest.id,
-      ownerId: OWNER_ID,
+      ownerId,
       enabled: messageIngest.defaults.enabled !== false,
       intervalSeconds: null,
       lastRunAt: null,
@@ -74,21 +83,35 @@ async function markActivity(
   await upsertPlugin(record).catch(() => {});
 }
 
-function authorized(req: Request): boolean {
-  if (!INGEST_TOKEN) return false;
+// Bearer header or ?token=. Resolves to the owner the message belongs
+// to: the legacy env token maps to the configured owner; otherwise the
+// token is looked up in the plugin_config table (config->>'ingestToken').
+async function ownerForRequest(req: Request): Promise<string | null> {
   const header = req.headers.get('authorization') || '';
-  if (header === `Bearer ${INGEST_TOKEN}`) return true;
-  return (new URL(req.url).searchParams.get('token') || '') === INGEST_TOKEN;
+  const token = header.startsWith('Bearer ')
+    ? header.slice('Bearer '.length)
+    : new URL(req.url).searchParams.get('token') || '';
+  if (!token) return null;
+  if (INGEST_TOKEN && token === INGEST_TOKEN) return OWNER_ID;
+  const db = await getDb();
+  const rows: { ownerId: string }[] = await db
+    .select({ ownerId: pluginConfig.ownerId })
+    .from(pluginConfig)
+    .where(
+      sql`${pluginConfig.pluginId} = ${messageIngest.id} and ${pluginConfig.config}->>'ingestToken' = ${token}`,
+    )
+    .limit(1);
+  return rows[0]?.ownerId || null;
 }
 
 // The Task template seeds like the plugin templates do on /tick, but this
 // endpoint can be hit before the first tick — ensure it exists here too.
-async function getTaskTemplate() {
-  const templates = await getTemplates();
+async function getTaskTemplate(ownerId: string) {
+  const templates = await getTemplates(ownerId);
   const existing = templates.find((t: { name: string }) => t.name === 'Task');
   if (existing) return existing;
   const [seed] = JSON.parse(fs.readFileSync(TASK_TEMPLATE_FILE, 'utf-8'));
-  await saveTemplate(seed);
+  await saveTemplate(ownerId, seed);
   return seed;
 }
 
@@ -112,13 +135,8 @@ function receivedParts(receivedAt: string | undefined, timeZone: string) {
 }
 
 export async function POST(req: Request) {
-  if (!INGEST_TOKEN) {
-    return Response.json(
-      { error: 'INGEST_TOKEN is not configured' },
-      { status: 503 },
-    );
-  }
-  if (!authorized(req)) {
+  const owner = await ownerForRequest(req);
+  if (!owner) {
     return Response.json(
       { error: 'missing or invalid ingest token' },
       { status: 401 },
@@ -133,7 +151,7 @@ export async function POST(req: Request) {
 
   // Off switch: when the message-ingest plugin is disabled on the Plugins
   // page, accept the message but do nothing (no Gemini call, no print).
-  const record = await getIngestRecord();
+  const record = await getIngestRecord(owner);
   if (!record.enabled) {
     return Response.json({ skipped: 'disabled' });
   }
@@ -195,7 +213,7 @@ export async function POST(req: Request) {
 
   // One slip per task: Gemini has already grouped related items together and
   // split unrelated tasks apart, so each entry prints on its own.
-  const tpl = await getTaskTemplate();
+  const tpl = await getTaskTemplate(owner);
   const { date, time } = receivedParts(receivedAt, cfg.timezone);
   const printed: { id: string; title: string }[] = [];
   for (const t of tasks) {
@@ -212,7 +230,7 @@ export async function POST(req: Request) {
       priority: t.priority || 'normal',
       quote: t.quote || '',
     };
-    const job = await createJob({
+    const job = await createJob(owner, {
       template: tpl.template,
       data,
       name: `Task: ${title}`,

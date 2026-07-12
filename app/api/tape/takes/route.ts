@@ -5,10 +5,7 @@
 // under the local JSON driver — so this route stays small.
 // Cookie session like the other dashboard JSON APIs.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { audioUploadMode, createTake, listTakes } from '@/lib/tape-store.js';
 
 // stay clear of the platform's ~4.5MB request cap; a take document is
@@ -16,16 +13,18 @@ import { audioUploadMode, createTake, listTakes } from '@/lib/tape-store.js';
 const MAX_BODY = 4 * 1024 * 1024;
 
 export async function GET(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   try {
-    return Response.json({ takes: await listTakes() });
+    return Response.json({ takes: await listTakes(owner) });
   } catch (err) {
     return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
   const text = await req.text();
   if (text.length > MAX_BODY) {
     return Response.json({ error: 'take too large to save' }, { status: 413 });
@@ -42,7 +41,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'doc required' }, { status: 400 });
   }
   try {
-    const take = await createTake({
+    const take = await createTake(owner, {
       name:
         typeof name === 'string' && name.trim()
           ? name.trim().slice(0, 80)

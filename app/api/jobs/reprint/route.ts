@@ -2,17 +2,15 @@
 // and queue a fresh job. Never resends old bytes: the render pipeline may
 // have improved since the original print.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
+import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
 import { createJob, getJob } from '@/lib/job-store.js';
 
 export async function POST(req: Request) {
-  if (!requestSessionValid(req)) return unauthorizedJson();
+  const owner = await requestOwner(req);
+  if (!owner) return unauthorizedJson();
 
   const id = new URL(req.url).searchParams.get('job');
-  const job = id ? await getJob(id) : null;
+  const job = id ? await getJob(owner, id) : null;
   if (!job)
     return Response.json({ error: 'record not found' }, { status: 404 });
   // Raw-bytes jobs (source: tape) carry no template to re-render from.
@@ -23,7 +21,7 @@ export async function POST(req: Request) {
     );
 
   try {
-    const result = await createJob({
+    const result = await createJob(owner, {
       template: job.template,
       data: job.data,
       name: job.name || job.id,

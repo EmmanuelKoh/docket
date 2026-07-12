@@ -4,6 +4,8 @@
 // searchParams, like the legacy page's query string.
 
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { sessionOwner } from '@/app/_lib/dashboard-session';
 import { HistoryList, type HistoryRow } from '@/components/history-list';
 import { listJobs } from '@/lib/job-store.js';
 import { agoShort, HISTORY_STATUSES, type JobSummary } from '../../_lib/format';
@@ -33,12 +35,14 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
+  const owner = await sessionOwner();
+  if (!owner) redirect('/login');
   const params = await searchParams;
   const filter = HISTORY_STATUSES.includes(params.filter || '')
     ? (params.filter as string)
     : 'all';
 
-  const all = ((await listJobs(1000)) as JobSummary[]).filter((j) =>
+  const all = ((await listJobs(owner, 1000)) as JobSummary[]).filter((j) =>
     filter === 'all'
       ? HISTORY_STATUSES.includes(j.status)
       : j.status === filter,

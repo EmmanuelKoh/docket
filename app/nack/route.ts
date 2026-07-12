@@ -3,10 +3,11 @@
 // Ported from api/nack.js.
 
 import { nackJob } from '@/lib/job-store.js';
-import { deviceAuthorized, unauthorized } from '../_lib/device-auth';
+import { deviceAuth, unauthorized } from '../_lib/device-auth';
 
 export async function POST(req: Request) {
-  if (!deviceAuthorized(req)) return unauthorized();
+  const dev = await deviceAuth(req);
+  if (!dev) return unauthorized();
 
   const id = new URL(req.url).searchParams.get('job');
   if (!id) {
@@ -16,6 +17,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const found = await nackJob(id);
+  const found = await nackJob(dev.ownerId, id);
   return Response.json({ requeued: id, found });
 }

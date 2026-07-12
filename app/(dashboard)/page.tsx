@@ -6,8 +6,10 @@
 // legacy homePage() in api/dashboard.js.
 
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { sessionOwner } from '@/app/_lib/dashboard-session';
 import { ReceiptPreview } from '@/components/receipt-preview';
-import { HEARTBEAT_SECONDS, OWNER_ID, STORE_DRIVER } from '@/config.js';
+import { HEARTBEAT_SECONDS, STORE_DRIVER } from '@/config.js';
 import { listJobs } from '@/lib/job-store.js';
 import { listPlugins } from '@/lib/plugin-registry.js';
 import { getState } from '@/lib/state-store.js';
@@ -27,11 +29,13 @@ function statusColor(status: string): string {
 }
 
 export default async function OverviewPage() {
+  const owner = await sessionOwner();
+  if (!owner) redirect('/login');
   const [templates, plugins, jobs, device] = await Promise.all([
-    getTemplates(),
-    listPlugins(OWNER_ID),
-    listJobs(1000) as Promise<JobSummary[]>,
-    getState('device'),
+    getTemplates(owner),
+    listPlugins(owner),
+    listJobs(owner, 1000) as Promise<JobSummary[]>,
+    getState(owner, 'device'),
   ]);
 
   const queued = jobs.filter((j) => j.status === 'queued').length;

@@ -14,6 +14,7 @@ import {
   Layers,
   Printer,
   ReceiptText,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -47,8 +48,17 @@ const ACTIVE_BAR =
   'data-[active=true]:before:bottom-1.5 data-[active=true]:before:w-[1.5px] ' +
   'data-[active=true]:before:bg-red';
 
-export function AppSidebar({ queueCount }: { queueCount: number }) {
+export function AppSidebar({
+  queueCount,
+  isAdmin = false,
+}: {
+  queueCount: number;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
+  const nav = isAdmin
+    ? [...NAV, { title: 'Users', url: '/users', icon: Users }]
+    : NAV;
 
   return (
     <Sidebar collapsible="icon">
@@ -64,7 +74,7 @@ export function AppSidebar({ queueCount }: { queueCount: number }) {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV.map((item) => (
+              {nav.map((item) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     asChild

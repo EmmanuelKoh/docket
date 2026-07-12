@@ -14,13 +14,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { OWNER_ID } from '../config.js';
 import { saveTemplate } from '../lib/store.js';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const file = path.join(dir, '..', 'reference', 'task-templates.json');
 const [task] = JSON.parse(fs.readFileSync(file, 'utf-8'));
 
-await saveTemplate(task);
+await saveTemplate(OWNER_ID, task);
 console.log(
   `synced "${task.name}" template into the ${process.env.STORE_DRIVER || 'json'} store`,
 );

@@ -46,7 +46,7 @@ export async function saveTake({
   onStatus?.('uploading audio…');
   if (audio === 'client') {
     const { upload } = await import('@vercel/blob/client');
-    const result = await upload(`tape/${take.id}.wav`, wav, {
+    const result = await upload(`tape/${take.ownerId}/${take.id}.wav`, wav, {
       access: 'public',
       handleUploadUrl: '/api/tape/takes/upload',
       contentType: 'audio/wav',
