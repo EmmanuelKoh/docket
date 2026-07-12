@@ -1,16 +1,32 @@
 'use client';
 
-// components/tape/tape-tool.tsx — the Tape tool's React layer. Unlike
-// the Photo tool's render-once id-contract, these controls are ordinary
-// React: they read the shared store (store.js) and call controller
-// methods (controller.js). The only imperative DOM left is the canvas
-// island inside .tape-roll, which the controller's view module owns —
-// React renders those elements once and never touches their contents.
+// components/tape/tape-tool.tsx — the Tape studio's React layer. The
+// left column is the PROJECT side: session buttons, the takes list
+// (each saved take is a project; the open one expands to its phrases),
+// the key signature, and collapsible settings groups. The stage is the
+// tape itself: roll, transport, inspector, print actions. Controls read
+// the shared store (store.ts) and call controller methods
+// (controller.js); the only imperative DOM is the canvas island inside
+// .tape-roll, which the controller's view module owns.
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Mic,
+  Pause,
+  Play,
+  Printer,
+  Redo2,
+  Scissors,
+  Square,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createTapeController } from '@/components/tape/controller.js';
+import { floorToMidi } from '@/components/tape/doc.mjs';
 import { type TapeSettings, tapeStore, useTape } from '@/components/tape/store';
-import { KEY_SIGS } from '@/components/tape-renderer.js';
+import { KEY_SIGS, noteLabel } from '@/components/tape-renderer.js';
 import { useSidebar } from '@/components/ui/sidebar';
 
 type Controller = ReturnType<typeof createTapeController>;
@@ -49,6 +65,202 @@ function Slider(props: {
   );
 }
 
+// a collapsible settings group — settings earn space only when open
+function Group(props: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="tape-acc">
+      <summary className="label">{props.title}</summary>
+      <div className="tape-acc-body">{props.children}</div>
+    </details>
+  );
+}
+
+// the open project's phrases, as a sub-list under its takes-list row:
+// "Song" is the whole-take overview, each phrase opens its own tape
+function PhraseList({ ctl }: { ctl: Controller | null }) {
+  const phrases = useTape((s) => s.phrases);
+  const active = useTape((s) => s.activePhrase);
+  const view = useTape((s) => s.phraseView);
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  const busy = micOn || decoding;
+  const many = phrases.length > 1;
+
+  return (
+    <div className="tape-phraselist">
+      {many && (
+        <button
+          type="button"
+          className={
+            view === 'song' ? 'tape-phrase-item selected' : 'tape-phrase-item'
+          }
+          disabled={busy}
+          onClick={() => ctl?.selectTab(-1)}
+        >
+          Song — all phrases
+        </button>
+      )}
+      {many &&
+        phrases.map((p, k) => (
+          <div key={`${p.t0}-${p.t1}`} className="tape-phrase-row">
+            <button
+              type="button"
+              className={
+                view === 'focus' && k === active
+                  ? 'tape-phrase-item selected'
+                  : 'tape-phrase-item'
+              }
+              disabled={busy}
+              onClick={() => ctl?.selectTab(k)}
+            >
+              Phrase {k + 1} · {fmtTime(p.t0)}–{fmtTime(p.t1)}
+              {p.editCount ? ' · edited' : ''}
+            </button>
+            {k > 0 && (
+              <button
+                type="button"
+                className="tape-chip-x"
+                disabled={busy}
+                aria-label={`Merge phrase ${k + 1} into phrase ${k}`}
+                onClick={() => ctl?.removeCutAt(k - 1)}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+      <button
+        type="button"
+        className="tape-phrase-action"
+        disabled={busy}
+        onClick={() => ctl?.cutAtBreaths()}
+      >
+        cut into phrases at breaths
+      </button>
+    </div>
+  );
+}
+
+// the takes list: every saved take is a project — click a row to open
+// it; the open one (or the unsaved session) expands to its phrases.
+function Projects({ ctl }: { ctl: Controller | null }) {
+  const takes = useTape((s) => s.takes);
+  const busy = useTape((s) => s.persistBusy);
+  const hasTake = useTape((s) => s.hasTake);
+  const hasAudio = useTape((s) => s.hasAudio);
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  const current = useTape((s) => s.currentTake);
+  const lastDeleted = useTape((s) => s.lastDeleted);
+  const [name, setName] = useState('');
+  const canSave = hasTake && hasAudio && !micOn && !decoding && !busy;
+
+  // the name field follows the open take (load, save, untie)
+  const currentId = current?.id ?? null;
+  const currentName = current?.name ?? '';
+  useEffect(() => {
+    setName(currentName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  return (
+    <div className="tape-group">
+      <span className="label">Takes</span>
+      {hasTake && (
+        <div className="tape-btnrow">
+          <input
+            className="tape-name"
+            type="text"
+            placeholder="name this take"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn small"
+            disabled={!canSave}
+            onClick={() => ctl?.saveTake(name.trim() || 'Take')}
+          >
+            {current ? 'Save' : 'Save take'}
+          </button>
+          {current && (
+            <button
+              type="button"
+              className="btn small"
+              disabled={!canSave}
+              onClick={() => ctl?.saveTakeAsNew(name.trim() || 'Take')}
+            >
+              Save as new
+            </button>
+          )}
+        </div>
+      )}
+      <div className="tape-takes">
+        {hasTake && !current && (
+          <>
+            <div className="tape-take-row current">
+              <span className="tape-take-open">
+                <span className="tape-take-name">unsaved take</span>
+              </span>
+            </div>
+            <PhraseList ctl={ctl} />
+          </>
+        )}
+        {takes?.map((t) => (
+          <Fragment key={t.id}>
+            <div
+              className={
+                t.id === currentId ? 'tape-take-row current' : 'tape-take-row'
+              }
+            >
+              <button
+                type="button"
+                className="tape-take-open"
+                disabled={busy || micOn || decoding || t.id === currentId}
+                onClick={() => ctl?.loadTakeById(t.id)}
+              >
+                <span className="tape-take-name" title={t.name}>
+                  {t.name}
+                </span>
+                <span className="tape-take-sub">{fmtTime(t.seconds)}</span>
+              </button>
+              <button
+                type="button"
+                className="tape-chip-x"
+                disabled={busy}
+                aria-label={`Delete ${t.name}`}
+                onClick={() => {
+                  if (window.confirm(`Delete "${t.name}"?`))
+                    ctl?.deleteTakeById(t.id);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            {t.id === currentId && <PhraseList ctl={ctl} />}
+          </Fragment>
+        ))}
+        {takes && takes.length === 0 && !hasTake && (
+          <p className="tape-hint">record, load a clip, or try the demo</p>
+        )}
+      </div>
+      {lastDeleted && (
+        <p className="tape-hint">
+          deleted “{lastDeleted.name}” —{' '}
+          <button
+            type="button"
+            className="tape-undo"
+            disabled={busy}
+            onClick={() => ctl?.undeleteTake()}
+          >
+            undo
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Controls({ ctl }: { ctl: Controller | null }) {
   const micOn = useTape((s) => s.micOn);
   const decoding = useTape((s) => s.decoding);
@@ -65,11 +277,19 @@ function Controls({ ctl }: { ctl: Controller | null }) {
       <div className="tape-btnrow">
         <button
           type="button"
-          className={micOn ? 'btn on' : 'btn'}
+          className={micOn ? 'btn icon on' : 'btn icon'}
           disabled={decoding}
           onClick={() => ctl?.toggleMic()}
         >
-          {micOn ? 'Stop' : 'Start mic'}
+          {micOn ? (
+            <>
+              <Square size={12} /> Stop
+            </>
+          ) : (
+            <>
+              <Mic size={13} /> Record
+            </>
+          )}
         </button>
         <button
           type="button"
@@ -89,6 +309,8 @@ function Controls({ ctl }: { ctl: Controller | null }) {
         </button>
       </div>
 
+      <Projects ctl={ctl} />
+
       <div className="tape-field">
         <span className="label">Key signature</span>
         <select
@@ -106,19 +328,20 @@ function Controls({ ctl }: { ctl: Controller | null }) {
         </select>
       </div>
 
-      <div className="tape-group">
-        <span className="label">
-          {phraseCount > 1
+      <Group
+        title={
+          phraseCount > 1
             ? `Detection · phrase ${activePhrase + 1}`
-            : 'Detection'}
-        </span>
+            : 'Detection'
+        }
+      >
         <Slider
           ctl={ctl}
           k="melodyFloor"
           label="Melody floor"
           min={120}
           max={500}
-          fmt={(v) => `${v} Hz`}
+          fmt={(v) => `${v} Hz / ${noteLabel(floorToMidi(v), keySig)}`}
           disabled={editCount > 0}
         />
         {editCount > 0 && (
@@ -137,10 +360,9 @@ function Controls({ ctl }: { ctl: Controller | null }) {
             </button>
           </>
         )}
-      </div>
+      </Group>
 
-      <div className="tape-group">
-        <span className="label">View</span>
+      <Group title="View">
         <div className="tape-field">
           <span className="label">Notation</span>
           <select
@@ -159,22 +381,24 @@ function Controls({ ctl }: { ctl: Controller | null }) {
             value={traceMode}
             onChange={(e) => ctl?.setTraceMode(e.target.value)}
           >
+            <option value="hidden">Hidden</option>
             <option value="aligned">Aligned under the tape</option>
             <option value="linear">Linear time — continuous</option>
           </select>
         </div>
-        <Slider
-          ctl={ctl}
-          k="traceZoom"
-          label="Trace stretch"
-          min={20}
-          max={400}
-          fmt={(v) => `${v} px/s`}
-        />
-      </div>
+        {traceMode === 'linear' && (
+          <Slider
+            ctl={ctl}
+            k="traceZoom"
+            label="Trace stretch"
+            min={20}
+            max={400}
+            fmt={(v) => `${v} px/s`}
+          />
+        )}
+      </Group>
 
-      <div className="tape-group">
-        <span className="label">Layout</span>
+      <Group title="Layout">
         <Slider
           ctl={ctl}
           k="msPerRow"
@@ -219,12 +443,9 @@ function Controls({ ctl }: { ctl: Controller | null }) {
           Changes re-render the finished take instantly; while recording they
           apply to new tape only.
         </p>
-      </div>
+      </Group>
 
-      <Takes ctl={ctl} />
-
-      <div className="tape-group">
-        <span className="label">Clip</span>
+      <Group title="Clip file">
         <div className="tape-btnrow">
           <button
             type="button"
@@ -251,230 +472,8 @@ function Controls({ ctl }: { ctl: Controller | null }) {
             />
           </label>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// saved takes: name + save the current take, and the list to load or
-// delete from. The document round-trips whole (edits, versions, layout),
-// audio rides along as a lossless WAV. A session that was saved or
-// loaded stays tied to its record: Save updates it in place (no audio
-// re-upload; renaming the field renames the take), Save as new forks it.
-function Takes({ ctl }: { ctl: Controller | null }) {
-  const takes = useTape((s) => s.takes);
-  const busy = useTape((s) => s.persistBusy);
-  const hasTake = useTape((s) => s.hasTake);
-  const hasAudio = useTape((s) => s.hasAudio);
-  const micOn = useTape((s) => s.micOn);
-  const decoding = useTape((s) => s.decoding);
-  const current = useTape((s) => s.currentTake);
-  const lastDeleted = useTape((s) => s.lastDeleted);
-  const [name, setName] = useState('');
-  const canSave = hasTake && hasAudio && !micOn && !decoding && !busy;
-
-  // the name field follows the tied take (load, save, untie)
-  const currentId = current?.id ?? null;
-  const currentName = current?.name ?? '';
-  useEffect(() => {
-    setName(currentName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId]);
-
-  return (
-    <div className="tape-group">
-      <span className="label">Takes</span>
-      <div className="tape-btnrow">
-        <input
-          className="tape-name"
-          type="text"
-          placeholder="name this take"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button
-          type="button"
-          className="btn small"
-          disabled={!canSave}
-          onClick={() => ctl?.saveTake(name.trim() || 'Take')}
-        >
-          {current ? 'Save' : 'Save take'}
-        </button>
-        {current && (
-          <button
-            type="button"
-            className="btn small"
-            disabled={!canSave}
-            onClick={() => ctl?.saveTakeAsNew(name.trim() || 'Take')}
-          >
-            Save as new
-          </button>
-        )}
-      </div>
-      {takes && takes.length > 0 && (
-        <div className="tape-takes">
-          {takes.map((t) => (
-            <div
-              key={t.id}
-              className={
-                t.id === currentId ? 'tape-take-row current' : 'tape-take-row'
-              }
-            >
-              <span className="tape-take-name" title={t.name}>
-                {t.name}
-              </span>
-              <span className="tape-take-sub">
-                {fmtTime(t.seconds)} · {t.noteCount} notes
-              </span>
-              <button
-                type="button"
-                className="btn small"
-                disabled={busy || micOn || decoding}
-                onClick={() => ctl?.loadTakeById(t.id)}
-              >
-                Load
-              </button>
-              <button
-                type="button"
-                className="btn small"
-                disabled={busy}
-                aria-label={`Delete ${t.name}`}
-                onClick={() => {
-                  if (window.confirm(`Delete "${t.name}"?`))
-                    ctl?.deleteTakeById(t.id);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {takes && takes.length === 0 && (
-        <p className="tape-hint">no saved takes yet</p>
-      )}
-      {lastDeleted && (
-        <p className="tape-hint">
-          deleted “{lastDeleted.name}” —{' '}
-          <button
-            type="button"
-            className="tape-undo"
-            disabled={busy}
-            onClick={() => ctl?.undeleteTake()}
-          >
-            undo
-          </button>
-        </p>
-      )}
-    </div>
-  );
-}
-
-// the song is the project; phrases are its pages. Tabs: "Song" opens
-// the overview roll (cut management, whole-take print), each numbered
-// tab opens that phrase's own tape (edit, settings, confined playback).
-// A chip's ✕ merges the phrase into its predecessor.
-function PhraseStrip({ ctl }: { ctl: Controller | null }) {
-  const hasTake = useTape((s) => s.hasTake);
-  const phrases = useTape((s) => s.phrases);
-  const active = useTape((s) => s.activePhrase);
-  const view = useTape((s) => s.phraseView);
-  const micOn = useTape((s) => s.micOn);
-  const decoding = useTape((s) => s.decoding);
-  const printState = useTape((s) => s.printState);
-  if (!hasTake) return null;
-  const busy = micOn || decoding;
-  const many = phrases.length > 1;
-
-  return (
-    <div className="tape-phrases">
-      <span className="label">Phrases</span>
-      {many && (
-        <span className={view === 'song' ? 'tape-chip active' : 'tape-chip'}>
-          <button
-            type="button"
-            className="tape-chip-btn"
-            disabled={busy}
-            onClick={() => ctl?.selectTab(-1)}
-          >
-            Song
-          </button>
-        </span>
-      )}
-      {many &&
-        phrases.map((p, k) => (
-          <span
-            key={`${p.t0}-${p.t1}`}
-            className={
-              view === 'focus' && k === active
-                ? 'tape-chip active'
-                : 'tape-chip'
-            }
-          >
-            <button
-              type="button"
-              className="tape-chip-btn"
-              disabled={busy}
-              onClick={() => ctl?.selectTab(k)}
-            >
-              {k + 1} · {fmtTime(p.t0)}–{fmtTime(p.t1)}
-              {p.editCount ? ' · edited' : ''}
-            </button>
-            {k > 0 && (
-              <button
-                type="button"
-                className="tape-chip-x"
-                disabled={busy}
-                aria-label={`Merge phrase ${k + 1} into phrase ${k}`}
-                onClick={() => ctl?.removeCutAt(k - 1)}
-              >
-                ✕
-              </button>
-            )}
-          </span>
-        ))}
-      <button
-        type="button"
-        className="btn small"
-        disabled={busy}
-        onClick={() => ctl?.cutAtBreaths()}
-      >
-        Cut at breaths
-      </button>
-      {many && (
-        <button
-          type="button"
-          className="btn small"
-          disabled={busy || printState === 'queuing'}
-          onClick={() => ctl?.printPhrases()}
-        >
-          Print phrases ({phrases.length})
-        </button>
-      )}
-      {!many && (
-        <span className="tape-hint">
-          cut at breaths, or select a note and use Cut before
-        </span>
-      )}
-    </div>
-  );
-}
-
-function StageHead() {
-  const noteNow = useTape((s) => s.noteNow);
-  const truncated = useTape((s) => s.truncated);
-  return (
-    <div className="tape-stagehead">
-      <span className="label">Tape — prints exactly as shown</span>
-      {truncated && (
-        <span className="tape-hint">
-          preview cut off here — the print still includes the whole take
-        </span>
-      )}
-      <span className="tape-now">
-        <span className="label">Sounding</span>
-        <span className="tape-val">{noteNow}</span>
-      </span>
+        <p className="tape-hint">a loaded clip opens as its own new take</p>
+      </Group>
     </div>
   );
 }
@@ -517,17 +516,21 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
           </span>
           <button
             type="button"
-            className="btn small"
+            className="btn small icon"
+            aria-label="Pitch down a semitone"
+            title="Pitch down a semitone"
             onClick={() => ctl?.nudgePitch(-1)}
           >
-            Pitch −
+            <ChevronDown size={14} />
           </button>
           <button
             type="button"
-            className="btn small"
+            className="btn small icon"
+            aria-label="Pitch up a semitone"
+            title="Pitch up a semitone"
             onClick={() => ctl?.nudgePitch(1)}
           >
-            Pitch +
+            <ChevronUp size={14} />
           </button>
           <button
             type="button"
@@ -563,18 +566,23 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
           <button
             type="button"
             className={
-              cuts.includes(selection.t0) ? 'btn small pressed' : 'btn small'
+              cuts.includes(selection.t0)
+                ? 'btn small icon pressed'
+                : 'btn small icon'
             }
+            title="start a new phrase at this note"
             onClick={() => ctl?.cutBefore()}
           >
-            Cut before
+            <Scissors size={12} /> Cut before
           </button>
           <button
             type="button"
-            className="btn small"
+            className="btn small icon"
+            aria-label="Remove note"
+            title="Remove note (⌫)"
             onClick={() => ctl?.removeNote()}
           >
-            Remove
+            <Trash2 size={13} />
           </button>
         </>
       ) : (
@@ -587,19 +595,24 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
       <span className="tape-inspector-spacer" />
       <button
         type="button"
-        className="btn small"
+        className="btn small icon"
         disabled={!editCount}
+        aria-label="Undo"
+        title="Undo (⌘Z)"
         onClick={() => ctl?.undoEdit()}
       >
-        Undo{editCount ? ` (${editCount})` : ''}
+        <Undo2 size={13} />
+        {editCount ? ` ${editCount}` : ''}
       </button>
       <button
         type="button"
-        className="btn small"
+        className="btn small icon"
         disabled={!redoCount}
+        aria-label="Redo"
+        title="Redo (⇧⌘Z)"
         onClick={() => ctl?.redoEdit()}
       >
-        Redo
+        <Redo2 size={13} />
       </button>
     </div>
   );
@@ -623,6 +636,45 @@ function Playhead({
   );
 }
 
+function TraceCanvas({
+  elRef,
+}: {
+  elRef: React.RefObject<HTMLCanvasElement | null>;
+}) {
+  const hidden = useTape((s) => s.traceMode === 'hidden');
+  return (
+    <canvas
+      ref={elRef}
+      className={hidden ? 'tape-trace tape-trace-hidden' : 'tape-trace'}
+      height={110}
+    />
+  );
+}
+
+// a friendly note on the bare paper before anything is on tape
+function EmptyOverlay() {
+  const show = useTape(
+    (s) => !s.hasTake && !s.hasAudio && !s.micOn && !s.decoding,
+  );
+  if (!show) return null;
+  return (
+    <div className="tape-empty">
+      nothing on tape yet — press Record, try the Demo phrase, or open a saved
+      take
+    </div>
+  );
+}
+
+function TruncatedNote() {
+  const truncated = useTape((s) => s.truncated);
+  if (!truncated) return null;
+  return (
+    <p className="tape-hint">
+      preview cut off here — the print still includes the whole take
+    </p>
+  );
+}
+
 function Transport({ ctl }: { ctl: Controller | null }) {
   const playState = useTape((s) => s.playState);
   const playTime = useTape((s) => s.playTime);
@@ -637,19 +689,25 @@ function Transport({ ctl }: { ctl: Controller | null }) {
     <div className="tape-transport">
       <button
         type="button"
-        className={playState === 'playing' ? 'btn small on' : 'btn small'}
+        className={
+          playState === 'playing' ? 'btn small icon on' : 'btn small icon'
+        }
         disabled={idle}
+        aria-label={playState === 'playing' ? 'Pause' : 'Play'}
+        title={playState === 'playing' ? 'Pause' : 'Play'}
         onClick={() => ctl?.playPause()}
       >
-        {playState === 'playing' ? 'Pause' : 'Play'}
+        {playState === 'playing' ? <Pause size={13} /> : <Play size={13} />}
       </button>
       <button
         type="button"
-        className="btn small"
+        className="btn small icon"
         disabled={idle || (playState === 'stopped' && playTime === 0)}
+        aria-label="Stop"
+        title="Stop"
         onClick={() => ctl?.stopPlay()}
       >
-        Stop
+        <Square size={11} />
       </button>
       <select
         className="tape-select tape-speed"
@@ -664,47 +722,48 @@ function Transport({ ctl }: { ctl: Controller | null }) {
       <span className="tape-val">
         {fmtTime(playTime)} / {fmtTime(clipDur)}
       </span>
-      <span className="tape-hint">
-        click or drag on the tape to seek · raw pitch below the staff
-      </span>
+      <span className="tape-hint">click or drag on the tape to seek</span>
     </div>
   );
 }
 
 function Bottom({ ctl }: { ctl: Controller | null }) {
-  const log = useTape((s) => s.log);
   const status = useTape((s) => s.status);
   const canPrint = useTape((s) => s.canPrint);
   const printState = useTape((s) => s.printState);
+  const phraseCount = useTape((s) => s.phrases.length);
   const focused = useTape(
     (s) => s.phraseView === 'focus' && s.phrases.length > 1,
   );
 
   return (
     <div className="tape-bottom">
-      <div className="tape-log-wrap">
-        <span className="label">Notes</span>
-        <div className="tape-log">
-          {log.map((l) => (
-            <div key={l.id}>{l.text}</div>
-          ))}
-        </div>
-      </div>
-      <div className="tape-actions">
-        <span className="status">{status}</span>
+      <span className="status">{status}</span>
+      <span className="tape-bottom-actions">
+        {phraseCount > 1 && (
+          <button
+            type="button"
+            className="btn small icon"
+            disabled={!canPrint || printState === 'queuing'}
+            onClick={() => ctl?.printPhrases()}
+          >
+            <Printer size={12} /> Print phrases ({phraseCount})
+          </button>
+        )}
         <button
           type="button"
-          className="btn"
+          className="btn icon"
           disabled={!canPrint || printState === 'queuing'}
           onClick={() => ctl?.print()}
         >
+          <Printer size={13} />{' '}
           {printState === 'queuing'
             ? 'Queuing…'
             : focused
               ? 'Print phrase'
               : 'Print take'}
         </button>
-      </div>
+      </span>
     </div>
   );
 }
@@ -767,14 +826,14 @@ export function TapeTool() {
     <div className="tape-tool">
       <Controls ctl={ctl} />
       <div className="tape-stage">
-        <StageHead />
+        <TruncatedNote />
         <div className="tape-roll" ref={wrapRef}>
           <canvas ref={canvasRef} />
-          <canvas ref={traceRef} className="tape-trace" height={110} />
+          <TraceCanvas elRef={traceRef} />
           <SelectionBand />
           <Playhead elRef={playheadRef} />
+          <EmptyOverlay />
         </div>
-        <PhraseStrip ctl={ctl} />
         <Transport ctl={ctl} />
         <Inspector ctl={ctl} />
         <Bottom ctl={ctl} />

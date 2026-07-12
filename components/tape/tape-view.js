@@ -147,6 +147,15 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     opts,
   );
 
+  // the roll's width changes after mount (the app sidebar collapses on
+  // entry) and on window resizes — repaint so the canvases keep filling
+  // it instead of leaving a stale-width notch of roll background
+  const resizeObserver = new ResizeObserver(() => {
+    paintVisible();
+    paintTrace();
+  });
+  resizeObserver.observe(wrap);
+
   // ---- pitch trace: the raw-pitch pane riding under the tape in the
   // same scroll container, sharing its x-axis — each detector frame
   // draws at the tape row the renderer had just emitted, so the pitch
@@ -399,6 +408,7 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     exportPng,
     dispose() {
       cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
       aborter.abort();
     },
   };

@@ -334,50 +334,46 @@ in reading orientation (staff horizontal, time flowing left to right,
 new tape entering at the right; the strip auto-follows unless the user
 scrolls back). The tape sits on white in both themes, receipts are
 paper. A take past the preview's width cap (~14 minutes of sounding
-tape) keeps printing whole; the stage header grows a hint saying the
-preview is cut off, never silently.
+tape) keeps printing whole; a hint line grows above the roll saying
+the preview is cut off, never silently. The stage carries no title,
+no live-note readout, and no event log — the tape itself is the
+answer; the only permanent stage text is the transport and the
+transient status line.
 
-Left column (300px): session buttons (Start mic / Demo phrase / New
-take), key signature select (mono), then a single DETECTION control —
-the Melody floor slider, the register split between dam and melody,
-used by both the live sketch and the neural decode — a VIEW group, the
-LAYOUT slider group (label / native range / mono value, the Photo
-tool's tone-row idiom), a hint line, a TAKES group (persistence: a
-name input + save button in one row, then the saved-takes list —
-name, "m:ss.cc · N notes" in mono, Load, and a ✕ delete behind a
-confirm — deletes are SOFT: the record is tombstoned and hidden for
-30 days before its payloads are purged (lazily, on list reads), the
-status line says so ("deleted "x" — kept for 30 days"), and an
-underlined inline "undo" in the hint line restores it; "no saved
-takes yet" as the empty hint; saving round-trips
-the whole take document with its edits, versions, and layout, plus
-the recording as lossless WAV, so a loaded take comes back frozen if
-it was edited and re-transcribes identically. A session saved or
-loaded stays TIED to its record: the button reads "Save" and updates
-in place without re-uploading audio, the name field renames on save,
-a "Save as new" button forks, and the tied row's name renders bold.
-The tie clears when the audio genuinely changes — New take, a fresh
-mic recording, Demo, Load clip — and the button reads "Save take"
-again), and CLIP buttons (Save clip / Load clip). The View group
-re-renders from the cached decode,
-never re-transcribing: a Notation select (Full — ornaments + slides /
-Skeleton — main notes only, the bare pass-1 melody) and a Pitch trace
-select (Aligned under the tape — one column per tape row, so the raw
-pitch sits under the note bar it produced but glyph rows cut the
-ribbon / Linear time — one continuous ribbon, stretchable via the
-Trace stretch slider in px/s for analysis; clicking a linear trace
-seeks on its own time axis). The old detector/drone selects and threshold sliders are
-gone: they tuned only the live sketch, and the neural decode needs
-none of them (it estimates the take's tuning center from its own
-pitch-bend data). Status during a decode: "transcribing… N%" then a
-plain count, "N notes · M ornaments"; while the decode runs, the
-session, clip, and transport controls disable rather than race it.
-The mic button while listening is --red text and border (red rule 5, a
-live capture). Right stage: titled "Tape — prints exactly as shown"; the tape roll
-with the raw-pitch trace riding inside it (below), a transport row
-(Play/Pause, Stop, a varispeed select 0.25×–1× — slower playback also
-lowers pitch — and the position readout at hundredths, m:ss.cc), then
-a NOTES mono event log beside status text and the Print take button.
+Left column (300px), project-first: session buttons (Start mic / Demo
+phrase / New take), then the TAKES list — every saved take is a
+PROJECT. Rows are plain text (name + mono duration; no note counts),
+clicking a row opens it, the open row renders bold and expands to its
+PHRASE LIST (see Phrases below) indented under a hairline; an unsaved
+session shows as a bold "unsaved take" row. A ✕ per row deletes
+behind a confirm — deletes are SOFT: tombstoned and hidden for 30
+days before payloads purge (lazily, on list reads), the status line
+says so, and an underlined inline "undo" restores. The save row (name
+input + Save) appears once a take exists: a session saved or loaded
+stays TIED to its record — "Save" updates in place without
+re-uploading audio, the name field renames on save, "Save as new"
+forks; the tie clears when the audio genuinely changes (New take,
+fresh recording, Demo, Load clip). Saving round-trips the whole song
+document (phrases, edits, versions, layout) plus the recording as
+lossless WAV, so a loaded take comes back frozen where edited and
+re-transcribes identically. Below the list: the key signature select
+(the one always-visible setting), then COLLAPSIBLE groups
+(details/summary, ▸/▾ markers, closed by default — settings earn
+space only when open): DETECTION (the Melody floor slider, value
+shown as "230 Hz / A♯3" — a note name, not bare Hz), VIEW (Notation:
+Full / Main notes only; Pitch trace: Hidden / Aligned under the tape /
+Linear time, with the Trace stretch slider only in Linear), LAYOUT
+(the five geometry sliders + hint), and CLIP FILE (Save clip / Load
+clip WAV round-trip; a loaded clip opens as its own new take). Status
+during a decode: "transcribing… N%", then the line clears — no note
+or ornament counts, ever; while the decode runs, the session, clip,
+and transport controls disable rather than race it. The mic button
+while listening is --red text and border (red rule 5, a live
+capture). Right stage: the tape roll with the raw-pitch trace riding
+inside it (below, hideable), a transport row (Play/Pause, Stop, a
+varispeed select 0.25×–1×, the position readout at hundredths), the
+inspector strip, and a bottom row with the status line left and the
+print buttons right.
 
 The pitch trace shares the tape's x-axis and scroll: it sits directly
 under the paper inside the same roll (hairline separator, --raised
@@ -424,28 +420,29 @@ again. Background re-derivation (the trace backfill finishing) never
 replaces an edited timeline.
 
 Phrases: a song splits into phrases at CUTS — timestamps snapped to
-note attacks, seeded by "Cut at breaths" (rests ≥ 2× the Breath gap)
-or toggled per note with the inspector's "Cut before"; a chip's ✕
-merges a phrase into its predecessor. Each phrase is a full take
-document of its own: its own melody floor (the Detection group reads
-"Detection · phrase N" and edits only the ACTIVE phrase), its own
-edit log, undo/redo, versions, and freeze state. A phrase behaves
-like a standalone clip — detection never reaches across a cut. The
-song is the PROJECT and phrases are its pages: the PHRASE STRIP
-between the roll and the transport is a tab row — "Song" plus one
-mono tab per phrase ("2 · 0:05.38–0:09.02", "· edited" when frozen;
-the selected tab's border and text darken to ink) — followed by Cut
-at breaths and Print phrases (N). The Song tab is the overview: every
-phrase stitched in time order with a printed CAESURA at each cut (two
+note attacks, seeded by "cut into phrases at breaths" (rests ≥ 2× the
+Breath gap) in the phrase list, or toggled per note with the
+inspector's "Cut before"; a phrase entry's ✕ merges it into its
+predecessor. Each phrase is a full take document of its own: its own
+melody floor (the Detection group reads "Detection · phrase N" and
+edits only the ACTIVE phrase), its own edit log, undo/redo, versions,
+and freeze state. A phrase behaves like a standalone clip — detection
+never reaches across a cut. The song is the PROJECT and phrases are
+its pages, navigated from the PHRASE LIST under the open take in the
+left column: "Song — all phrases" plus one mono entry per phrase
+("Phrase 2 · 0:05.38–0:09.02", "· edited" when frozen; the selected
+entry renders bold ink). "Song" is the overview: every phrase
+stitched in time order with a printed CAESURA at each cut (two
 parallel strokes slanting up-time above the staff, replacing the
 breath comma there) — preview stays identical to print; selecting a
 note there activates its phrase in place for the Detection panel and
-inspector. A phrase tab is that phrase's OWN tape: its own roll
+inspector. A phrase entry opens that phrase's OWN tape: its own roll
 exactly as it prints, its own detection settings and undo history,
 playback confined to its span (practice mode), and a print button
-reading "Print phrase" — "prints exactly as shown" stays true on
-every tab. Sessions and loaded projects open on the Song tab; a take
-with no cuts shows no tabs at all.
+reading "Print phrase" — "prints exactly as shown" stays true in
+every scope. "Print phrases (N)" sits beside Print take in the bottom
+row when phrases exist. Sessions and loaded projects open on Song; a
+take with no cuts lists no phrase entries, just the cut action.
 
 Print take queues the rendered rows verbatim through /api/tape/print
 (source "tape"); the button reads "Queuing…" while in flight and the

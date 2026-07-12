@@ -75,8 +75,6 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     micOn: false,
     decoding: false,
     status: '',
-    noteNow: '—',
-    log: [],
     playState: 'stopped',
     playTime: 0,
     clipDur: 0,
@@ -110,13 +108,11 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   let cursor = 0; // next analysis window start (samples)
   let inFlight = false; // one live window in the pitch worker at a time
   let lastT = 0; // timestamp of the newest analyzed frame (ms)
-  let lastOn = null; // { midi, tMs, grace } for event-log durations
   let analysisGen = 0; // bumped per take: stale analyses and backfills quit
   let decoding = false;
   let deriveStale = false; // derivation inputs changed (floor / fine frames)
   let pendingFloor = null; // { k, hz } — active phrase's floor moved
   let pendingRerender = false; // re-render deferred while audio plays
-  let logId = 0;
 
   // the phrase the Detection slider, inspector undo/redo, and focus
   // view act on — follows chip clicks and note selection
@@ -208,7 +204,6 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     view.attachRenderer(renderer);
     cursor = 0;
     lastT = 0;
-    lastOn = null;
     traceFrames = [];
     analysisGen++; // stale backfills and live windows quit
     pendingRerender = false; // any queued re-render is now stale
@@ -217,8 +212,6 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     view.reset();
     if (clearRecording) recorder.reset();
     set({
-      log: [],
-      noteNow: '—',
       canPrint: false,
       hasTake: false,
       selection: null,
@@ -315,12 +308,6 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // is drawn. Live printing runs seconds behind the horn anyway; 300ms
   // of hindsight is free accuracy. ----
   function feedRenderer(horizonMs) {
-    // store writes are collected and applied as ONE set() per drain —
-    // rendering a decoded take pushes hundreds of events through this
-    // loop in a single call, and a store write per event would re-render
-    // the React side hundreds of times back to back
-    let noteNow;
-    const newLines = [];
     while (evQueue.length && evQueue[0].tMs <= horizonMs) {
       const e = evQueue.shift();
       renderer.advance(e.tMs);
@@ -334,21 +321,8 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
           ornament: e.ornament,
           id: e.id,
         });
-        lastOn = { midi: e.midi, tMs: e.tMs, grace: e.grace };
-        noteNow = noteLabel(e.midi, renderer.config.keySig);
       } else {
         renderer.noteOff(e.tMs);
-        noteNow = '—';
-        if (lastOn) {
-          const label = noteLabel(lastOn.midi, renderer.config.keySig);
-          newLines.push(
-            (lastOn.grace ? `( ${label} )` : label) +
-              '  ' +
-              ((e.tMs - lastOn.tMs) / 1000).toFixed(2) +
-              's',
-          );
-          lastOn = null;
-        }
       }
     }
     renderer.advance(horizonMs);
@@ -357,17 +331,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       traceFrames.push(f);
       view.paintTraceFrame(f, Math.max(0, renderer.rows.length - 1));
     }
-    const patch = {};
-    if (noteNow !== undefined) patch.noteNow = noteNow;
-    if (newLines.length) {
-      // newest first, like the log renders; ids keep chronological order
-      patch.log = [
-        ...newLines.map((text) => ({ id: ++logId, text })).reverse(),
-        ...get().log,
-      ].slice(0, 200);
-    }
-    if (renderer.rows.length && !get().canPrint) patch.canPrint = true;
-    if (Object.keys(patch).length) set(patch);
+    if (renderer.rows.length && !get().canPrint) set({ canPrint: true });
   }
 
   function applyFrame(m) {
@@ -492,7 +456,8 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       deriveStale = false;
       pendingFloor = null;
       set({ activePhrase: 0, phraseView: 'song' });
-      set({ status: renderTimeline(), hasTake: true });
+      renderTimeline();
+      set({ status: '', hasTake: true }); // the tape itself is the answer
       syncPhraseState();
     } catch (e) {
       set({ status: `transcription failed: ${e.message}` });
@@ -514,19 +479,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     const focus = get().phraseView === 'focus';
     const k = activeIdx();
     const scope = focus ? [song.phrases[k]] : song.phrases;
-    let timeline;
-    let label;
-    if (get().viewMode === 'skeleton') {
-      timeline = scope.flatMap((p) => skeletonOf(p));
-      label = `main notes only — ${timeline.length} notes`;
-    } else {
-      timeline = scope.flatMap((p) => p.timeline);
-      const mains = timeline.filter((e) => !e.mark).length;
-      const arcs = timeline.filter((e) => e.ornament || e.mark).length;
-      label = `${mains} notes · ${arcs} ornaments`;
-      if (focus) label = `phrase ${k + 1} of ${song.phrases.length} — ${label}`;
-      else if (song.cuts.length) label += ` · ${song.phrases.length} phrases`;
-    }
+    const timeline =
+      get().viewMode === 'skeleton'
+        ? scope.flatMap((p) => skeletonOf(p))
+        : scope.flatMap((p) => p.timeline);
     for (const n of timeline) {
       if (n.mark) {
         // a time-anchored ornament arc, not a note
@@ -554,7 +510,14 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         a.tMs - b.tMs || (EV_RANK[a.type] ?? 3) - (EV_RANK[b.type] ?? 3),
     );
     feedRenderer(Number.MAX_SAFE_INTEGER);
-    return label;
+  }
+
+  // the trace frames the visible scope should draw (a focused phrase
+  // shows only its own window)
+  function visibleFrames() {
+    return song && get().phraseView === 'focus'
+      ? sliceFrames(traceFrames, phraseWindow(song, activeIdx()))
+      : traceFrames;
   }
 
   // re-render the finished take from the document — no re-transcription.
@@ -607,15 +570,12 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         ),
       };
     }
-    set({ status: renderTimeline(), hasTake: true });
-    // the trace pane follows the visible scope
-    const focus = get().phraseView === 'focus';
-    view.rebuildTrace(
-      focus
-        ? sliceFrames(traceFrames, phraseWindow(song, activeIdx()))
-        : traceFrames,
+    renderTimeline();
+    set({ hasTake: true }); // status untouched: re-renders are silent
+    view.rebuildTrace(visibleFrames()); // trace follows the visible scope
+    player.setWindow(
+      get().phraseView === 'focus' ? windowSecs(activeIdx()) : null,
     );
-    player.setWindow(focus ? windowSecs(activeIdx()) : null);
     syncPhraseState();
     selectNote(selId); // geometry moved; recompute (or clear) the band
   }
@@ -933,8 +893,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       pendingFloor = null;
       set({ activePhrase: 0, phraseView: 'song' }); // land on the Song tab
       resetTake(false);
+      renderTimeline();
       set({
-        status: `loaded "${loaded.take.name}" — ${renderTimeline()}`,
+        status: `loaded "${loaded.take.name}"`,
         hasTake: true,
         currentTake: { id: loaded.take.id, name: loaded.take.name },
       });
@@ -1061,7 +1022,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       set((s) => ({ settings: { ...s.settings, [key]: value } }));
       if (key === 'traceZoom') {
         view.setTraceZoom(value);
-        if (get().traceMode === 'linear') view.rebuildTrace(traceFrames);
+        if (get().traceMode === 'linear') view.rebuildTrace(visibleFrames());
       } else {
         // layout keys: live to the current renderer (mid-recording they
         // shape new tape only), full re-render for a finished take
@@ -1075,8 +1036,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     },
     setTraceMode(v) {
       set({ traceMode: v });
+      if (v === 'hidden') return; // React hides the pane; nothing to draw
       view.setTraceMode(v);
-      view.rebuildTrace(traceFrames);
+      view.rebuildTrace(visibleFrames());
     },
     setSpeed(v) {
       set({ speed: v });

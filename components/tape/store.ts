@@ -63,8 +63,6 @@ export interface TapeState {
   micOn: boolean;
   decoding: boolean; // neural decode in flight; most controls sit out
   status: string; // the human status line under the tape
-  noteNow: string; // the currently sounding note label (live sketch)
-  log: { id: number; text: string }[]; // newest first, capped
   playState: 'stopped' | 'playing' | 'paused';
   playTime: number; // seconds into the clip (playhead / time display)
   clipDur: number; // seconds of recorded audio
@@ -91,7 +89,7 @@ export interface TapeState {
 
   // ---- user settings (persist across mounts) ----
   viewMode: 'full' | 'skeleton';
-  traceMode: 'aligned' | 'linear';
+  traceMode: 'hidden' | 'aligned' | 'linear'; // the raw-pitch pane
   phraseView: 'song' | 'focus'; // whole roll, or just the active phrase
   speed: number; // playback rate (varispeed: slower also lowers pitch)
   settings: TapeSettings;
@@ -101,8 +99,6 @@ export const tapeStore = createStore<TapeState>(() => ({
   micOn: false,
   decoding: false,
   status: '',
-  noteNow: '—',
-  log: [],
   playState: 'stopped',
   playTime: 0,
   clipDur: 0,
