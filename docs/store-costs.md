@@ -68,6 +68,32 @@ may touch Postgres, or the database never scales to zero (an always-on
 wakes for dashboard traffic and actual prints only. Registration and
 template seeding run on the Slips page view, never on ticks.
 
+### Shared devices (July 2026)
+
+A device can serve several owners (members). Cost shape per meter:
+Vercel invocations are per DEVICE and do not change with members (the
+same one appliance polls at the same cadence — the 1M cap is what a
+second physical printer would threaten). Redis: each member adds their
+own safety checks, about 52K commands/month, so an idle shared device
+costs ~95K + 52K per extra member against the 500K tier. Blob flag reads
+multiply per member but bill as data transfer (about 1% of the 10GB
+allowance per member). Postgres is untouched by the member loops; it
+wakes per human action as ever. Presence is written once per device, to
+the primary owner's slot, not per member. Rule of thumb: members are
+cheap, devices are expensive; real costs scale with actual prints and
+plugin runs, which is the meter working as intended.
+
+Device-less accounts round to zero at rest (nothing polls for an owner
+with no printer; their registered plugins never run). What they do cost:
+Neon bills the ~5-minute wake window after any query, so VISIT FREQUENCY
+is the real variable — a hundred once-a-day visitors is ~60 CU-hours a
+month of the 100 free, while weekly visitors are noise. A parked Queue tab
+used to keep Postgres awake continuously (~9 CU-hours and ~870K function
+invocations a month at 3s polling); the queue list now follows the human
+instead — 3s while active on the page, 30s after two idle minutes, fully
+paused after thirty with a manual refresh — so an abandoned tab costs
+about a hundred fetches and then nothing.
+
 ### The queue and tick flags (Blob-backed change signals)
 
 `/next` polls read a tiny per-owner flag file in Vercel Blob ("does the

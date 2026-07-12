@@ -100,9 +100,13 @@ token and return 401 without one. Real printers get a per-device token
 from pairing: an unpaired device POSTs `/pair`, prints a short code on
 its own paper, and the owner claims the code on the dashboard's Printer
 page. Tokens are stored hashed; verification runs on a memory cache and
-a Redis mirror so polling never queries Postgres. Locally, the laptop
-agents use the shared `DEVICE_TOKEN` (default `dev-token`), which
-resolves to the `OWNER_ID` owner and has no default when hosted.
+a Redis mirror so polling never queries Postgres. A printer can be
+shared with other accounts: the owner mints a single-use share code in
+the dashboard and the other person enters it on their own Printer page;
+the device then serves every member's queue and scheduled plugins while
+each keeps a fully separate docket. Locally, the laptop agents use the
+shared `DEVICE_TOKEN` (default `dev-token`), which resolves to the
+`OWNER_ID` owner and has no default when hosted.
 
 ## Dashboard
 
@@ -133,7 +137,7 @@ ESP32 can't log in.
 | Queue | job store queued/inflight; Cancel a queued job, or Requeue an inflight one whose claim is stuck |
 | History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |
 | Tape | live instrument transcription (mic to printed tape); saved takes with editing, phrases, and per-phrase printing |
-| Printer | device status, running configuration, and printer pairing (enter a printed code to claim a device; Revoke to cut one off) |
+| Printer | device status, configuration, pairing, and sharing (a printed code claims a device; a share code from its owner joins it; Share/Leave/Revoke per row) |
 | Users | admin only: accounts and invite links |
 
 **Polling.** The Queue page re-fetches `/api/queue` every 3 seconds while

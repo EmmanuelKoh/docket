@@ -3,7 +3,7 @@
 // Ported from api/ack.js.
 
 import { ackJob } from '@/lib/job-store.js';
-import { deviceAuth, unauthorized } from '../_lib/device-auth';
+import { deviceAuth, parseJobRef, unauthorized } from '../_lib/device-auth';
 
 export async function POST(req: Request) {
   const dev = await deviceAuth(req);
@@ -17,6 +17,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const found = await ackJob(dev.ownerId, id);
+  const ref = parseJobRef(dev, id);
+  if (!ref) {
+    return Response.json({ error: 'job not on this device' }, { status: 403 });
+  }
+  const found = await ackJob(ref.owner, ref.id);
   return Response.json({ acked: id, found });
 }

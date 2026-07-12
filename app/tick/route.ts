@@ -78,86 +78,89 @@ function makeCtx(ownerId: string, pluginId: string) {
 export async function POST(req: Request) {
   const dev = await deviceAuth(req);
   if (!dev) return unauthorized();
-  const owner = dev.ownerId;
 
-  recordDeviceSeen(owner);
+  // One heartbeat per device, on the primary owner's slot.
+  recordDeviceSeen(dev.ownerId);
 
   const nowMs = Date.now();
-
-  // Idle short-circuit: when the flag is fresh and says nothing is due,
-  // this tick costs zero store commands. The flag only guards the metered
-  // store; the json driver (local dev) is free to query directly.
-  if (
-    STORE_DRIVER === 'redis' &&
-    signalsConfigured() &&
-    nowMs - (lastRealCheckAt.get(owner) || 0) < SAFETY_CHECK_MS
-  ) {
-    const flag = await readTickSignal(owner);
-    if (flag && (flag.nextDueAt === null || flag.nextDueAt > nowMs)) {
-      return Response.json({ results: [], idle: true });
-    }
-    // due, unknown, or missing flag: fall through to the real claim
-  }
-
-  lastRealCheckAt.set(owner, nowMs);
-  const dueIds = await claimDuePlugins(owner, nowMs, RUN_LEASE_SECONDS);
-  if (!dueIds.length) {
-    // Verified-idle: refresh the flag so the cheap path answers next time.
-    await syncTickSignal(owner);
-    return Response.json({ results: [], idle: true });
-  }
-
   const results = [];
 
-  for (const id of dueIds) {
-    const summary: { id: string; status?: string; error?: string } = { id };
-    try {
-      const record = await getPlugin(owner, id);
-      const module = (PLUGINS as PluginModule[]).find((m) => m.id === id);
-
-      if (!record || !module || module.passive || !record.enabled) {
-        // Orphaned due entry (uninstalled/disabled plugin) — drop it.
-        if (record) {
-          record.nextDueAt = null;
-          await upsertPlugin(record, { create: false });
-        }
-        summary.status = 'dropped';
-        results.push(summary);
+  // Run due plugins for EVERY owner the device serves, in stable order.
+  for (const owner of dev.owners) {
+    // Idle short-circuit: when the flag is fresh and says nothing is due,
+    // this owner costs zero store commands. The flag only guards the
+    // metered store; the json driver (local dev) queries directly.
+    if (
+      STORE_DRIVER === 'redis' &&
+      signalsConfigured() &&
+      nowMs - (lastRealCheckAt.get(owner) || 0) < SAFETY_CHECK_MS
+    ) {
+      const flag = await readTickSignal(owner);
+      if (flag && (flag.nextDueAt === null || flag.nextDueAt > nowMs)) {
         continue;
       }
+      // due, unknown, or missing flag: fall through to the real claim
+    }
 
+    lastRealCheckAt.set(owner, nowMs);
+    const dueIds = await claimDuePlugins(owner, nowMs, RUN_LEASE_SECONDS);
+    if (!dueIds.length) {
+      // Verified-idle: refresh the flag so the cheap path answers next time.
+      await syncTickSignal(owner);
+      continue;
+    }
+
+    for (const id of dueIds) {
+      const summary: { id: string; status?: string; error?: string } = { id };
       try {
-        const { state } = await module.run({
-          config: record.config || {},
-          state: record.state || {},
-          ctx: makeCtx(owner, id),
-        });
-        record.state = state;
-        record.lastRunAt = new Date().toISOString();
-        record.lastError = null;
-        record.lastErrorAt = null;
-        reschedule(record); // next due computed from now — run late, once
-        summary.status = 'ran';
+        const record = await getPlugin(owner, id);
+        const module = (PLUGINS as PluginModule[]).find((m) => m.id === id);
+
+        if (!record || !module || module.passive || !record.enabled) {
+          // Orphaned due entry (uninstalled/disabled plugin) — drop it.
+          if (record) {
+            record.nextDueAt = null;
+            await upsertPlugin(record, { create: false });
+          }
+          summary.status = 'dropped';
+          results.push(summary);
+          continue;
+        }
+
+        try {
+          const { state } = await module.run({
+            config: record.config || {},
+            state: record.state || {},
+            ctx: makeCtx(owner, id),
+          });
+          record.state = state;
+          record.lastRunAt = new Date().toISOString();
+          record.lastError = null;
+          record.lastErrorAt = null;
+          reschedule(record); // next due computed from now — run late, once
+          summary.status = 'ran';
+        } catch (err) {
+          record.lastRunAt = new Date().toISOString();
+          record.lastError = (err as Error).message;
+          record.lastErrorAt = record.lastRunAt;
+          // Keep the claim's retry moment as the visible next-due time.
+          record.nextDueAt = nowMs + RUN_LEASE_SECONDS * 1000;
+          summary.status = 'error';
+          summary.error = (err as Error).message;
+        }
+        await upsertPlugin(record, { create: false });
       } catch (err) {
-        record.lastRunAt = new Date().toISOString();
-        record.lastError = (err as Error).message;
-        record.lastErrorAt = record.lastRunAt;
-        // Keep the claim's retry moment as the visible next-due time.
-        record.nextDueAt = nowMs + RUN_LEASE_SECONDS * 1000;
+        // Store failure for this plugin — report it, run the rest.
         summary.status = 'error';
         summary.error = (err as Error).message;
       }
-      await upsertPlugin(record, { create: false });
-    } catch (err) {
-      // Store failure for this plugin — report it, run the rest.
-      summary.status = 'error';
-      summary.error = (err as Error).message;
+      results.push(summary);
     }
-    results.push(summary);
+
+    // Reschedules above moved the due-index; let the flag catch up.
+    await syncTickSignal(owner);
   }
 
-  // Reschedules above moved the due-index; let the flag catch up.
-  await syncTickSignal(owner);
-
+  if (!results.length) return Response.json({ results: [], idle: true });
   return Response.json({ results });
 }

@@ -527,7 +527,12 @@ jobs appear in Queue and History like any other, but carry no
 template, so Reprint declines them with a pointer back to the tool.
 
 ### Queue
-Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).
+Title "Queue" with "What prints next." subtitle; job count right (mono).
+Above the list, a right-aligned 12px ink-faint status line: mono cadence
+text ("updates every 3s" while active, "updates every 30s" after two
+idle minutes, "paused" after thirty) plus a quiet lowercase "refresh"
+text button (hover to ink) that re-fetches immediately and resumes the
+fast cadence; any pointer or key interaction also resumes it.
 Job CARDS: receipt thumbnail (110x74 phone / 158x108 desktop), name +
 "source · created HH:MM:SS" sub,
 status mono ("printing" --red / "queued" --ink-muted), rail = a Cancel
@@ -561,15 +566,20 @@ used, or expired…").
 
 ### Printer — Devices section
 Below the status card, a "Devices" ledger section (13px semibold ink
-heading): one row per paired device — name (14px medium ink), dotted
-leader, "paired {ago}" rail in 12px ink-faint, small outline "Revoke"
-button. A mid-pairing row's rail reads "pairing…", and while one exists
-the page re-renders every 3s (visible tab only, the queue-list rule)
-until the device collects its token; the polling stops once nothing is
-pending. Empty state: one ink-faint sentence explaining that a new
-printer prints its pairing code on boot. Below the list, the claim
-form: mono uppercase code input + name input + outline "Pair" button;
-errors 12px --red on their own line.
+heading): one row per device — name (14px medium ink), dotted leader,
+rail in 12px ink-faint ("paired {ago}"; a shared one prefixes "shared
+with you · "), then the row's actions: owners get small outline "Share"
+and "Revoke" buttons, members get "Leave". Share swaps in place for the
+minted code as mono 12px ("share code ABC123 · 15m, single use"); an
+unexpired code re-renders on reload. Under an owner's row with members,
+a 12px ink-faint second line: "also prints for {email}" with a quiet
+lowercase "remove" text button per member. A mid-pairing row's rail
+reads "pairing…", and while one exists the page re-renders every 3s
+(visible tab only, the queue-list rule) until the device collects its
+token. Empty state: one ink-faint sentence covering both codes. Below
+the list, one form for both code kinds: mono uppercase input
+("pairing or share code") + name input + outline "Pair" button; errors
+12px --red on their own line.
 
 ### Users (admin only)
 Two ledger sections, "Accounts" and "Invites", 13px semibold ink

@@ -22,40 +22,42 @@ const lastRealCheckAt = new Map<string, number>(); // per owner per warm instanc
 export async function GET(req: Request) {
   const dev = await deviceAuth(req);
   if (!dev) return unauthorized();
-  const owner = dev.ownerId;
 
-  recordDeviceSeen(owner);
+  // One heartbeat per device, written to the primary owner's slot; every
+  // member's Printer page reads that slot for the online dot.
+  recordDeviceSeen(dev.ownerId);
 
-  // The flag only guards the metered store; the json driver (local dev) is
-  // free to query directly and never maintains flags.
-  if (
-    STORE_DRIVER === 'redis' &&
-    signalsConfigured() &&
-    Date.now() - (lastRealCheckAt.get(owner) || 0) < SAFETY_CHECK_MS
-  ) {
-    const hasWork = await readQueueSignal(owner);
-    if (hasWork === false) {
-      return new Response(null, { status: 204 }); // zero Redis commands
+  // Serve each owner the device prints for, in stable order. The flag only
+  // guards the metered store; the json driver (local dev) is free to query
+  // directly and never maintains flags.
+  for (const owner of dev.owners) {
+    if (
+      STORE_DRIVER === 'redis' &&
+      signalsConfigured() &&
+      Date.now() - (lastRealCheckAt.get(owner) || 0) < SAFETY_CHECK_MS
+    ) {
+      const hasWork = await readQueueSignal(owner);
+      if (hasWork === false) continue; // zero Redis commands for this owner
+      // true or unknown (null): fall through to the real claim.
     }
-    // true or unknown (null): fall through to the real claim.
-  }
 
-  lastRealCheckAt.set(owner, Date.now());
-  const job = await nextJob(owner);
-  if (!job) {
-    return new Response(null, { status: 204 });
-  }
+    lastRealCheckAt.set(owner, Date.now());
+    const job = await nextJob(owner);
+    if (!job) continue;
 
-  // Content-Length is part of the device contract: the ESP32 firmware
-  // reads it via http.getSize() and streams exactly that many bytes to the
-  // printer; a chunked response (no length) makes it nack every job. Set it
-  // explicitly so the framework never falls back to chunked encoding.
-  return new Response(new Uint8Array(job.bytes), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': String(job.bytes.length),
-      'X-Job-Id': job.id,
-    },
-  });
+    // Content-Length is part of the device contract: the ESP32 firmware
+    // reads it via http.getSize() and streams exactly that many bytes to
+    // the printer; a chunked response (no length) makes it nack every job.
+    // The job id is owner-qualified (owner~id) because members' ids can
+    // collide; the firmware echoes it opaquely.
+    return new Response(new Uint8Array(job.bytes), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(job.bytes.length),
+        'X-Job-Id': `${owner}~${job.id}`,
+      },
+    });
+  }
+  return new Response(null, { status: 204 });
 }

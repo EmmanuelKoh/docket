@@ -13,10 +13,11 @@ it all.
 record row in Postgres) → queue (Redis, atomic claim + 120s lease) → ESP32
 polls /next → serial → printer → /ack`. Every stored record belongs to an
 owner (a user id), derived per request from the session or the device's
-pairing token. The ESP32 also POSTs `/tick` every 30s, which runs ITS
-owner's due plugins server-side; idle /next and /tick answer from
-per-owner Blob flags at zero store commands. No process polls on its own
-timer except the device.
+pairing token. A device can be shared: it serves each member owner's
+queue and plugins in turn. The ESP32 also POSTs `/tick` every 30s, which
+runs its owners' due plugins server-side; idle /next and /tick answer
+from per-owner Blob flags at zero store commands. No process polls on its
+own timer except the device.
 
 ## Layout
 
@@ -57,12 +58,19 @@ timer except the device.
   hosting service has a meter, so read `docs/store-costs.md` (per-path
   costs, quota math rule, rejected approaches) before adding any polled or
   timer-driven query.
-- `lib/devices.js`: printer pairing. An unpaired device POSTs /pair,
-  prints its code, the owner claims it on the Printer page; tokens are
-  sha256-at-rest with a memory-cache + Redis-mirror hot path. Registration
-  and plugin-template seeding run on the Slips page view
-  (`lib/plugin-setup.js`), never on ticks — a new owner's plugins activate
-  on their first Slips visit.
+- `lib/devices.js`: printer pairing and sharing. An unpaired device POSTs
+  /pair, prints its code, the owner claims it on the Printer page; tokens
+  are sha256-at-rest with a memory-cache + Redis-mirror hot path. A device
+  serves a LIST of owners: the owner mints a single-use share code in the
+  dashboard, another account types it into the same code box and joins as
+  a member (device_member table; the token mirror carries the owner list;
+  consent on both sides by design). /next and /tick loop the members in
+  stable order — each keeps their own queue, plugins, and schedules; job
+  ids cross the wire owner-qualified (`owner~job-N`, opaque to firmware;
+  bare ids still accepted). One presence heartbeat per device, on the
+  primary owner's slot. Registration and plugin-template seeding run on
+  the Slips page view (`lib/plugin-setup.js`), never on ticks — a new
+  owner's plugins activate on their first Slips visit.
 - `plugins/`: registry plugins. Each exports `id`, `defaults` (may set
   `enabled: false`; `schedule` is `{every: seconds}` or
   `{at: "HH:MM", timezone}`, see `lib/schedule.js`), optional

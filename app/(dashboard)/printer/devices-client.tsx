@@ -1,7 +1,9 @@
 'use client';
 
-// Client bits of the Printer page's DEVICES section: claim a printed
-// pairing code, revoke a paired device, and watch a pairing complete.
+// Client bits of the Printer page's DEVICES section: enter a code (a
+// printed pairing code claims a new device; a share code joins someone
+// else's), share a device you own, leave one shared with you, remove a
+// member, revoke, and watch a pairing complete.
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -58,10 +60,10 @@ export function ClaimDeviceForm() {
     >
       <Input
         name="code"
-        placeholder="pairing code"
-        className="w-36 font-mono uppercase"
+        placeholder="pairing or share code"
+        className="w-44 font-mono uppercase"
         autoComplete="off"
-        aria-label="Pairing code"
+        aria-label="Pairing or share code"
       />
       <Input
         name="name"
@@ -92,5 +94,89 @@ export function RevokeDeviceButton({ id }: { id: string }) {
     >
       Revoke
     </Button>
+  );
+}
+
+// Owner-only: mint a single-use share code and show it inline. Another
+// account types it into their own code box to join this device.
+export function ShareDeviceButton({
+  id,
+  initial = null,
+}: {
+  id: string;
+  initial?: string | null;
+}) {
+  const [code, setCode] = useState<string | null>(initial);
+  const [busy, setBusy] = useState(false);
+
+  if (code) {
+    return (
+      <span className="font-mono text-xs text-ink">
+        share code {code}
+        <span className="text-ink-faint"> · 15m, single use</span>
+      </span>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const r = await fetch('/api/devices', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        setBusy(false);
+        if (r.ok) setCode((await r.json()).code);
+      }}
+    >
+      Share
+    </Button>
+  );
+}
+
+export function LeaveDeviceButton({ id }: { id: string }) {
+  const router = useRouter();
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={async () => {
+        await fetch(`/api/devices?id=${encodeURIComponent(id)}&leave`, {
+          method: 'DELETE',
+        });
+        router.refresh();
+      }}
+    >
+      Leave
+    </Button>
+  );
+}
+
+export function RemoveMemberButton({
+  id,
+  member,
+}: {
+  id: string;
+  member: string;
+}) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      className="text-xs text-ink-faint transition-colors hover:text-ink"
+      onClick={async () => {
+        await fetch(
+          `/api/devices?id=${encodeURIComponent(id)}&member=${encodeURIComponent(member)}`,
+          { method: 'DELETE' },
+        );
+        router.refresh();
+      }}
+    >
+      remove
+    </button>
   );
 }
