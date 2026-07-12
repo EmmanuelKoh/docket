@@ -23,6 +23,8 @@ export const JOB_CAP      = parseInt(process.env.JOB_CAP, 10)      || 50;
 // Blob). Connection vars for the redis driver are read directly by
 // lib/redis.js and the @vercel/blob SDK — see .env.example.
 export const STORE_DRIVER  = (process.env.STORE_DRIVER || 'json').toLowerCase();
+// Which owner the local-dev DEVICE_TOKEN resolves to (see below); set it
+// to your local account id if you drive the queue with the laptop agents.
 export const OWNER_ID      = process.env.OWNER_ID || 'default';
 export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
 
@@ -33,25 +35,18 @@ export const LEASE_SECONDS = parseInt(process.env.LEASE_SECONDS, 10) || 120;
 // equivalent for SQL).
 export const DATABASE_URL = process.env.DATABASE_URL || '';
 
-// Legacy shared device secret (/next, /ack, /nack, /tick) — the
-// transition fallback while printers move to per-device pairing tokens
-// (lib/devices.js). The dev-token default only ever applies locally:
-// hosted deployments get no default, so the old insecure out-of-the-box
-// token cannot exist in production.
+// Local-dev shared device secret for the laptop agents
+// (agent/heartbeat.js, agent/printer-agent.js) — real printers use
+// per-device pairing tokens (lib/devices.js). No default on Vercel, so
+// this door does not exist hosted; it maps to the OWNER_ID owner below.
 export const DEVICE_TOKEN =
   process.env.DEVICE_TOKEN || (process.env.VERCEL ? '' : 'dev-token');
 
-// Dashboard door. DASHBOARD_PASSWORD is what you type at /login;
-// SESSION_SECRET signs the stateless session cookie. No defaults — both must
-// be set (locally in .env, hosted in the Vercel env vars) for login to work.
-export const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
-export const SESSION_SECRET = process.env.SESSION_SECRET || '';
-
 // Better Auth (user accounts). The secret signs its session cookies —
-// falls back to SESSION_SECRET so hosted deployments need no new var
-// (Better Auth itself refuses to boot in production with none set, and
-// uses a fixed dev secret locally). BETTER_AUTH_URL pins the canonical
-// origin in production; unset locally, the origin is inferred per request.
+// falls back to SESSION_SECRET (the pre-accounts cookie secret, still in
+// hosted env) so deployments need no new var. BETTER_AUTH_URL pins the
+// canonical origin in production; unset locally, the origin is inferred
+// per request.
 export const BETTER_AUTH_SECRET =
   process.env.BETTER_AUTH_SECRET || process.env.SESSION_SECRET || '';
 export const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || '';
@@ -61,11 +56,10 @@ export const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || '';
 export const HEARTBEAT_SECONDS = parseInt(process.env.HEARTBEAT_SECONDS, 10) || 30;
 
 // Message ingestion (/ingest) — texts forwarded from a phone are classified
-// by Gemini and printed as task receipts when they contain one.
-// INGEST_TOKEN is the shared secret the forwarder sends (no default: the
-// endpoint refuses to run without it). GEMINI_API_KEY comes from Google AI
-// Studio. INGEST_TIMEZONE controls how "received at" prints on the receipt.
-export const INGEST_TOKEN    = process.env.INGEST_TOKEN || '';
+// by Gemini and printed as task receipts when they contain one. The
+// forwarder authenticates with the per-owner token from the message-ingest
+// plugin config (Slips page). GEMINI_API_KEY comes from Google AI Studio.
+// INGEST_TIMEZONE controls how "received at" prints on the receipt.
 export const GEMINI_API_KEY  = process.env.GEMINI_API_KEY || '';
 export const GEMINI_MODEL    = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 export const INGEST_TIMEZONE = process.env.INGEST_TIMEZONE || 'America/New_York';

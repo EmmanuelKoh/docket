@@ -44,11 +44,9 @@ tick flag's active/idle write policy below. Idle cost per plugin is zero:
 only actual runs cost commands, so cost scales with each plugin's
 schedule, not with how many plugins exist.
 
-Tape takes (added July 2026) follow the templates pattern: the meta list
-is one Redis key, so a list read is 1 command and a save/attach/delete is
-2-3. Nothing polls — the list fetches once per Tape-page mount and after
-each save/delete, so cost scales with actual use (tens of commands per
-session, noise next to the totals above). The heavy payloads never touch
+Tape takes (added July 2026): the meta rows live in Postgres (human
+traffic only), so takes cost no Redis commands at all. Nothing polls —
+the list fetches once per Tape-page mount and after each save/delete. The heavy payloads never touch
 Redis: the take document JSON and the audio WAV live in Blob (audio is
 uploaded browser→Blob directly via a minted client-upload token — routes
 cap at ~4.5MB). Storage is the meter that moves: WAV is ~2.65MB/min, so
@@ -79,7 +77,7 @@ verified-empty claim sets false) so feature code can never forget; a 60s
 safety check in /next bounds any stale flag to a 60s print delay, never a
 lost print. Chosen over Redis for the read price ($0.40/M vs $2.00/M) and
 over Edge Config for the meter (no read cap). Probed July 2026 against the
-production store with scripts/blob-staleness-probe.mjs: an overwritten
+production store (probe script in git history): an overwritten
 flag is visible to a cache-busted fetch in 46-184ms; plain fetches can lag
 ~2s on the CDN, so the reader always cache-busts.
 

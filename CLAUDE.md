@@ -99,19 +99,21 @@ timer except the device.
   floor, edits, undo, freeze — stitched into one roll (printed
   caesura at cuts) or focused one at a time; phrases print as
   standalone receipts. Saved takes:
-  `lib/tape-store.js` (meta in one Redis key, document JSON + lossless
-  WAV in Blob; json driver = files in `data/tape/`) behind
+  `lib/tape-store.js` (meta in Postgres; document JSON + lossless WAV
+  in Blob under `tape/{owner}/`, or files in `data/tape/` locally) behind
   `/api/tape/takes*`; hosted audio uploads go browser→Blob via a
   client-upload token (`/api/tape/takes/upload`) because WAVs exceed
   the ~4.5MB route cap.
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.
-- `scripts/`: `migrate-json-to-redis.js` (idempotent), `show-plugin.js`,
-  `toggle-plugin.js`, `print-calibration.js` (grayscale wedges through the
-  real pipeline), `tape-eval/` (Tape transcription v2 pipeline + corpus
-  scorer — `npm run tape:eval` scores every `data/clips/*.truth.json`
-  fixture; see docs/tape-transcription-v2.md before touching detection).
+- `scripts/`: `create-user.js` (bootstrap an account, hidden password
+  prompt), `show-plugin.js`, `toggle-plugin.js`, `print-calibration.js`
+  (grayscale wedges through the real pipeline; signs in with
+  DOCKET_EMAIL/DOCKET_PASSWORD), `tape-eval/` (Tape transcription v2
+  pipeline + corpus scorer — `npm run tape:eval` scores every
+  `data/clips/*.truth.json` fixture; see docs/tape-transcription-v2.md
+  before touching detection).
 
 ## Auth model
 
@@ -120,16 +122,13 @@ timer except the device.
   are served from a signed cookie cache (zero DB reads per page view).
   The seam is `app/_lib/dashboard-session.ts`: every page/route resolves
   `{ userId, role }` there, and `owner = userId` scopes all store calls.
-  TRANSITION: the legacy HMAC cookie door (`DASHBOARD_PASSWORD` +
-  `SESSION_SECRET`) still works and resolves to the `OWNER_ID` owner;
-  delete it (login form's owner mode, `/login/submit`, `lib/session.js`)
-  once the original owner has an account and data is migrated.
 - Device endpoints (`/next`, `/ack`, `/nack`, `/tick`): per-device Bearer
   tokens from pairing ONLY, never the cookie (the ESP32 can't log in).
-  The device's token resolves to its owner. TRANSITION: the shared
-  `DEVICE_TOKEN` env still works and maps to `OWNER_ID`.
+  The device's token resolves to its owner. Local dev only: the
+  `DEVICE_TOKEN` env (dev-token default, no default hosted) lets the
+  laptop agents in and maps to `OWNER_ID`.
 - `/ingest`: per-owner token in the message-ingest plugin config (shown
-  on its Slips page). TRANSITION: `INGEST_TOKEN` env maps to `OWNER_ID`.
+  on its Slips page).
 - `/pair` is deliberately unauthenticated (an unpaired device has no
   credentials); authority is the printed code + a signed-in claimer.
 - middleware.ts only does an optimistic cookie-presence redirect for
@@ -137,6 +136,10 @@ timer except the device.
   owner-scoped queries in `lib/` — never middleware alone.
 
 ## Design
+
+`docs/template-authoring.md` is the constraint sheet for writing receipt
+templates (Satori's CSS dialect, thermal-paper rules); give it to any
+LLM asked to design one.
 
 `docs/design-spec.md` is the visual source of truth (monochrome + register
 red, both themes, strict red-usage rules). **Update it whenever the UI
@@ -160,8 +163,7 @@ script.
   `node agent/printer-agent.js` only if the ESP32 isn't covering those).
   Accounts: `node scripts/create-user.js "Name" email` makes an admin
   (prompts for the password with hidden input; stop the dev server first
-  if on PGlite — it is single-process). The legacy
-  door also works with `DASHBOARD_PASSWORD`/`SESSION_SECRET` in `.env`.
+  if on PGlite — it is single-process).
   Schema changes: edit `db/schema.js`, `npm run db:generate`, commit the
   migration; PGlite applies it automatically, Neon via `npm run
   db:migrate`.
@@ -171,13 +173,6 @@ script.
   template read, plugin templates from `reference/*-templates.json` on
   Slips page view). Editing a seeded template's reference file requires
   syncing the stored copy (in Postgres now; via studio or a POST).
-- One-time accounts migration, in order, all idempotent: deploy;
-  create your account (invite yourself via the legacy door, or
-  `scripts/create-user.js` against prod DATABASE_URL); `npm run
-  db:migrate`; `npm run migrate:pg default`; `node
-  scripts/migrate-owner.js default <your-user-id>`; set `OWNER_ID` env to
-  your user id (keeps the legacy device/ingest tokens routing correctly);
-  pair the printer to retire the shared token.
 - Firmware test loop: point `secrets.h` at the laptop
   (`http://<mac-ip>:3000`), flash, **power-cycle the printer after
   flashing** (see field notes), test, point back at production.

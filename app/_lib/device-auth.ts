@@ -2,11 +2,12 @@
 // Device-facing endpoints accept Authorization: Bearer <token> and nothing
 // else — never the dashboard cookie, because the ESP32 can't log in.
 //
-// Two token kinds during the pairing transition:
+// Two token kinds:
 //   - a per-device token minted at pairing (lib/devices.js) — resolves to
 //     that device's owner; verification is memory-cache/Redis-mirror fast
-//   - the legacy shared DEVICE_TOKEN env — resolves to the OWNER_ID owner
-//     (compared constant-time; removed once every device is paired)
+//   - the local-dev DEVICE_TOKEN env for the laptop agents — resolves to
+//     the OWNER_ID owner (compared constant-time; has no default hosted,
+//     so the door does not exist in production unless the env is set)
 
 import crypto from 'node:crypto';
 import { DEVICE_TOKEN, OWNER_ID } from '@/config.js';

@@ -12,16 +12,17 @@
 //   node scripts/print-calibration.js                 -> production (PRINT_SERVER)
 //   node scripts/print-calibration.js http://localhost:3000
 //
-// Uses DASHBOARD_PASSWORD from .env to sign in (the /jobs API is behind the
-// session cookie).
+// Signs in with a real account (the /jobs API is behind the session):
+// set DOCKET_EMAIL and DOCKET_PASSWORD in .env.
 
 import 'dotenv/config';
 import { PNG } from 'pngjs';
 
 const SERVER = process.argv[2] || process.env.PRINT_SERVER || 'http://localhost:3000';
-const PASSWORD = process.env.DASHBOARD_PASSWORD;
-if (!PASSWORD) {
-  console.error('DASHBOARD_PASSWORD not set in .env');
+const EMAIL = process.env.DOCKET_EMAIL;
+const PASSWORD = process.env.DOCKET_PASSWORD;
+if (!EMAIL || !PASSWORD) {
+  console.error('DOCKET_EMAIL / DOCKET_PASSWORD not set in .env');
   process.exit(1);
 }
 
@@ -95,15 +96,17 @@ const template = `
 const strips = ROWS.map(r => ({ label: r.label, h: r.h, uri: stripPng(r.lut, r.mode, r.h) }));
 
 // sign in, then queue the job
-const login = await fetch(`${SERVER}/login`, {
+const login = await fetch(`${SERVER}/api/auth/sign-in/email`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  body: 'password=' + encodeURIComponent(PASSWORD),
-  redirect: 'manual',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
 });
-const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
-if (!cookie.includes('docket_session')) {
-  console.error('login failed — check DASHBOARD_PASSWORD matches the server at', SERVER);
+const cookie = login.headers
+  .getSetCookie()
+  .map(c => c.split(';')[0])
+  .join('; ');
+if (!login.ok || !cookie.includes('session_token')) {
+  console.error('login failed — check DOCKET_EMAIL/DOCKET_PASSWORD match the server at', SERVER);
   process.exit(1);
 }
 

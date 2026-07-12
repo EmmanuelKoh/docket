@@ -13,8 +13,7 @@
     "tape:eval": "node scripts/tape-eval/score.mjs",
     "tape:doc": "node scripts/test-tape-doc.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "migrate:pg": "node scripts/migrate-redis-to-postgres.js"
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

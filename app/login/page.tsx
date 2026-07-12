@@ -1,20 +1,13 @@
-// /login — same paper page, centered small card: DOCKET wordmark, then
-// the account form (email + password, Better Auth). A quiet toggle
-// underneath switches to the legacy owner-password door, which stays
-// until the accounts transition completes (spec: nothing else on the
-// page).
+// /login — same paper page, centered small card: DOCKET wordmark, email
+// field, password field, one outline "Sign in" button. Nothing else on
+// the page (spec).
 
 import { redirect } from 'next/navigation';
 import { sessionValid } from '../_lib/dashboard-session';
 import { LoginForm } from './login-form';
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function LoginPage() {
   if (await sessionValid()) redirect('/');
-  const { error } = await searchParams;
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
@@ -22,7 +15,7 @@ export default async function LoginPage({
         <div className="font-mono text-sm font-medium tracking-[0.14em]">
           DOCKET
         </div>
-        <LoginForm legacyError={error} />
+        <LoginForm />
       </div>
     </main>
   );

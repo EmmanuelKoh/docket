@@ -4,18 +4,16 @@
 // items onto one task and splits unrelated tasks apart, so one message can
 // print several slips.
 //
-// Auth (phase 5): each owner's message-ingest plugin carries its own
-// ingestToken in its config (minted at registration, visible/rotatable on
-// the Slips page) — the token routes the message to its owner. The
-// legacy INGEST_TOKEN env keeps working for the original owner during
-// the transition. Ingest is push traffic (a human sent a text), so the
+// Auth: each owner's message-ingest plugin carries its own ingestToken
+// in its config (minted at registration, visible/rotatable on the Slips
+// page) — the token both authenticates the sender and routes the message
+// to its owner. Ingest is push traffic (a human sent a text), so the
 // Postgres lookup here is fine — the device-cadence rule guards the
 // polling paths, not this.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { sql } from 'drizzle-orm';
-import { INGEST_TOKEN, OWNER_ID } from '@/config.js';
 import { pluginConfig } from '@/db/schema.js';
 import { getDb } from '@/lib/db.js';
 import { createJob } from '@/lib/job-store.js';
@@ -84,15 +82,13 @@ async function markActivity(
 }
 
 // Bearer header or ?token=. Resolves to the owner the message belongs
-// to: the legacy env token maps to the configured owner; otherwise the
-// token is looked up in the plugin_config table (config->>'ingestToken').
+// to via the plugin_config table (config->>'ingestToken').
 async function ownerForRequest(req: Request): Promise<string | null> {
   const header = req.headers.get('authorization') || '';
   const token = header.startsWith('Bearer ')
     ? header.slice('Bearer '.length)
     : new URL(req.url).searchParams.get('token') || '';
   if (!token) return null;
-  if (INGEST_TOKEN && token === INGEST_TOKEN) return OWNER_ID;
   const db = await getDb();
   const rows: { ownerId: string }[] = await db
     .select({ ownerId: pluginConfig.ownerId })
