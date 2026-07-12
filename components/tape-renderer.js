@@ -795,6 +795,11 @@ export function createTapeRenderer(config) {
     timeline,
     notes: noteGeom,
     width: WIDTH,
+    // an empty take still shows (and prints) a staff with its clef and
+    // key signature — bare paper with no explanation reads as a bug
+    begin() {
+      if (!started) start();
+    },
     noteOn,
     noteOff,
     markNow,

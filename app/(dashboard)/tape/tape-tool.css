@@ -463,21 +463,78 @@
   align-items: center;
 }
 
-/* ---- tape type scale: TWO sizes (13 words / 12 asides), TWO colors
-   (ink / ink-muted), sans for words, mono only for numbers and times.
-   No caps, no letter-spacing, section titles differ by weight alone —
-   receipt-plain. Scoped to .tape-tool and kept LAST: the base
-   .btn/.label copies above must keep their meaning on other pages
-   (page css loads globally once visited). ---- */
+/* ---- tape material & type: the studio borrows its chrome from the
+   machine. ONE typeface (the receipt mono) at two sizes (13 words /
+   12 asides) and two colors (ink / ink-muted). Controls are flat,
+   square, ink-bordered; hover and pressed states INVERT like thermal
+   print. Sections separate with dotted PERFORATION rules, the takes
+   list uses ledger leaders, the roll is framed as a torn receipt
+   strip, and Record carries a lamp. Scoped to .tape-tool and kept
+   LAST: the base .btn/.label copies above must keep their meaning on
+   other pages (page css loads globally once visited). ---- */
+.tape-tool {
+  font-family: var(--font-mono);
+}
 .tape-tool .btn {
-  padding: 8px 14px;
+  font-family: inherit;
   font-size: 13px;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border-radius: 0;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+.tape-tool .btn:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--raised);
 }
 .tape-tool .btn.small {
   padding: 6px 11px;
   font-size: 13px;
 }
+.tape-tool .btn:disabled,
+.tape-tool .btn.disabled {
+  border-color: var(--border);
+  color: var(--ink-muted);
+  background: transparent;
+}
+.tape-tool .btn.pressed {
+  background: var(--ink);
+  color: var(--raised);
+  border-color: var(--ink);
+}
+/* the live capture: red lamp, red frame; inverts to red when hovered */
+.tape-tool .btn.on {
+  color: var(--red);
+  border-color: var(--red);
+  background: transparent;
+}
+.tape-tool .btn.on:hover {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.tape-lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  flex: none;
+}
+.tape-lamp.live {
+  background: currentColor;
+  animation: tape-lamp-blink 1.6s ease-in-out infinite;
+}
+.tape-tool .btn.on:hover .tape-lamp.live {
+  animation: none;
+}
+@keyframes tape-lamp-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .tape-tool .label {
   font-size: 13px;
   letter-spacing: normal;
@@ -486,22 +543,144 @@
 }
 .tape-group > .label,
 .tape-acc summary.label {
-  font-weight: 600;
+  font-weight: 700;
 }
 .tape-tool .status {
   font-size: 12.5px;
 }
-.tape-tool .tape-select {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  padding: 7px 10px;
-}
+.tape-tool .tape-select,
 .tape-tool .tape-name {
+  font-family: inherit;
   font-size: 13px;
   padding: 7px 10px;
+  border-radius: 0;
 }
 .tape-tool .tape-val {
   font-size: 12.5px;
+}
+
+/* perforation rules between sections — receipt tear-off lines */
+.tape-controls {
+  gap: 14px;
+}
+.tape-stage {
+  gap: 10px;
+}
+.tape-controls > * + *,
+.tape-stage > * + * {
+  padding-top: 12px;
+  background:
+    repeating-linear-gradient(90deg, var(--border) 0 5px, transparent 5px 11px)
+    top left / 100% 1px no-repeat;
+}
+
+/* ledger leaders: name……………duration, like a receipt line item */
+.tape-take-open::after {
+  content: "";
+  order: 1;
+  flex: 1 1 12px;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--ink-muted);
+  margin: 0 2px 3px;
+  align-self: flex-end;
+}
+.tape-take-sub {
+  order: 2;
+}
+
+/* the roll framed as a receipt strip: square, hairline, and a torn
+   right edge (sawtooth of the surrounding card color over the paper) */
+.tape-frame {
+  position: relative;
+  border: 0.5px solid var(--border);
+  border-right: 0;
+}
+.tape-frame .tape-roll {
+  border: 0;
+  border-radius: 0;
+}
+.tape-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 9px;
+  pointer-events: none;
+  background:
+    linear-gradient(-45deg, var(--raised) 6.5px, transparent 6.5px),
+    linear-gradient(-135deg, var(--raised) 6.5px, transparent 6.5px);
+  background-size: 9px 13px;
+  background-repeat: repeat-y;
+  background-position: right;
+}
+
+/* the take banner: an inverted ink bar with bold knockout type, the
+   plugin receipts' FULL TIME move; red with a blinking lamp while the
+   mic is live (the one loud red allowed — an active capture) */
+.tape-banner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  background: var(--ink);
+  color: var(--raised);
+  font-weight: 700;
+  font-size: 15px;
+  padding: 7px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tape-banner.rec {
+  background: var(--red);
+  color: #fff;
+}
+.tape-banner .tape-lamp {
+  border-color: #fff;
+}
+
+/* the transport readout as a deck counter — score-numeral weight */
+.tape-transport .tape-val {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* fader-style sliders: hairline track, square ink thumb */
+.tape-tool input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 15px;
+  background: transparent;
+}
+.tape-tool input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--ink-muted);
+}
+.tape-tool input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 7px;
+  height: 15px;
+  margin-top: -7px;
+  background: var(--ink);
+  border: 0;
+  border-radius: 0;
+}
+.tape-tool input[type="range"]:disabled::-webkit-slider-runnable-track {
+  background: var(--border);
+}
+.tape-tool input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--ink-muted);
+}
+.tape-tool input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: var(--ink-muted);
+}
+.tape-tool input[type="range"]::-moz-range-thumb {
+  width: 7px;
+  height: 15px;
+  background: var(--ink);
+  border: 0;
+  border-radius: 0;
 }
 
 @media (max-width: 900px) {

@@ -460,8 +460,15 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       deriveStale = false;
       pendingFloor = null;
       set({ activePhrase: 0, phraseView: 'song' });
-      renderTimeline();
-      set({ status: '', hasTake: true }); // the tape itself is the answer
+      const mains = renderTimeline();
+      // the tape itself is the answer — except when it's empty, which
+      // deserves an explanation (quiet take, or the floor is set high)
+      set({
+        status: mains
+          ? ''
+          : `no notes found — the melody floor is at ${settings().melodyFloor} Hz; try lowering it, or record closer to the mic`,
+        hasTake: true,
+      });
       syncPhraseState();
     } catch (e) {
       set({ status: `transcription failed: ${e.message}` });
@@ -513,7 +520,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       (a, b) =>
         a.tMs - b.tMs || (EV_RANK[a.type] ?? 3) - (EV_RANK[b.type] ?? 3),
     );
+    const mains = timeline.filter((e) => !e.mark).length;
+    if (!mains) renderer.begin(); // empty take: staff + key sig, not void
     feedRenderer(Number.MAX_SAFE_INTEGER);
+    return mains;
   }
 
   // the trace frames the visible scope should draw (a focused phrase
@@ -574,8 +584,15 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         ),
       };
     }
-    renderTimeline();
-    set({ hasTake: true }); // status untouched: re-renders are silent
+    const mains = renderTimeline();
+    // re-renders stay silent — unless the result is an empty staff
+    if (mains) set({ hasTake: true });
+    else {
+      set({
+        hasTake: true,
+        status: `no notes at a ${settings().melodyFloor} Hz melody floor — try lowering it`,
+      });
+    }
     view.rebuildTrace(visibleFrames()); // trace follows the visible scope
     player.setWindow(
       get().phraseView === 'focus' ? windowSecs(activeIdx()) : null,

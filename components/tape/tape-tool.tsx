@@ -12,7 +12,6 @@
 import {
   ChevronDown,
   ChevronUp,
-  Mic,
   Pause,
   Play,
   Printer,
@@ -367,15 +366,8 @@ function Controls({ ctl }: { ctl: Controller | null }) {
           disabled={decoding}
           onClick={() => ctl?.toggleMic()}
         >
-          {micOn ? (
-            <>
-              <Square size={12} /> Stop
-            </>
-          ) : (
-            <>
-              <Mic size={13} /> Record
-            </>
-          )}
+          <span className={micOn ? 'tape-lamp live' : 'tape-lamp'} />
+          {micOn ? 'Stop' : 'Record'}
         </button>
         <button
           type="button"
@@ -714,6 +706,42 @@ function TraceCanvas({
   );
 }
 
+// the take banner: an inverted ink bar over the roll, like the bold
+// knockout headers on the plugin receipts (see the World Cup FULL TIME
+// template) — the open take's name, or a red REC counter while live
+function TakeBanner() {
+  const micOn = useTape((s) => s.micOn);
+  const hasTake = useTape((s) => s.hasTake);
+  const current = useTape((s) => s.currentTake);
+  const clipDur = useTape((s) => s.clipDur);
+  const phrases = useTape((s) => s.phrases);
+  const active = useTape((s) => s.activePhrase);
+  const focus = useTape((s) => s.phraseView === 'focus');
+
+  if (micOn) {
+    return (
+      <div className="tape-banner rec">
+        <span className="tape-lamp live" />
+        REC {fmtTime(clipDur)}
+      </div>
+    );
+  }
+  if (!hasTake) return null;
+  const name = current?.name ?? 'unsaved take';
+  const suffix =
+    phrases.length > 1
+      ? focus
+        ? ` · phrase ${active + 1} of ${phrases.length}`
+        : ` · ${phrases.length} phrases`
+      : '';
+  return (
+    <div className="tape-banner">
+      {name}
+      {suffix}
+    </div>
+  );
+}
+
 // a friendly note on the bare paper before anything is on tape — also
 // where the demo phrase lives, out of the main controls' way
 function EmptyOverlay({ ctl }: { ctl: Controller | null }) {
@@ -894,13 +922,16 @@ export function TapeTool() {
     <div className="tape-tool">
       <Controls ctl={ctl} />
       <div className="tape-stage">
+        <TakeBanner />
         <TruncatedNote />
-        <div className="tape-roll" ref={wrapRef}>
-          <canvas ref={canvasRef} />
-          <TraceCanvas elRef={traceRef} />
-          <SelectionBand />
-          <Playhead elRef={playheadRef} />
-          <EmptyOverlay ctl={ctl} />
+        <div className="tape-frame">
+          <div className="tape-roll" ref={wrapRef}>
+            <canvas ref={canvasRef} />
+            <TraceCanvas elRef={traceRef} />
+            <SelectionBand />
+            <Playhead elRef={playheadRef} />
+            <EmptyOverlay ctl={ctl} />
+          </div>
         </div>
         <Transport ctl={ctl} />
         <Inspector ctl={ctl} />

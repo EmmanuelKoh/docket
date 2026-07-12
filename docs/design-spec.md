@@ -345,18 +345,33 @@ no live-note readout, and no event log — the tape itself is the
 answer; the only permanent stage text is the transport and the
 transient status line.
 
-Tape type discipline (receipt-plain, scoped to this page): TWO text
-sizes (13px for words, 12px for asides), TWO colors (--ink and
---ink-muted), sans for words with mono reserved for numbers and
-times, no uppercase and no letter-spacing — section titles differ by
-weight (600) alone. Buttons run larger than the global kit (8/14px
-padding, 6/11px small, 4px radius) with lucide icons where a symbol
-is universal: Record carries a mic (stop-square + red while live),
-the transport is icon-only Play/Pause/Stop, pitch nudges are
-chevrons, Cut before carries scissors, Remove is a trash can,
-Undo/Redo are the curved arrows (tooltips carry the shortcuts), and
-the print buttons carry the printer glyph. Domain actions (Ornament,
-Slide from prev, Split at playhead, Join next) stay as words.
+Tape material & type (the studio borrows its chrome from the machine;
+scoped to this page): ONE typeface — the receipt mono — at TWO sizes
+(13px words, 12px asides) and TWO colors (--ink, --ink-muted); no
+uppercase, no letter-spacing, section titles differ by weight (700)
+alone. Controls are FLAT and SQUARE: 1px ink borders, transparent
+fill, zero radius; hover and pressed states INVERT like thermal print
+(ink fill, --raised text); disabled drops to hairline border +
+muted text. Record carries a round LAMP (outline circle idle, filled
+red with a slow blink while live) and the live button inverts to red
+on hover. Sections separate with dotted PERFORATION rules (5px dash /
+6px gap hairlines) in both columns; the takes list draws LEDGER
+LEADERS (name……………duration) like receipt line items; the roll is
+framed as a receipt strip — square hairline frame with a TORN
+sawtooth right edge (card-color triangles over the paper). Sliders
+are FADERS: 1px track, 7×15px square ink thumb. Lucide icons where a
+symbol is universal: icon-only Play/Pause/Stop transport, chevron
+pitch nudges, scissors on Cut before, trash for Remove, curved
+Undo/Redo arrows (tooltips carry shortcuts), printer glyph on print
+buttons. Domain actions (Ornament, Slide from prev, Split at
+playhead, Join next) stay as words. The one BOLD element (borrowed
+from the plugin receipts' FULL TIME knockout bar): the TAKE BANNER
+over the roll — an inverted ink bar, centered 15px/700 knockout type,
+naming the open take ("unsaved take · 2 phrases", or "name · phrase 2
+of 3" in focus); while the mic is live it turns --red with a blinking
+white lamp and a running counter ("● REC 0:12.4") — the loudest red
+on the page, earned by an active capture. The transport readout sets
+in deck-counter weight (17px/700 mono).
 
 Left column (300px), project-first: session buttons (Record / New
 take — the demo phrase is NOT a main button; it lives as an
