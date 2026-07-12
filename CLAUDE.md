@@ -158,8 +158,9 @@ script.
 
 - Local dev: `npm run dev` (+ `node agent/heartbeat.js` and
   `node agent/printer-agent.js` only if the ESP32 isn't covering those).
-  Accounts: `node scripts/create-user.js "Name" email password` makes an
-  admin (stop the dev server first: PGlite is single-process). The legacy
+  Accounts: `node scripts/create-user.js "Name" email` makes an admin
+  (prompts for the password with hidden input; stop the dev server first
+  if on PGlite — it is single-process). The legacy
   door also works with `DASHBOARD_PASSWORD`/`SESSION_SECRET` in `.env`.
   Schema changes: edit `db/schema.js`, `npm run db:generate`, commit the
   migration; PGlite applies it automatically, Neon via `npm run
