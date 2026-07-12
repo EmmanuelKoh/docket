@@ -13,6 +13,9 @@ firmware/docket-agent/secrets.h
 # Generated output from print runs
 *.bin
 out_*.png
+# ...but the Basic Pitch model weights MUST ship (the tape decode 404s
+# in production without them — tfjs reads the HTML error page as floats)
+!public/basic-pitch/*.bin
 
 # Job queue (runtime data, not source)
 jobs/*
