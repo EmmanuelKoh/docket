@@ -108,10 +108,8 @@ timer except the device.
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.
 - `scripts/`: `create-user.js` (bootstrap an account, hidden password
-  prompt), `migrate-owner.js` + `migrate-redis-to-postgres.js` +
-  `cleanup-redis-records.js` (owner/data moves, idempotent),
-  `show-plugin.js`, `toggle-plugin.js`, `print-calibration.js` (grayscale
-  wedges through the real pipeline; signs in with
+  prompt), `show-plugin.js`, `toggle-plugin.js`, `print-calibration.js`
+  (grayscale wedges through the real pipeline; signs in with
   DOCKET_EMAIL/DOCKET_PASSWORD), `tape-eval/` (Tape transcription v2
   pipeline + corpus scorer — `npm run tape:eval` scores every
   `data/clips/*.truth.json` fixture; see docs/tape-transcription-v2.md
@@ -175,12 +173,6 @@ script.
   template read, plugin templates from `reference/*-templates.json` on
   Slips page view). Editing a seeded template's reference file requires
   syncing the stored copy (in Postgres now; via studio or a POST).
-- The one-time accounts migration is done (July 2026). If an owner ever
-  moves again: `npm run migrate:pg <owner>` copies records to Postgres,
-  `node scripts/migrate-owner.js <from> <to>` reassigns everything, and
-  `node scripts/cleanup-redis-records.js <owner>` deletes the Redis
-  record keys Postgres replaced. All idempotent, all run with the target
-  environment's vars set explicitly.
 - Firmware test loop: point `secrets.h` at the laptop
   (`http://<mac-ip>:3000`), flash, **power-cycle the printer after
   flashing** (see field notes), test, point back at production.

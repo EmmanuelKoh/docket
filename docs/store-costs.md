@@ -77,7 +77,7 @@ verified-empty claim sets false) so feature code can never forget; a 60s
 safety check in /next bounds any stale flag to a 60s print delay, never a
 lost print. Chosen over Redis for the read price ($0.40/M vs $2.00/M) and
 over Edge Config for the meter (no read cap). Probed July 2026 against the
-production store with scripts/blob-staleness-probe.mjs: an overwritten
+production store (probe script in git history): an overwritten
 flag is visible to a cache-busted fetch in 46-184ms; plain fetches can lag
 ~2s on the CDN, so the reader always cache-busts.
 
