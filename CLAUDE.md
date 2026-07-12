@@ -54,12 +54,40 @@ plugins server-side. No process polls on its own timer except the device.
   markup is `components/photo-tool.tsx` and its styles
   `app/(dashboard)/photo/photo-tool.css`; ids and class names are the
   contract between the three. Do not "modernize" the engine.
+- The Tape tool (`/tape`): live duduk transcription in the browser
+  (mic → `public/pcm-worklet.js` → `public/pitch-worker.js` (MPM) →
+  `components/tape-events.js` note tracker → `components/tape-renderer.js`
+  raster rows). The renderer is pure JS and its rows ARE the print bytes:
+  the preview canvas and `/api/tape/print` (→ `createRawJob`, a job with
+  `template: null` that Reprint refuses) consume the same arrays; never
+  add a second rendering path. The tool lives in `components/tape/`:
+  React controls (`tape-tool.tsx`) over a zustand store (`store.ts`),
+  an imperative controller (`controller.js`) that owns the session and
+  the canvas island (`tape-view.js`), audio/decode/playback modules,
+  and the take document (`doc.mjs` — derives the timeline via the
+  tape-eval passes and holds edits/undo/versions; `npm run tape:doc`
+  checks it). Only the canvases are imperative; controls are ordinary
+  React reading the store. Editing (click a note → inspector strip)
+  re-renders the whole tape from the edited timeline; detection
+  freezes while edits exist ("Start over" re-derives, snapshotting
+  the edited tape into doc.versions first). A song splits at cuts
+  into phrases (`song.mjs`): each phrase is its own doc — own melody
+  floor, edits, undo, freeze — stitched into one roll (printed
+  caesura at cuts) or focused one at a time; phrases print as
+  standalone receipts. Saved takes:
+  `lib/tape-store.js` (meta in one Redis key, document JSON + lossless
+  WAV in Blob; json driver = files in `data/tape/`) behind
+  `/api/tape/takes*`; hosted audio uploads go browser→Blob via a
+  client-upload token (`/api/tape/takes/upload`) because WAVs exceed
+  the ~4.5MB route cap.
 - `firmware/docket-agent/`: the ESP32 sketch. Credentials in gitignored
   `secrets.h` (copy from `.example`). RP850 pins: DevKit TX=17/RX=16,
   115200 baud.
 - `scripts/`: `migrate-json-to-redis.js` (idempotent), `show-plugin.js`,
   `toggle-plugin.js`, `print-calibration.js` (grayscale wedges through the
-  real pipeline).
+  real pipeline), `tape-eval/` (Tape transcription v2 pipeline + corpus
+  scorer — `npm run tape:eval` scores every `data/clips/*.truth.json`
+  fixture; see docs/tape-transcription-v2.md before touching detection).
 
 ## Auth model
 

@@ -96,18 +96,23 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                 />
               </div>
               <div className="min-w-0 grow pt-0.5">
-                <div className="truncate font-mono text-[13px] text-ink">
-                  {row.name}
+                {/* the ledger line: name……………status · time share ONE
+                    baseline so the leader runs into the rail text */}
+                <div className="flex min-w-0 items-baseline">
+                  <div className="truncate font-mono text-[13px] text-ink">
+                    {row.name}
+                  </div>
+                  <span className="leader" aria-hidden="true" />
+                  <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs sm:inline">
+                    <span className={row.statusColor}>{row.statusText}</span>
+                    <span className="text-ink-faint"> · {row.railTime}</span>
+                  </span>
                 </div>
                 <div className="mt-0.5 text-xs text-ink-muted">{row.sub}</div>
                 <div className="mt-2 whitespace-nowrap font-mono text-xs sm:hidden">
                   <span className={row.statusColor}>{row.statusText}</span>
                   <span className="text-ink-faint"> · {row.railTime}</span>
                 </div>
-              </div>
-              <div className="hidden w-[118px] shrink-0 whitespace-nowrap pt-0.5 text-right font-mono text-xs sm:block">
-                <span className={row.statusColor}>{row.statusText}</span>
-                <span className="text-ink-faint"> · {row.railTime}</span>
               </div>
               <span className="pt-0.5 text-ink-faint">
                 {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -118,7 +123,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
               <div className="bg-page px-5 py-4 sm:pl-[162px]">
                 <div className="grid gap-5 sm:grid-cols-[auto_1fr_1fr]">
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Printed
                     </div>
                     <div className="mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
@@ -130,7 +135,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Template
                     </div>
                     <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
@@ -142,7 +147,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     </pre>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+                    <div className="text-[13px] font-semibold text-ink">
                       Data
                     </div>
                     <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">

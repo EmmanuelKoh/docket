@@ -586,7 +586,7 @@ export function StudioEditor() {
           </div>
           {/* recent jobs */}
           <div className="max-h-[150px] overflow-y-auto border-t-[0.5px] border-t-border">
-            <div className="sticky top-0 border-b-[0.5px] border-b-hairline bg-raised px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+            <div className="sticky top-0 border-b-[0.5px] border-b-hairline bg-raised px-4 py-2 text-[13px] font-semibold text-ink">
               Recent jobs
             </div>
             {jobs.length ? (

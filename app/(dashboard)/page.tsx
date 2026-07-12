@@ -72,9 +72,7 @@ export default async function OverviewPage() {
     <div className="space-y-5">
       {/* latest print */}
       <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-          Latest print
-        </div>
+        <div className="text-[13px] font-semibold text-ink">Latest print</div>
         {last ? (
           <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-start">
             <ReceiptPreview
@@ -109,9 +107,7 @@ export default async function OverviewPage() {
             key={s.label}
             className={`p-4 ${i > 0 ? 'border-l-[0.5px] border-l-hairline max-sm:odd:border-l-0' : ''} ${i >= 2 ? 'max-sm:border-t-[0.5px] max-sm:border-t-hairline' : ''}`}
           >
-            <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-              {s.label}
-            </div>
+            <div className="text-[13px] font-semibold text-ink">{s.label}</div>
             <div
               className={`mt-2 font-mono text-[28px] leading-none ${s.red ? 'text-red' : 'text-ink'}`}
             >
@@ -139,14 +135,12 @@ export default async function OverviewPage() {
         <span className="ml-auto text-ink-faint">v{pkg.version}</span>
       </div>
 
-      <div className="border-t border-dashed border-dash" />
+      <div className="perf" />
 
       {/* recent */}
       <section>
         <div className="flex items-baseline justify-between">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-            Recent
-          </div>
+          <div className="text-[13px] font-semibold text-ink">Recent</div>
           <Link
             href="/history"
             className="text-xs text-ink-muted hover:text-ink"
@@ -170,8 +164,20 @@ export default async function OverviewPage() {
                   />
                 </div>
                 <div className="min-w-0 grow">
-                  <div className="truncate font-mono text-[13px] text-ink">
-                    {j.name || j.id}
+                  {/* the ledger line: name……………status · time share ONE
+                      baseline so the leader runs into the rail text */}
+                  <div className="flex min-w-0 items-baseline">
+                    <div className="truncate font-mono text-[13px] text-ink">
+                      {j.name || j.id}
+                    </div>
+                    <span className="leader" aria-hidden="true" />
+                    <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs sm:inline">
+                      <span className={statusColor(j.status)}>{j.status}</span>
+                      <span className="text-ink-faint">
+                        {' '}
+                        · {agoShort(j.createdAt)}
+                      </span>
+                    </span>
                   </div>
                   <div className="mt-0.5 text-xs text-ink-muted">
                     {j.source || '—'}
@@ -183,13 +189,6 @@ export default async function OverviewPage() {
                       · {agoShort(j.createdAt)}
                     </span>
                   </div>
-                </div>
-                <div className="hidden w-[118px] shrink-0 whitespace-nowrap text-right font-mono text-xs sm:block">
-                  <span className={statusColor(j.status)}>{j.status}</span>
-                  <span className="text-ink-faint">
-                    {' '}
-                    · {agoShort(j.createdAt)}
-                  </span>
                 </div>
               </div>
             ))}

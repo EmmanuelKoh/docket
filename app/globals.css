@@ -27,8 +27,8 @@
      them automatically via html[data-theme="dark"] — there is no separate
      .dark block. Per the design spec: primary is inverse ink (never a
      brand fill), destructive is the register red, focus rings are faint
-     ink, radius is 6px. */
-  --radius: 6px;
+     ink, radius is ZERO — the machine's chrome is flat and square. */
+  --radius: 0px;
   --background: var(--page);
   --foreground: var(--ink);
   --card: var(--raised);
@@ -82,7 +82,10 @@ html[data-theme="dark"] {
   --color-ink-faint: var(--ink-faint);
   --color-red: var(--red);
 
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ONE typeface: the receipt mono carries the whole app (the tape
+     studio proved the look) — font-sans keeps its NAME so utilities
+     don't change, but its value is the mono stack */
+  --font-sans: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --color-background: var(--background);
@@ -112,10 +115,11 @@ html[data-theme="dark"] {
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* square everywhere (calc against a 0px base would go negative) */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 }
 
 body {
@@ -124,4 +128,36 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---- receipt accents (design-spec — material & type) ---- */
+
+/* perforation: the dotted tear-off rule between major page zones */
+.perf {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--dash) 0 5px,
+    transparent 5px 11px
+  );
+}
+
+/* ledger leader: the dotted run between a row's name and its rail,
+   like a receipt line item (name……………value). Round 2px dots on a 7px
+   rhythm — a 1px dotted border reads as a faint line, not dots. Rides
+   inside a baseline flex next to a truncating name. */
+.leader {
+  flex: 1 1 16px;
+  min-width: 16px;
+  height: 3px;
+  background-image: radial-gradient(
+    circle,
+    var(--ink-muted) 0.75px,
+    transparent 1.25px
+  );
+  background-size: 7px 3px;
+  margin: 0 4px 0 6px;
+  align-self: baseline;
+  position: relative;
+  top: 1px;
 }

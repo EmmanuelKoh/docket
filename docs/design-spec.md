@@ -9,17 +9,25 @@ extending the mockup files.
 Two-color register ribbon: everything is one neutral gray ramp (monochrome),
 plus a single deep "register red" used only where an old receipt printer would
 ink red: attention and motion. Paper-flat, hairline rules, no shadows, no
-gradients. Data is monospace; labels are small letterspaced caps.
+gradients, ZERO border radius — the chrome borrows from the machine
+(July 2026 "material" pass, first proven on the Tape studio and then
+applied app-wide): flat square controls, ink borders on primary
+actions, hover/pressed states that INVERT like thermal print.
 
-Name/wordmark: DOCKET, mono font, 14px, weight 500, letter-spacing 0.14em.
+Name/wordmark: DOCKET, mono font, 14px, weight 500, letter-spacing 0.14em
+(the wordmark is the one letterspaced thing in the product).
 
 ## Fonts (standalone stacks, no external dependencies required)
 
---font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif
+ONE typeface: the receipt mono carries the entire app. --font-sans keeps
+its NAME (so utilities don't churn) but its VALUE is the mono stack:
+
+--font-sans: ui-monospace, "SF Mono", Menlo, Consolas, monospace
 --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace
 
-Weights: 400 and 500 only. Mono is for DATA VALUES only (counts, job names,
-timestamps, config JSON, intervals), never for labels or body copy.
+Weights: 400, 500/600 for emphasis, 700 for knockout banners and section
+titles. NO uppercase, NO letter-spacing (wordmark excepted): section
+labels are 13px --ink at semibold weight — hierarchy by weight alone.
 
 Icons: any single icon set, outline style, 14-15px, colored --ink-faint.
 (The mockups used Tabler icons via webfont; self-host or swap freely.)
@@ -65,7 +73,10 @@ artifact).
 ### Red usage rules (strict)
 
 Red appears ONLY as: (1) active nav underline, (2) job status "printing" /
-inflight, (3) failures and error text, (4) queue count when nonzero.
+inflight, (3) failures and error text, (4) queue count when nonzero,
+(5) live audio actually running (the Tape tool's mic button while
+listening, its Pause button and playhead while a clip plays: hardware or
+transport actively running, the same family as "printing").
 Everything else is gray. Enabled/on states are INK, not red (a working
 plugin is normal, not an alert). Success/"done" is --ink-muted text.
 Green is not used anywhere.
@@ -89,40 +100,53 @@ Green is not used anywhere.
   dock). Everything else is --ink-muted.
 - Major blocks: 20px apart. Section title block: 16px/500 title,
   12px --ink-faint subtitle 3px below.
-- Cards: --raised bg, 0.5px --border, radius 6px, padding 16px 18px,
-  12px gap between cards.
+- Cards: --raised bg, 0.5px --border, radius 0 (square everywhere),
+  padding 16px 18px, 12px gap between cards.
 - Card detail line: separated by 1px dashed --dash, 14px padding above and
   below, fields 24px apart. Inline-editable values get 1px dotted
   --ink-faint underline.
-- List containers: one --raised box, radius 6px; rows inside at 16px 20px
+- List containers: one --raised box, radius 0; rows inside at 16px 20px
   with 0.5px --hairline separators (no per-row cards).
-- Rows: 24px column gap, 16px 20px padding; right meta column fixed 118px, right-aligned, mono
-  12px, never wraps ("canceled · 33m" is the sizing case), so timestamps
-  rail-align down the page. Rows with a thumbnail TOP-ALIGN all content to
-  the media (text centered against tall media floats in dead space); only
-  single-line rows center vertically.
-- Labels: 11px, letter-spacing 0.12em, UPPERCASE, --ink-faint.
+- Rows: 24px column gap, 16px 20px padding. The row's FIRST LINE is the
+  LEDGER LINE: name, leader dots, and the rail meta (status · time, and
+  any row action button) share ONE baseline flex — the leader runs into
+  the rail, buttons baseline-align by their label text, and everything
+  flushes right so timestamps rail-align down the page by their right
+  edge (mono 12px, never wraps; "canceled · 33m" is the sizing case).
+  Rows with a thumbnail TOP-ALIGN all content to the media (text
+  centered against tall media floats in dead space); only single-line
+  rows center vertically.
+- Labels: 13px, --ink, semibold — sentence case, no letter-spacing
+  (the old 11px caps idiom is retired everywhere).
 - Body 13px; meta/sub 12px; stat numbers 28px mono.
-- Dashed divider between major page zones: 1px dashed --dash, inside the
+- PERFORATION divider between major page zones: a 1px dotted tear-off
+  rule (5px dash / 6px gap of --dash — the .perf utility), inside the
   gutters.
+- LEDGER LEADERS in list rows: a dotted --border run fills the space
+  between a row's truncating name and its rail (name……………status · time,
+  the .leader utility) — Queue cards, History rows, the Overview Recent
+  list, and the tape studio's takes list all speak it.
 
 ## Components
 
-Buttons: outline only, 0.5px --border, radius 6px, --raised or --page bg,
---ink text 12-12.5px, padding 6px 12px (4px 10px for in-row buttons).
-No filled buttons anywhere.
+Buttons: flat and square — 1px --ink border, transparent bg, --ink text
+13px, padding 8px 14px (6px 11px small); hover/pressed INVERT like
+thermal print (--ink fill, --raised text). Disabled drops to a --border
+frame with --ink-muted text. The only steady fills are inversion states
+and knockout banners; red frames/fills belong to live/destructive
+states only.
 
 Toggle: 34x20 pill, 16px knob inset 2px. On: --ink fill, knob --page.
 Off: --border fill, knob white/raised.
 
-Status chip (plugins only): 11px caps, 0.06em tracking, 2px 8px, 0.5px
---border, radius 4px. ENABLED = --ink-muted text; OFF = --ink-faint.
+Status chip (plugins only): 11px sentence case, 2px 8px, 0.5px
+--border, radius 0. enabled = --ink-muted text; off = --ink-faint.
 Job statuses are plain mono text, not chips: "printing"/"failed" in --red,
 "queued"/"done" in --ink-muted / --ink-faint.
 
 Thumbnails (real job/template preview PNGs at build time): landscape to
 match the artifact (receipts are wider than tall). 130x86 in list rows,
-158x108 in queue cards; 0.5px --border, radius 2px, object-fit contain.
+158x108 in queue cards; 0.5px --border, radius 0, object-fit contain.
 Background is always #fff in BOTH themes: receipts are paper, and a theme
 background would letterbox dark bars around them in darkroom mode.
 Hovering any list thumbnail floats a 288px-wide peek of the same PNG
@@ -136,8 +160,8 @@ The identity, tokens, red rules, spacing, and components above apply
 throughout. Shell rules:
 
 - Sidebar: DOCKET wordmark at top (links home), then Overview, Slips,
-  Photo, Queue, History, Printer. Collapsible to an icon rail; on phones
-  it becomes a sheet.
+  Photo, Tape, Queue, History, Printer. Collapsible to an icon rail; on
+  phones it becomes a sheet.
   Items are 13px --ink-muted with 14px outline icons in --ink-faint.
   Active item: --ink text, --hairline pill, and a 1.5px --red bar at the
   item's left edge (the vertical form of the old nav underline).
@@ -167,6 +191,8 @@ throughout. Shell rules:
   Keyboard: Cmd/Ctrl+S save, +P print.
 - Photo page: the workbench per the Photo spec below (its engine carried
   over verbatim), inside the shell as a card under the title block.
+- Tape page: full-bleed workbench like the Studio (the sidebar collapses
+  on entry). Live music transcription; detailed under Tape below.
 - Receipt previews (the render shown on white paper): one canonical width
   everywhere. The paper is 400px wide with the printed image at 92.3% of
   it (the 576 printable dots within the 624-dot / 80mm stock), centered,
@@ -303,6 +329,202 @@ a simple stack: dropzone, Take a photo, empty preview.
 Segmented control (.seg): a bordered pill of flush buttons; the active
 option is inverse mono (--ink background, --page text), the same idiom as
 a toggle that's on, never red.
+
+### Tape
+
+Full-bleed workbench at /tape (sidebar collapses on entry, like the
+Studio). Notation glyphs (treble clef, key signature, accidentals,
+breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
+sized to the staff; the take opens with bare paper, then the clef and
+key signature before the first note. Before anything is on tape, the
+paper carries a centered fixed-gray note ("nothing on tape yet —
+press Record, open a saved take, or try the demo phrase" — the demo
+is a clickable underlined action there). The canvases track the
+roll's width via a ResizeObserver (the app sidebar collapses after
+mount). Monophonic transcription in two
+regimes: while the mic is live, a lightweight pitch tracker sketches
+the tape and trace in real time; when the take ends (Stop or Load
+clip) the recording is transcribed by a neural model (Basic
+Pitch, bundled, in-browser) and decoded into main notes,
+rearticulation splits, slide connectors (a thin diagonal between
+pitches; a dip scoop for a same-pitch slide), and ornament marks (a
+small backwards "c" — a procedurally drawn arc opening toward the
+earlier tape — above the staff at the attack of every ornamented main
+note). Ornaments never render as small notes on the staff; the arc is
+painted OVER the preceding tape rather than inserting rows, so main
+notes stay close together. (The renderer still draws small grace
+noteheads with shrunk accidentals for the live sketch's tracker
+events.) The final tape replaces the sketch. The
+preview canvas shows the exact raster rows the printer would receive,
+in reading orientation (staff horizontal, time flowing left to right,
+new tape entering at the right; the strip auto-follows unless the user
+scrolls back). The tape sits on white in both themes, receipts are
+paper. A take past the preview's width cap (~14 minutes of sounding
+tape) keeps printing whole; a hint line grows above the roll saying
+the preview is cut off, never silently. The stage carries no title,
+no live-note readout, and no event log — the tape itself is the
+answer; the only permanent stage text is the transport and the
+transient status line.
+
+Tape material & type (the studio borrows its chrome from the machine;
+scoped to this page): ONE typeface — the receipt mono — at TWO sizes
+(13px words, 12px asides) and TWO colors (--ink, --ink-muted); no
+uppercase, no letter-spacing, section titles differ by weight (700)
+alone. Controls are FLAT and SQUARE: 1px ink borders, transparent
+fill, zero radius; hover and pressed states INVERT like thermal print
+(ink fill, --raised text); disabled drops to hairline border +
+muted text. Record carries a round LAMP (outline circle idle, filled
+red with a slow blink while live) and the live button inverts to red
+on hover. Sections separate with dotted PERFORATION rules (5px dash /
+6px gap hairlines) in both columns; the takes list draws LEDGER
+LEADERS (name……………duration) like receipt line items; the roll is
+framed as a receipt strip — square hairline frame with a TORN
+sawtooth right edge (card-color triangles over the paper). Sliders
+are FADERS: 1px track, 7×15px square ink thumb. Lucide icons where a
+symbol is universal: icon-only Play/Pause/Stop transport, chevron
+pitch nudges, scissors on Cut before, trash for Remove, curved
+Undo/Redo arrows (tooltips carry shortcuts), printer glyph on print
+buttons. Domain actions (Ornament, Slide from prev, Split at
+playhead, Join next) stay as words. The one BOLD element (borrowed
+from the plugin receipts' FULL TIME knockout bar): the TAKE BANNER
+over the roll — an inverted ink bar, centered 15px/700 knockout type,
+naming the open take ("unsaved take · 2 phrases", or "name · phrase 2
+of 3" in focus); while the mic is live it turns --red with a blinking
+white lamp and a running counter ("● REC 0:12.4") — the loudest red
+on the page, earned by an active capture. The transport readout sets
+in deck-counter weight (17px/700 mono).
+
+Left column (300px), project-first: session buttons (Record / New
+take — the demo phrase is NOT a main button; it lives as an
+underlined action inside the empty-paper note), then the TAKES list —
+every saved take is a PROJECT. Rows are plain text (name + mono duration; no note counts),
+clicking a row opens it, the open row renders bold and expands to its
+PHRASE LIST (see Phrases below) indented under a hairline; an unsaved
+session shows as a bold "unsaved take" row. A ✕ per row deletes
+behind a confirm — deletes are SOFT: tombstoned and hidden for 30
+days before payloads purge (lazily, on list reads), the status line
+says so, and an underlined inline "undo" restores. The save row (name
+input + Save) appears once a take exists: a session saved or loaded
+stays TIED to its record — "Save" updates in place without
+re-uploading audio, the name field renames on save, "Save as new"
+forks; the tie clears when the audio genuinely changes (New take,
+fresh recording, Demo, Load clip). Saving round-trips the whole song
+document (phrases, edits, versions, layout) plus the recording as
+lossless WAV, so a loaded take comes back frozen where edited and
+re-transcribes identically. Below the list: the KEY picker (the one
+always-visible setting) — a system select (Western — major / minor,
+or Mugham — Rast, Shur, Segah…). Western lists every signature named
+with its relative minor ("G major / E minor · 1♯"). Mugham offers the
+seven principal modes (Rast, Shur, Segah, Shushtar, Chahargah,
+Bayati-Shiraz, Humayun) on a chosen tonic; each pick derives the
+best-fit printed signature (most shared pitches, ties to fewer
+accidentals then flats) and a hint states it plainly ("Segah on A —
+prints as F major / D minor · 1♭"). Neutral quarter-tone degrees
+round to the nearest semitone for now — the paper shows plain
+accidentals, the playing supplies the intonation; the interval rows
+are data in tape-renderer.js (MUGHAM_MODES), correctable one line per
+mode. Then COLLAPSIBLE groups
+(details/summary, ▸/▾ markers, closed by default — settings earn
+space only when open): DETECTION (the Melody floor slider, value
+shown as "230 Hz / A♯3" — a note name, not bare Hz), VIEW (Notation:
+Full / Main notes only; Pitch trace: Hidden / Aligned under the tape /
+Linear time, with the Trace stretch slider only in Linear), LAYOUT
+(the five geometry sliders + hint), and CLIP FILE (Save clip / Load
+clip WAV round-trip; a loaded clip opens as its own new take). Status
+during a decode: "transcribing… N%", then the line clears — no note
+or ornament counts, ever; while the decode runs, the session, clip,
+and transport controls disable rather than race it. The mic button
+while listening is --red text and border (red rule 5, a live
+capture). Right stage: the tape roll with the raw-pitch trace riding
+inside it (below, hideable), a transport row (Play/Pause, Stop, a
+varispeed select 0.25×–1×, the position readout at hundredths), the
+inspector strip, and a bottom row with the status line left and the
+print buttons right.
+
+The pitch trace shares the tape's x-axis and scroll: it sits directly
+under the paper inside the same roll (hairline separator, --raised
+background — instrument panel under paper), one column per tape row, so
+the raw pitch that produced a note bar sits directly below that bar at
+any scroll position. Ink dots weighted by detector confidence, a thin
+--ink-faint line for the committed note, and faint full-width reference
+rows at A3/A4/A5 (the duduk-in-A anchors). Like the tape, its x-axis is
+sounding time — silence compresses.
+
+The player: Play/Pause and Stop (outline .btn.small) with a mono
+"elapsed / total" readout, plus a playhead crossing both the tape and
+the trace — a 1.5px DOM overlay spanning the roll (never drawn into the
+canvases; the tape canvas holds exact print bytes), --ink-muted while
+paused and --red while audio runs (red rule 5; the Play button mirrors
+it as a red Pause). The tape is not linear in time (silence compresses
+to a breath mark, glyphs occupy timeless rows), so the playhead follows
+the renderer's time-to-row timeline: it sweeps steadily through notes
+and skips across breath marks, matching the ear. Both panes are the
+scrub surface (crosshair cursor, hint right-aligned in the transport
+row): dragging pauses and seeks, releasing resumes if it was playing.
+While playing the roll auto-scrolls to keep the bar in view.
+
+Editing: once a take is decoded, clicking a note on the tape selects
+it — the same click still seeks. The selection is an ink-wash band
+(8% ink, hairline --ink-muted edges) over the tape pane only, drawn as
+a DOM overlay like the playhead, never into the canvas (exact print
+bytes). An inspector strip under the transport shows the selected note
+in mono ("A♯4 · 0:00.07–0:02.23") with its actions: Pitch −/+,
+Ornament and Slide-from-prev toggles (a pressed toggle inverts to ink
+on raised — red stays reserved), Split at playhead (enabled while the
+playhead rests inside the note; edits keep the playback position),
+Join next, Remove, and Undo (n) / Redo pushed to the right. Before a
+selection the strip teaches the affordance ("click a note on the tape
+to edit it"); the Main-notes-only view doesn't edit ("switch to Full
+notation to edit"). Keyboard (YouTube-spirited; skipped while a form control has focus):
+space play/pause, ⇧< / ⇧> seek ±5s (also on the transport as deck
+◀◀/▶▶ buttons), ←/→ walk the notes (auto-scrolling the selection into
+view), ↑/↓ nudge the selected note's pitch, 1–9 open a phrase and 0
+the Song overview, O toggles the ornament, J joins next, S splits at
+the playhead, C cuts a phrase before the note, Esc deselects,
+Cmd/Ctrl-Z and Shift-Cmd-Z undo/redo, Backspace/Delete removes the
+selected note; button tooltips carry their keys, and the transport
+hint line lists the core set.
+Every edit re-renders the whole tape from the edited timeline, so the
+preview and the print bytes remain the same rows. Freeze-on-edit:
+while a take has edits, the Melody floor slider disables with a hint
+and a Start over button appears — it re-reads the recording, keeping
+the edited tape as a snapshot; undoing every edit unlocks the slider
+again. Background re-derivation (the trace backfill finishing) never
+replaces an edited timeline.
+
+Phrases: a song splits into phrases at CUTS — timestamps snapped to
+note attacks, seeded by "cut into phrases at breaths" (rests ≥ 2× the
+Breath gap) in the phrase list, or toggled per note with the
+inspector's "Cut before"; a phrase entry's ✕ merges it into its
+predecessor. Each phrase is a full take document of its own: its own
+melody floor (the Detection group reads "Detection · phrase N" and
+edits only the ACTIVE phrase), its own edit log, undo/redo, versions,
+and freeze state. A phrase behaves like a standalone clip — detection
+never reaches across a cut. The song is the PROJECT and phrases are
+its pages, navigated from the PHRASE LIST under the open take in the
+left column: "Song — all phrases" plus one mono entry per phrase
+("Phrase 2 · 0:05.38–0:09.02", "· edited" when frozen; the selected
+entry renders bold ink). "Song" is the overview: every phrase
+stitched in time order with a printed CAESURA at each cut (two
+parallel strokes slanting up-time above the staff, replacing the
+breath comma there) — preview stays identical to print; selecting a
+note there activates its phrase in place for the Detection panel and
+inspector. A phrase entry opens that phrase's OWN tape: its own roll
+exactly as it prints, its own detection settings and undo history,
+playback confined to its span (practice mode), and a print button
+reading "Print phrase" — "prints exactly as shown" stays true in
+every scope. "Print phrases (N)" sits beside Print take in the bottom
+row when phrases exist. Sessions and loaded projects open on Song; a
+take with no cuts lists no phrase entries, just the cut action.
+
+Print take queues the rendered rows verbatim through /api/tape/print
+(source "tape"); the button reads "Queuing…" while in flight and the
+status line answers in plain words ("sent to the print queue", never a
+raw job id). Jobs carry the take's saved name; a phrase prints as
+'name · phrase 2 of 5', and "Print phrases (N)" queues every phrase as
+its own standalone receipt (fresh clef and key signature each). The
+jobs appear in Queue and History like any other, but carry no
+template, so Reprint declines them with a pointer back to the tool.
 
 ### Queue
 Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).

@@ -37,7 +37,7 @@ export default async function SlipsPage() {
       {groups.map((group) => (
         <section key={group.category} className="space-y-4">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] uppercase tracking-[0.12em] text-ink-faint">
+            <span className="text-[13px] font-semibold text-ink">
               {group.category}
             </span>
             <span className="rounded-full border-[0.5px] border-border px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">
@@ -75,12 +75,12 @@ export default async function SlipsPage() {
                     />
                   ) : null}
                   <div className="absolute left-2 top-2 flex items-center gap-1">
-                    <span className="rounded-[4px] border-[0.5px] border-black/10 bg-white/85 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-neutral-600 backdrop-blur">
+                    <span className="rounded-[4px] border-[0.5px] border-black/10 bg-white/85 px-1.5 py-0.5 text-[10px] text-neutral-600 backdrop-blur">
                       {r.kind}
                     </span>
                     {r.kind === 'system' ? (
                       <span
-                        className={`rounded-[4px] border-[0.5px] border-black/10 bg-white/85 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] backdrop-blur ${r.enabled ? 'text-neutral-600' : 'text-neutral-400'}`}
+                        className={`rounded-[4px] border-[0.5px] border-black/10 bg-white/85 px-1.5 py-0.5 text-[10px] backdrop-blur ${r.enabled ? 'text-neutral-600' : 'text-neutral-400'}`}
                       >
                         {r.enabled ? 'enabled' : 'off'}
                       </span>

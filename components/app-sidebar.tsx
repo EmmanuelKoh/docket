@@ -7,6 +7,7 @@
 // carries a count badge, red only when nonzero (red-usage rule 4).
 
 import {
+  AudioLines,
   Camera,
   History,
   House,
@@ -33,6 +34,7 @@ const NAV = [
   { title: 'Overview', url: '/', icon: House },
   { title: 'Slips', url: '/slips', icon: ReceiptText },
   { title: 'Photo', url: '/photo', icon: Camera },
+  { title: 'Tape', url: '/tape', icon: AudioLines },
   { title: 'Queue', url: '/queue', icon: Layers },
   { title: 'History', url: '/history', icon: History },
   { title: 'Printer', url: '/printer', icon: Printer },
