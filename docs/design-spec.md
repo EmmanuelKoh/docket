@@ -454,8 +454,15 @@ playhead rests inside the note; edits keep the playback position),
 Join next, Remove, and Undo (n) / Redo pushed to the right. Before a
 selection the strip teaches the affordance ("click a note on the tape
 to edit it"); the Main-notes-only view doesn't edit ("switch to Full
-notation to edit"). Keyboard: Esc deselects, Cmd/Ctrl-Z and
-Shift-Cmd-Z undo/redo, Backspace/Delete removes the selected note.
+notation to edit"). Keyboard (YouTube-spirited; skipped while a form control has focus):
+space play/pause, ⇧< / ⇧> seek ±5s (also on the transport as deck
+◀◀/▶▶ buttons), ←/→ walk the notes (auto-scrolling the selection into
+view), ↑/↓ nudge the selected note's pitch, 1–9 open a phrase and 0
+the Song overview, O toggles the ornament, J joins next, S splits at
+the playhead, C cuts a phrase before the note, Esc deselects,
+Cmd/Ctrl-Z and Shift-Cmd-Z undo/redo, Backspace/Delete removes the
+selected note; button tooltips carry their keys, and the transport
+hint line lists the core set.
 Every edit re-renders the whole tape from the edited timeline, so the
 preview and the print bytes remain the same rows. Freeze-on-edit:
 while a take has edits, the Melody floor slider disables with a hint

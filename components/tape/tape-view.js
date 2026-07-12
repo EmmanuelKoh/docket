@@ -389,6 +389,18 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     };
   }
 
+  // bring a css-px span (e.g. the selection band) into the viewport —
+  // keyboard note-walking must not leave the selection off-screen
+  function reveal(left, width) {
+    const view = wrap.clientWidth;
+    if (
+      left < wrap.scrollLeft + 16 ||
+      left + width > wrap.scrollLeft + view - 16
+    ) {
+      wrap.scrollLeft = Math.max(0, left + width / 2 - view / 2);
+    }
+  }
+
   raf = requestAnimationFrame(frame);
 
   return {
@@ -396,6 +408,7 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
       renderer = r;
     },
     rectForNote,
+    reveal,
     reset,
     paintTraceFrame,
     rebuildTrace,

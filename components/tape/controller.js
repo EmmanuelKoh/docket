@@ -1027,6 +1027,30 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     stopPlay() {
       player.stop(false);
     },
+    // deck skip: ±seconds from the current position (window-clamped)
+    seekBy(delta) {
+      if (recorder.micOn || decoding || !recorder.length) return;
+      player.seek(player.pos() + delta);
+    },
+    // keyboard note-walking: next/previous main note in the visible
+    // scope; nothing selected starts from the near end
+    selectAdjacent(dir) {
+      if (!song || recorder.micOn || decoding) return;
+      if (get().viewMode !== 'full') return; // skeleton view doesn't edit
+      const scope =
+        get().phraseView === 'focus'
+          ? song.phrases[activeIdx()].timeline
+          : assembled(song);
+      const mains = scope.filter((e) => !e.mark);
+      if (!mains.length) return;
+      const cur = get().selection?.id;
+      let i = mains.findIndex((e) => e.id === cur);
+      if (i < 0) i = dir > 0 ? -1 : mains.length;
+      i = Math.max(0, Math.min(mains.length - 1, i + dir));
+      selectNote(mains[i].id);
+      const rect = get().selectionRect;
+      if (rect) view.reveal(rect.left, rect.width);
+    },
     setSetting(key, value) {
       // scale system: mugham selections derive the EFFECTIVE printed
       // signature (best-fit, see mughamKey); keySig stays the single

@@ -12,10 +12,12 @@
 import {
   ChevronDown,
   ChevronUp,
+  FastForward,
   Pause,
   Play,
   Printer,
   Redo2,
+  Rewind,
   Scissors,
   Square,
   Trash2,
@@ -573,7 +575,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             type="button"
             className="btn small icon"
             aria-label="Pitch down a semitone"
-            title="Pitch down a semitone"
+            title="Pitch down a semitone (↓)"
             onClick={() => ctl?.nudgePitch(-1)}
           >
             <ChevronDown size={14} />
@@ -582,7 +584,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             type="button"
             className="btn small icon"
             aria-label="Pitch up a semitone"
-            title="Pitch up a semitone"
+            title="Pitch up a semitone (↑)"
             onClick={() => ctl?.nudgePitch(1)}
           >
             <ChevronUp size={14} />
@@ -590,6 +592,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
           <button
             type="button"
             className={selection.ornament ? 'btn small pressed' : 'btn small'}
+            title="Toggle the ornament arc (O)"
             onClick={() => ctl?.toggleOrnament()}
           >
             Ornament
@@ -605,7 +608,11 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             type="button"
             className="btn small"
             disabled={!canSplit}
-            title={canSplit ? undefined : 'seek inside the note first'}
+            title={
+              canSplit
+                ? 'Split at the playhead (S)'
+                : 'seek inside the note first'
+            }
             onClick={() => ctl?.splitAtPlayhead()}
           >
             Split at playhead
@@ -614,6 +621,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             type="button"
             className="btn small"
             disabled={!selection.canJoin}
+            title="Join with the next note (J)"
             onClick={() => ctl?.joinNext()}
           >
             Join next
@@ -625,7 +633,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
                 ? 'btn small icon pressed'
                 : 'btn small icon'
             }
-            title="start a new phrase at this note"
+            title="Start a new phrase at this note (C)"
             onClick={() => ctl?.cutBefore()}
           >
             <Scissors size={12} /> Cut before
@@ -785,15 +793,35 @@ function Transport({ ctl }: { ctl: Controller | null }) {
     <div className="tape-transport">
       <button
         type="button"
+        className="btn small icon"
+        disabled={idle}
+        aria-label="Back 5 seconds"
+        title="Back 5 seconds (⇧<)"
+        onClick={() => ctl?.seekBy(-5)}
+      >
+        <Rewind size={13} />
+      </button>
+      <button
+        type="button"
         className={
           playState === 'playing' ? 'btn small icon on' : 'btn small icon'
         }
         disabled={idle}
         aria-label={playState === 'playing' ? 'Pause' : 'Play'}
-        title={playState === 'playing' ? 'Pause' : 'Play'}
+        title={playState === 'playing' ? 'Pause (space)' : 'Play (space)'}
         onClick={() => ctl?.playPause()}
       >
         {playState === 'playing' ? <Pause size={13} /> : <Play size={13} />}
+      </button>
+      <button
+        type="button"
+        className="btn small icon"
+        disabled={idle}
+        aria-label="Forward 5 seconds"
+        title="Forward 5 seconds (⇧>)"
+        onClick={() => ctl?.seekBy(5)}
+      >
+        <FastForward size={13} />
       </button>
       <button
         type="button"
@@ -818,7 +846,10 @@ function Transport({ ctl }: { ctl: Controller | null }) {
       <span className="tape-val">
         {fmtTime(playTime)} / {fmtTime(clipDur)}
       </span>
-      <span className="tape-hint">click or drag on the tape to seek</span>
+      <span className="tape-hint">
+        drag tape to seek · space ▶ · ⇧&lt;&gt; ±5s · ←→ notes · ↑↓ pitch · 0–9
+        phrases
+      </span>
     </div>
   );
 }
@@ -894,24 +925,59 @@ export function TapeTool() {
     return () => c.dispose();
   }, []);
 
-  // editing shortcuts — skipped while a form control has focus
+  // keyboard, YouTube-spirited — skipped while a form control has focus:
+  //   space play/pause · ⇧< ⇧> ±5s · ←/→ walk notes · ↑/↓ pitch
+  //   1–9 phrase, 0 Song · o ornament · j join · s split · c cut
+  //   esc deselect · ⌘Z/⇧⌘Z undo/redo · ⌫ remove
   useEffect(() => {
     if (!ctl) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return;
-      if (e.key === 'Escape') {
+      const sel = tapeStore.getState().selection;
+      const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (e.key === ' ') {
+        e.preventDefault();
+        ctl.playPause();
+      } else if (e.key === '>' || (e.key === '.' && e.shiftKey)) {
+        e.preventDefault();
+        ctl.seekBy(5);
+      } else if (e.key === '<' || (e.key === ',' && e.shiftKey)) {
+        e.preventDefault();
+        ctl.seekBy(-5);
+      } else if (e.key === 'ArrowRight' && plain) {
+        e.preventDefault();
+        ctl.selectAdjacent(1);
+      } else if (e.key === 'ArrowLeft' && plain) {
+        e.preventDefault();
+        ctl.selectAdjacent(-1);
+      } else if (e.key === 'ArrowUp' && plain && sel) {
+        e.preventDefault();
+        ctl.nudgePitch(1);
+      } else if (e.key === 'ArrowDown' && plain && sel) {
+        e.preventDefault();
+        ctl.nudgePitch(-1);
+      } else if (e.key >= '1' && e.key <= '9' && plain) {
+        ctl.selectTab(Number(e.key) - 1);
+      } else if (e.key === '0' && plain) {
+        ctl.selectTab(-1);
+      } else if (e.key === 'Escape') {
         ctl.select(null);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) ctl.redoEdit();
         else ctl.undoEdit();
-      } else if (
-        (e.key === 'Backspace' || e.key === 'Delete') &&
-        tapeStore.getState().selection
-      ) {
+      } else if ((e.key === 'Backspace' || e.key === 'Delete') && sel) {
         e.preventDefault();
         ctl.removeNote();
+      } else if (e.key.toLowerCase() === 'o' && plain && sel) {
+        ctl.toggleOrnament();
+      } else if (e.key.toLowerCase() === 'j' && plain && sel) {
+        ctl.joinNext();
+      } else if (e.key.toLowerCase() === 's' && plain && sel) {
+        ctl.splitAtPlayhead();
+      } else if (e.key.toLowerCase() === 'c' && plain && sel) {
+        ctl.cutBefore();
       }
     };
     window.addEventListener('keydown', onKey);
