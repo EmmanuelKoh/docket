@@ -16,12 +16,19 @@ import { listDevices } from '@/lib/devices.js';
 import { getState } from '@/lib/state-store.js';
 import pkg from '@/package.json';
 import { agoText } from '../../_lib/format';
-import { ClaimDeviceForm, RevokeDeviceButton } from './devices-client';
+import {
+  ClaimDeviceForm,
+  PairingWatcher,
+  RevokeDeviceButton,
+} from './devices-client';
 
 export default async function PrinterPage() {
   const owner = await sessionOwner();
   if (!owner) redirect('/login');
   const paired = await listDevices(owner);
+  const pairingPending = paired.some(
+    (d: { pairedAt: Date | null }) => !d.pairedAt,
+  );
   const device = await getState(owner, 'device');
   const lastSeen = device?.lastSeenAt as string | undefined;
   const online =
@@ -75,6 +82,7 @@ export default async function PrinterPage() {
       </section>
 
       <section>
+        {pairingPending ? <PairingWatcher /> : null}
         <h2 className="text-[13px] font-semibold text-ink">Devices</h2>
         <ul className="mt-3">
           {paired.map(

@@ -1,12 +1,27 @@
 'use client';
 
 // Client bits of the Printer page's DEVICES section: claim a printed
-// pairing code, revoke a paired device.
+// pairing code, revoke a paired device, and watch a pairing complete.
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+// Rendered only while a device row is mid-pairing (claimed, token not yet
+// collected): re-renders the page every 3s — visible tab only, same rule
+// as the queue list — so the row flips to "paired" the moment the device
+// picks up its token. Unmounts (and stops) once nothing is pending.
+export function PairingWatcher() {
+  const router = useRouter();
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') router.refresh();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [router]);
+  return null;
+}
 
 export function ClaimDeviceForm() {
   const router = useRouter();

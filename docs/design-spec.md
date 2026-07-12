@@ -566,7 +566,10 @@ used, or expired…").
 Below the status card, a "Devices" ledger section (13px semibold ink
 heading): one row per paired device — name (14px medium ink), dotted
 leader, "paired {ago}" rail in 12px ink-faint, small outline "Revoke"
-button. Empty state: one ink-faint sentence explaining that a new
+button. A mid-pairing row's rail reads "pairing…", and while one exists
+the page re-renders every 3s (visible tab only, the queue-list rule)
+until the device collects its token; the polling stops once nothing is
+pending. Empty state: one ink-faint sentence explaining that a new
 printer prints its pairing code on boot. Below the list, the claim
 form: mono uppercase code input + name input + outline "Pair" button;
 errors 12px --red on their own line.
