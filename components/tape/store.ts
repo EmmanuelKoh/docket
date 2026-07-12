@@ -35,6 +35,15 @@ export interface TakeMeta {
   hasAudio: boolean;
 }
 
+// One phrase of the song, as the phrase strip renders it.
+export interface PhraseMeta {
+  t0: number; // clip seconds
+  t1: number;
+  noteCount: number;
+  editCount: number; // nonzero = this phrase's detection is frozen
+  floor: number; // the phrase's own melody floor (Hz)
+}
+
 // The selected note, as the inspector renders it — a snapshot the
 // controller rebuilds from the take document after every change.
 export interface TapeSelection {
@@ -76,10 +85,14 @@ export interface TapeState {
   currentTake: { id: string; name: string } | null;
   // the most recent soft delete, undoable from the takes list
   lastDeleted: { id: string; name: string } | null;
+  phrases: PhraseMeta[]; // the song's phrases, in time order
+  activePhrase: number; // which one the slider/undo/focus act on
+  cuts: number[]; // phrase boundaries (clip seconds, note attacks)
 
   // ---- user settings (persist across mounts) ----
   viewMode: 'full' | 'skeleton';
   traceMode: 'aligned' | 'linear';
+  phraseView: 'song' | 'focus'; // whole roll, or just the active phrase
   speed: number; // playback rate (varispeed: slower also lowers pitch)
   settings: TapeSettings;
 }
@@ -106,9 +119,13 @@ export const tapeStore = createStore<TapeState>(() => ({
   persistBusy: false,
   currentTake: null,
   lastDeleted: null,
+  phrases: [],
+  activePhrase: 0,
+  cuts: [],
 
   viewMode: 'full',
   traceMode: 'aligned',
+  phraseView: 'song',
   speed: 1,
   settings: {
     melodyFloor: 230,

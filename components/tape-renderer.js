@@ -496,6 +496,35 @@ export function createTapeRenderer(config) {
     }
   }
 
+  // Caesura (phrase cut): two short parallel strokes slanting up-time
+  // above the staff — railroad tracks marking a phrase boundary on the
+  // whole-song tape. Printed into the rows like every mark (preview =
+  // print); the per-phrase receipts simply start fresh instead. The
+  // following note skips its breath comma — the caesura IS the break.
+  let cutJustEmitted = false;
+  function emitCaesura() {
+    if (cur) return; // cuts snap to attacks; never mid-note
+    if (!started) return; // a cut before any note marks nothing
+    const x0 = xOfStep(9); // just above the top staff line
+    const rise = Math.round(cfg.staffGap * 1.2);
+    const len = 6; // rows per stroke
+    emitBlank(cfg.breathRows);
+    for (let i = 0; i < len + 8; i++) {
+      const row = blankRow();
+      for (const off of [0, 8]) {
+        const j = i - off;
+        if (j >= 0 && j < len) {
+          const xa = x0 + Math.round((j / len) * rise);
+          const xb = x0 + Math.round(((j + 1) / len) * rise);
+          setDots(row, xa, Math.max(3, xb - xa + 2));
+        }
+      }
+      rows.push(row);
+    }
+    emitBlank(cfg.breathRows);
+    cutJustEmitted = true;
+  }
+
   // Slide connector: a thin line carrying the pitch from the previous
   // note into this one — diagonal between different pitches, a dip
   // scoop for a same-pitch slide (played through the note below and
@@ -552,7 +581,9 @@ export function createTapeRenderer(config) {
     const sp = spellNote(midi, cfg.keySig);
     const markFrom = rows.length; // where the inter-note space begins
     if (lastOffMs !== null) {
-      if (tMs - lastOffMs >= cfg.breathGapMs) {
+      if (cutJustEmitted) {
+        emitBlank(cfg.gapRows); // the caesura already marked the break
+      } else if (tMs - lastOffMs >= cfg.breathGapMs) {
         emitBlank(cfg.breathRows);
         // slightly small comma, with a touch more air after it than
         // before the next note begins
@@ -596,6 +627,7 @@ export function createTapeRenderer(config) {
     if (led.length) emitPad(led, cfg.ledgerPadRows);
     pushSpan(preRow, preT, tMs); // lead/gap/glyph rows cover the silence
     cur.rStart = rows.length;
+    cutJustEmitted = false;
   }
 
   // Emit the rows the current note has earned up to tMs. Called every
@@ -696,6 +728,7 @@ export function createTapeRenderer(config) {
     noteOn,
     noteOff,
     markNow,
+    caesura: emitCaesura,
     advance,
     rowForTime,
     timeForRow,

@@ -33,13 +33,14 @@ import { skeletonize } from '../../scripts/tape-eval/skeleton.mjs';
 export const floorToMidi = (hz) => Math.round(69 + 12 * Math.log2(hz / 440));
 
 // Run the full pass 1-3 pipeline — the SAME modules the eval corpus
-// scores, so the browser and the harness can never disagree.
-function deriveBase(notes, melodyFloorHz, fineFrames) {
+// scores, so the browser and the harness can never disagree. idPrefix
+// keeps ids unique across a song's phrases (each phrase is its own doc).
+function deriveBase(notes, melodyFloorHz, fineFrames, idPrefix = '') {
   const opts = { melodyLoMidi: floorToMidi(melodyFloorHz) };
   const skeleton = skeletonize(notes, opts);
   const decorated = decorate(notes, skeleton, opts);
   const timeline = annotate(notes, decorated, opts, fineFrames ?? []);
-  return timeline.map((e, i) => ({ ...e, id: `n${i}` }));
+  return timeline.map((e, i) => ({ ...e, id: `${idPrefix}n${i}` }));
 }
 
 // Pass-1-only view (the "Main notes only" toggle): derived on demand,
@@ -54,16 +55,29 @@ export function createDoc({
   melodyFloorHz,
   fineFrames = [],
   createdAt = 0,
+  idPrefix = '',
 }) {
-  const base = deriveBase(notes, melodyFloorHz, fineFrames);
+  const base = deriveBase(notes, melodyFloorHz, fineFrames, idPrefix);
   return {
     decode: { notes, melodyFloorHz },
+    idPrefix,
     base,
     edits: [],
     redoStack: [],
     timeline: base,
     versions: [],
     createdAt,
+  };
+}
+
+// the shape reDerive snapshots — exported so the song layer can preserve
+// an edited phrase's state when a cut reshapes it
+export function snapshotOf(doc, savedAt = 0) {
+  return {
+    savedAt,
+    melodyFloorHz: doc.decode.melodyFloorHz,
+    timeline: doc.timeline,
+    edits: doc.edits,
   };
 }
 
@@ -178,17 +192,14 @@ export function reDerive(
   } = {},
 ) {
   const versions = doc.edits.length
-    ? [
-        ...doc.versions,
-        {
-          savedAt,
-          melodyFloorHz: doc.decode.melodyFloorHz,
-          timeline: doc.timeline,
-          edits: doc.edits,
-        },
-      ]
+    ? [...doc.versions, snapshotOf(doc, savedAt)]
     : doc.versions;
-  const base = deriveBase(doc.decode.notes, melodyFloorHz, fineFrames);
+  const base = deriveBase(
+    doc.decode.notes,
+    melodyFloorHz,
+    fineFrames,
+    doc.idPrefix ?? '',
+  );
   return {
     ...doc,
     decode: { ...doc.decode, melodyFloorHz },

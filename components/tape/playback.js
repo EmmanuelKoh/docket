@@ -17,15 +17,20 @@ export function createPlayer({ getSamples, getRate, onChange }) {
   let startedAt = 0; // ctx.currentTime when playback began
   let rate = 1; // varispeed: slower playback also lowers pitch
   let gen = 0; // invalidates onended of killed sources
+  let win = null; // [startSec, endSec] — focus-phrase playback, or null
 
   const dur = () => {
     const n = getSamples().length;
     return n ? n / getRate() : 0;
   };
 
+  const winStart = () => (win ? win[0] : 0);
+  const winEnd = () => (win ? Math.min(win[1], dur()) : dur());
+  const clamp = (sec) => Math.max(winStart(), Math.min(winEnd(), sec));
+
   const pos = () =>
     state === 'playing'
-      ? Math.min(offset + (ctx.currentTime - startedAt) * rate, dur())
+      ? Math.min(offset + (ctx.currentTime - startedAt) * rate, winEnd())
       : offset;
 
   function kill() {
@@ -46,7 +51,7 @@ export function createPlayer({ getSamples, getRate, onChange }) {
     if (!ctx) ctx = new AudioContext();
     if (ctx.state === 'suspended') ctx.resume();
     kill();
-    if (offset >= dur()) offset = 0;
+    if (offset >= winEnd() || offset < winStart()) offset = winStart();
     if (!cached) {
       cached = ctx.createBuffer(1, samples.length, Math.round(getRate()));
       cached.getChannelData(0).set(samples);
@@ -59,11 +64,13 @@ export function createPlayer({ getSamples, getRate, onChange }) {
     source.onended = () => {
       if (g !== gen || state !== 'playing') return;
       state = 'stopped';
-      offset = 0;
+      offset = winStart();
       onChange?.('stopped');
     };
     startedAt = ctx.currentTime;
-    source.start(0, offset);
+    // a window plays just its span and ends there (focus-phrase mode)
+    if (win) source.start(0, offset, Math.max(0.01, winEnd() - offset));
+    else source.start(0, offset);
     state = 'playing';
     onChange?.('playing');
   }
@@ -79,19 +86,30 @@ export function createPlayer({ getSamples, getRate, onChange }) {
   function stop(keepOffset) {
     kill();
     state = 'stopped';
-    if (!keepOffset) offset = 0;
+    if (!keepOffset) offset = winStart();
     onChange?.('stopped');
   }
 
   function seek(sec) {
     const wasPlaying = state === 'playing';
-    offset = Math.max(0, Math.min(dur(), sec));
+    offset = clamp(sec);
     if (wasPlaying) {
       // restart the source at the new offset
       play();
     } else {
       onChange?.(state); // position moved; let the UI resync
     }
+  }
+
+  // focus-phrase playback: confine play/seek to [startSec, endSec];
+  // null restores whole-take playback
+  function setWindow(w) {
+    win = w;
+    const wasPlaying = state === 'playing';
+    if (wasPlaying) kill();
+    offset = clamp(offset);
+    if (wasPlaying) play();
+    else onChange?.(state);
   }
 
   function setRate(r) {
@@ -111,6 +129,7 @@ export function createPlayer({ getSamples, getRate, onChange }) {
     cached = null;
     state = 'stopped';
     offset = 0;
+    win = null;
     onChange?.('stopped');
   }
 
@@ -129,6 +148,7 @@ export function createPlayer({ getSamples, getRate, onChange }) {
     stop,
     seek,
     setRate,
+    setWindow,
     invalidate,
     dispose,
     pos,

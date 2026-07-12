@@ -17,6 +17,42 @@ const SCALE = 0.75; // preview px per printer dot
 const MAX_VIS_W = 30000; // canvas width guard (~14 min of sounding tape)
 const TRACE_H = 110;
 
+// Renderer rows → PNG bytes (printer orientation, like every History
+// thumbnail). Standalone so the controller can thumbnail per-phrase
+// renders that were never attached to the view.
+export function rowsToPngBytes(rows) {
+  return new Promise((resolve, reject) => {
+    if (!rows.length) {
+      reject(new Error('nothing to export'));
+      return;
+    }
+    const crop = document.createElement('canvas');
+    crop.width = 576;
+    crop.height = rows.length;
+    const cctx = crop.getContext('2d');
+    cctx.fillStyle = '#fff';
+    cctx.fillRect(0, 0, 576, rows.length);
+    cctx.fillStyle = '#000';
+    for (let y = 0; y < rows.length; y++) {
+      const row = rows[y];
+      for (let xb = 0; xb < 72; xb++) {
+        const byte = row[xb];
+        if (!byte) continue;
+        for (let b = 0; b < 8; b++) {
+          if (byte & (0x80 >> b)) cctx.fillRect(xb * 8 + b, y, 1, 1);
+        }
+      }
+    }
+    crop.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('png export failed'));
+        return;
+      }
+      blob.arrayBuffer().then((b) => resolve(new Uint8Array(b)), reject);
+    }, 'image/png');
+  });
+}
+
 export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   const aborter = new AbortController();
   const opts = { signal: aborter.signal };

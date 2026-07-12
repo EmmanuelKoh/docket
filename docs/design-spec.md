@@ -423,12 +423,38 @@ the edited tape as a snapshot; undoing every edit unlocks the slider
 again. Background re-derivation (the trace backfill finishing) never
 replaces an edited timeline.
 
+Phrases: a song splits into phrases at CUTS — timestamps snapped to
+note attacks, seeded by "Cut at breaths" (rests ≥ 2× the Breath gap)
+or toggled per note with the inspector's "Cut before"; a chip's ✕
+merges a phrase into its predecessor. Each phrase is a full take
+document of its own: its own melody floor (the Detection group reads
+"Detection · phrase N" and edits only the ACTIVE phrase), its own
+edit log, undo/redo, versions, and freeze state. A phrase behaves
+like a standalone clip — detection never reaches across a cut. The
+song is the PROJECT and phrases are its pages: the PHRASE STRIP
+between the roll and the transport is a tab row — "Song" plus one
+mono tab per phrase ("2 · 0:05.38–0:09.02", "· edited" when frozen;
+the selected tab's border and text darken to ink) — followed by Cut
+at breaths and Print phrases (N). The Song tab is the overview: every
+phrase stitched in time order with a printed CAESURA at each cut (two
+parallel strokes slanting up-time above the staff, replacing the
+breath comma there) — preview stays identical to print; selecting a
+note there activates its phrase in place for the Detection panel and
+inspector. A phrase tab is that phrase's OWN tape: its own roll
+exactly as it prints, its own detection settings and undo history,
+playback confined to its span (practice mode), and a print button
+reading "Print phrase" — "prints exactly as shown" stays true on
+every tab. Sessions and loaded projects open on the Song tab; a take
+with no cuts shows no tabs at all.
+
 Print take queues the rendered rows verbatim through /api/tape/print
 (source "tape"); the button reads "Queuing…" while in flight and the
 status line answers in plain words ("sent to the print queue", never a
-raw job id). The job appears in Queue and History like any other, but
-carries no template, so Reprint declines it with a pointer back to the
-tool.
+raw job id). Jobs carry the take's saved name; a phrase prints as
+'name · phrase 2 of 5', and "Print phrases (N)" queues every phrase as
+its own standalone receipt (fresh clef and key signature each). The
+jobs appear in Queue and History like any other, but carry no
+template, so Reprint declines them with a pointer back to the tool.
 
 ### Queue
 Title "Queue" with "updates every 3 seconds" subtitle; job count right (mono).

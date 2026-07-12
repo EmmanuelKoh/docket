@@ -83,4 +83,85 @@ const pristine = reDerive(createDoc({ notes: NOTES, melodyFloorHz: 230 }), {
 assert.equal(pristine.versions.length, 0, 'pristine reDerive: no snapshot');
 assert.equal(pristine.decode.melodyFloorHz, 240);
 
+// ---- the song layer (components/tape/song.mjs) ----
+import {
+  addCut,
+  assembled,
+  createSong,
+  mainCount,
+  phraseAt,
+  phraseOfId,
+  removeCut,
+  songFromDoc,
+  withPhrase,
+} from '../components/tape/song.mjs';
+
+// four notes, well separated, so cuts can land between them
+const SONG_NOTES = [
+  { t0: 0.5, t1: 1.6, midi: 64, amp: 0.8, bends: [0, 0, 0, 0], onset: 0.9 },
+  { t0: 2.4, t1: 3.5, midi: 62, amp: 0.8, bends: [0, 0, 0, 0], onset: 0.9 },
+  { t0: 5.0, t1: 6.1, midi: 60, amp: 0.8, bends: [0, 0, 0, 0], onset: 0.9 },
+  { t0: 7.0, t1: 8.1, midi: 59, amp: 0.8, bends: [0, 0, 0, 0], onset: 0.9 },
+];
+
+let song = createSong({ notes: SONG_NOTES, melodyFloorHz: 230, createdAt: 1 });
+assert.equal(song.phrases.length, 1, 'a new song is one phrase');
+assert.equal(mainCount(song), 4);
+assert.ok(
+  song.phrases[0].timeline[0].id.startsWith('q1.'),
+  'phrase ids carry the uid prefix',
+);
+
+// cut at the third note's attack → two phrases of two notes
+song = addCut(song, 5.0);
+assert.equal(song.phrases.length, 2, 'cut splits into two phrases');
+assert.deepEqual(song.cuts, [5.0]);
+assert.equal(song.phrases[0].timeline.length, 2);
+assert.equal(song.phrases[1].timeline.length, 2);
+assert.equal(phraseAt(song, 4.9), 0);
+assert.equal(phraseAt(song, 5.0), 1, 'a cut at t starts the new phrase');
+assert.equal(assembled(song).length, 4, 'assembly stitches all phrases');
+const p0id = song.phrases[0].timeline[0].id;
+const p1id = song.phrases[1].timeline[0].id;
+assert.notEqual(p0id, p1id, 'ids stay unique across phrases');
+assert.equal(phraseOfId(song, p1id), 1, 'phraseOfId finds the owner');
+
+// per-phrase edits stay isolated
+song = withPhrase(
+  song,
+  1,
+  applyEdit(song.phrases[1], { op: 'setPitch', id: p1id, midi: 61 }),
+);
+assert.equal(song.phrases[1].timeline[0].midi, 61);
+assert.equal(song.phrases[0].edits.length, 0, 'phrase 0 untouched');
+assert.equal(song.phrases[1].edits.length, 1);
+
+// per-phrase floors: re-derive phrase 0 alone
+song = withPhrase(song, 0, reDerive(song.phrases[0], { melodyFloorHz: 150 }));
+assert.equal(song.phrases[0].decode.melodyFloorHz, 150);
+assert.equal(song.phrases[1].decode.melodyFloorHz, 230, 'floors independent');
+assert.equal(song.phrases[1].timeline[0].midi, 61, 'edit survives');
+
+// removing the cut merges and snapshots the edited half
+song = removeCut(song, 0, { savedAt: 9 });
+assert.equal(song.phrases.length, 1, 'merge back to one phrase');
+assert.deepEqual(song.cuts, []);
+assert.equal(song.phrases[0].timeline.length, 4);
+assert.equal(
+  song.phrases[0].versions.length,
+  1,
+  'edited half snapshotted on merge',
+);
+assert.equal(song.phrases[0].versions[0].savedAt, 9);
+assert.equal(
+  song.phrases[0].decode.melodyFloorHz,
+  150,
+  'earlier phrase floor wins the merge',
+);
+
+// legacy single-doc takes adopt cleanly
+const legacy = songFromDoc(createDoc({ notes: SONG_NOTES, melodyFloorHz: 230 }));
+assert.equal(legacy.phrases.length, 1);
+assert.equal(mainCount(legacy), 4);
+
 console.log('tape-doc: all checks passed');

@@ -20,14 +20,7 @@ import { createTapeRenderer, noteLabel } from '@/components/tape-renderer.js';
 import { createAnalyzer } from './analyzer.js';
 import { createRecorder, synthDemoPcm } from './audio-io.js';
 import { transcribe } from './decode.js';
-import {
-  applyEdit,
-  createDoc,
-  reDerive,
-  redo,
-  skeletonOf,
-  undo,
-} from './doc.mjs';
+import { applyEdit, reDerive, redo, skeletonOf, undo } from './doc.mjs';
 import {
   deleteTake as apiDeleteTake,
   loadTake as apiLoadTake,
@@ -37,8 +30,20 @@ import {
   fetchTakes,
 } from './persist.js';
 import { createPlayer } from './playback.js';
+import {
+  addCut,
+  assembled,
+  createSong,
+  mainCount,
+  phraseOfId,
+  phraseWindow,
+  removeCut,
+  sliceFrames,
+  songFromDoc,
+  withPhrase,
+} from './song.mjs';
 import { tapeStore } from './store';
-import { createTapeView } from './tape-view.js';
+import { createTapeView, rowsToPngBytes } from './tape-view.js';
 
 const WINDOW = 1024; // analysis window (samples at ~22 kHz ≈ 46 ms)
 const HOP = 256; // analysis hop (≈ 12 ms → ~86 frames/s)
@@ -87,6 +92,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     persistBusy: false,
     currentTake: null,
     lastDeleted: null,
+    phrases: [],
+    activePhrase: 0,
+    cuts: [],
+    phraseView: 'song', // a fresh session opens on the Song tab
   });
 
   const recorder = createRecorder();
@@ -94,7 +103,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
 
   let renderer = null;
   let tracker = null;
-  let doc = null; // the take document (doc.mjs) of the newest decode
+  let song = null; // the song document (song.mjs) of the newest decode
   let disposed = false;
 
   let traceFrames = []; // every analyzed frame, for redraw + ornament marks
@@ -105,8 +114,24 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   let analysisGen = 0; // bumped per take: stale analyses and backfills quit
   let decoding = false;
   let deriveStale = false; // derivation inputs changed (floor / fine frames)
+  let pendingFloor = null; // { k, hz } — active phrase's floor moved
   let pendingRerender = false; // re-render deferred while audio plays
   let logId = 0;
+
+  // the phrase the Detection slider, inspector undo/redo, and focus
+  // view act on — follows chip clicks and note selection
+  const activeIdx = () =>
+    song ? Math.min(get().activePhrase, song.phrases.length - 1) : 0;
+  const activePhraseDoc = () => (song ? song.phrases[activeIdx()] : null);
+
+  // a phrase's playback window in clip seconds
+  function windowSecs(k) {
+    const [a, b] = phraseWindow(song, k);
+    return [
+      Number.isFinite(a) ? a : 0,
+      Number.isFinite(b) ? b : recorder.seconds,
+    ];
+  }
 
   // ---- player ----
   const player = createPlayer({
@@ -219,17 +244,21 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // renderer and its geometry. An id that no longer exists (removed,
   // re-derived, skeleton view) simply clears the selection. ----
   function selectNote(id) {
-    if (!doc || !id) {
+    if (!song || !id) {
       set({ selection: null, selectionRect: null });
       return;
     }
-    const entry = doc.timeline.find((e) => e.id === id && !e.mark);
+    const k = phraseOfId(song, id);
+    const timeline = k >= 0 ? song.phrases[k].timeline : [];
+    const entry = timeline.find((e) => e.id === id && !e.mark);
     const rect = view.rectForNote(id);
     if (!entry || !rect) {
       set({ selection: null, selectionRect: null });
       return;
     }
-    const after = doc.timeline.slice(doc.timeline.indexOf(entry) + 1);
+    if (k !== get().activePhrase) setActivePhraseState(k); // selection
+    // activates its phrase — the slider/undo/freeze follow the click
+    const after = timeline.slice(timeline.indexOf(entry) + 1);
     set({
       selection: {
         id,
@@ -240,17 +269,42 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         grace: !!entry.grace,
         ornament: !!entry.ornament,
         slide: !!entry.slide,
-        canJoin: after.some((e) => !e.mark),
+        canJoin: after.some((e) => !e.mark), // joins stay in the phrase
       },
       selectionRect: rect,
     });
   }
 
-  function syncEditState() {
-    set({
-      editCount: doc ? doc.edits.length : 0,
-      redoCount: doc ? doc.redoStack.length : 0,
+  // mirror the active phrase's floor and edit history into the store
+  // (the Detection slider and undo/redo are phrase-scoped)
+  function setActivePhraseState(k) {
+    const p = song.phrases[k];
+    set((s) => ({
+      activePhrase: k,
+      editCount: p.edits.length,
+      redoCount: p.redoStack.length,
+      settings: { ...s.settings, melodyFloor: p.decode.melodyFloorHz },
+    }));
+  }
+
+  // chip metadata for the phrase strip, plus the active mirror above
+  function syncPhraseState() {
+    if (!song) {
+      set({ phrases: [], activePhrase: 0, cuts: [] });
+      return;
+    }
+    const metas = song.phrases.map((p, k) => {
+      const [a, b] = windowSecs(k);
+      return {
+        t0: a,
+        t1: b,
+        noteCount: p.timeline.filter((e) => !e.mark).length,
+        editCount: p.edits.length,
+        floor: p.decode.melodyFloorHz,
+      };
     });
+    set({ phrases: metas, cuts: song.cuts });
+    setActivePhraseState(activeIdx());
   }
 
   // ---- look-behind rendering: the live tape draws ~300ms behind the
@@ -272,6 +326,8 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       renderer.advance(e.tMs);
       if (e.type === 'mark') {
         renderer.markNow(); // time-anchored ornament arc
+      } else if (e.type === 'caesura') {
+        renderer.caesura(); // phrase cut — printed railroad tracks
       } else if (e.type === 'on') {
         renderer.noteOn(e.midi, e.tMs, e.grace, {
           slide: e.slide,
@@ -427,15 +483,17 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         sampleRate: recorder.sampleRate,
         onStatus: (msg) => set({ status: msg }),
       });
-      doc = createDoc({
+      song = createSong({
         notes,
         melodyFloorHz: settings().melodyFloor,
         fineFrames: [],
         createdAt: Date.now(),
       });
       deriveStale = false;
+      pendingFloor = null;
+      set({ activePhrase: 0, phraseView: 'song' });
       set({ status: renderTimeline(), hasTake: true });
-      syncEditState();
+      syncPhraseState();
     } catch (e) {
       set({ status: `transcription failed: ${e.message}` });
     }
@@ -445,20 +503,29 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     traceBackfill(); // fill the raw-pitch trace under the finished tape
   }
 
-  // render the take document into the tape at the current view mode:
-  // 'full' = the doc's timeline (passes 1+2+3, plus any edits);
-  // 'skeleton' = pass 1 only, the bare main-note melody
+  // render the song into the tape. Scope: the whole song (phrases
+  // stitched in time order, caesura marks at cuts) or, in focus view,
+  // just the active phrase. 'skeleton' = pass 1 only per phrase.
+  // At equal times a caesura must land after the closing note and
+  // before the opening one.
+  const EV_RANK = { off: 0, caesura: 1, mark: 2, on: 3 };
+
   function renderTimeline() {
+    const focus = get().phraseView === 'focus';
+    const k = activeIdx();
+    const scope = focus ? [song.phrases[k]] : song.phrases;
     let timeline;
     let label;
     if (get().viewMode === 'skeleton') {
-      timeline = skeletonOf(doc);
+      timeline = scope.flatMap((p) => skeletonOf(p));
       label = `main notes only — ${timeline.length} notes`;
     } else {
-      timeline = doc.timeline;
+      timeline = scope.flatMap((p) => p.timeline);
       const mains = timeline.filter((e) => !e.mark).length;
       const arcs = timeline.filter((e) => e.ornament || e.mark).length;
       label = `${mains} notes · ${arcs} ornaments`;
+      if (focus) label = `phrase ${k + 1} of ${song.phrases.length} — ${label}`;
+      else if (song.cuts.length) label += ` · ${song.phrases.length} phrases`;
     }
     for (const n of timeline) {
       if (n.mark) {
@@ -477,7 +544,15 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       });
       evQueue.push({ type: 'off', tMs: n.t1 * 1000 });
     }
-    evQueue.sort((a, b) => a.tMs - b.tMs);
+    if (!focus) {
+      for (const c of song.cuts) {
+        evQueue.push({ type: 'caesura', tMs: c * 1000 });
+      }
+    }
+    evQueue.sort(
+      (a, b) =>
+        a.tMs - b.tMs || (EV_RANK[a.type] ?? 3) - (EV_RANK[b.type] ?? 3),
+    );
     feedRenderer(Number.MAX_SAFE_INTEGER);
     return label;
   }
@@ -487,7 +562,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // inputs moved (melody floor, fresh fine frames) the doc re-derives,
   // snapshotting first if it carries edits (freeze-on-edit recovery).
   function rerenderView() {
-    if (!doc || recorder.micOn || decoding) return;
+    if (!song || recorder.micOn || decoding) return;
     const selId = get().selection ? get().selection.id : null;
     const frames = traceFrames; // survive the reset
     resetTake(false);
@@ -496,33 +571,65 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     // queue a rerun, or the trace stays half-drawn and the fine-frame
     // ornament evidence never reaches the tape
     if (tracing) traceAgain = true;
-    if (deriveStale) {
-      deriveStale = false;
-      // freeze-on-edit: an edited timeline is never re-derived behind
-      // the user's back (the fine frames stay drawn in the trace; the
-      // explicit "Start over" path re-derives and snapshots first)
-      if (!doc.edits.length) {
-        doc = reDerive(doc, {
-          melodyFloorHz: settings().melodyFloor,
-          fineFrames: traceFrames,
-          savedAt: Date.now(),
-        });
+    // the active phrase's floor moved (slider): re-derive that phrase
+    // (freeze-on-edit: the slider is disabled while it has edits)
+    if (pendingFloor) {
+      const { k, hz } = pendingFloor;
+      pendingFloor = null;
+      const p = song.phrases[k];
+      if (p && !p.edits.length) {
+        song = withPhrase(
+          song,
+          k,
+          reDerive(p, {
+            melodyFloorHz: hz,
+            fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+            savedAt: Date.now(),
+          }),
+        );
       }
     }
+    if (deriveStale) {
+      deriveStale = false;
+      // fresh fine frames: re-derive every phrase, EXCEPT edited ones —
+      // an edited timeline is never replaced behind the user's back
+      // (the explicit "Start over" path re-derives and snapshots first)
+      song = {
+        ...song,
+        phrases: song.phrases.map((p, k) =>
+          p.edits.length
+            ? p
+            : reDerive(p, {
+                melodyFloorHz: p.decode.melodyFloorHz,
+                fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+                savedAt: Date.now(),
+              }),
+        ),
+      };
+    }
     set({ status: renderTimeline(), hasTake: true });
-    view.rebuildTrace(traceFrames); // aligned columns moved with the tape
-    syncEditState();
+    // the trace pane follows the visible scope
+    const focus = get().phraseView === 'focus';
+    view.rebuildTrace(
+      focus
+        ? sliceFrames(traceFrames, phraseWindow(song, activeIdx()))
+        : traceFrames,
+    );
+    player.setWindow(focus ? windowSecs(activeIdx()) : null);
+    syncPhraseState();
     selectNote(selId); // geometry moved; recompute (or clear) the band
   }
 
-  // ---- editing: every op goes through the take document (doc.mjs) and
-  // re-renders the whole tape from the edited timeline — the preview
-  // and the print bytes stay the same rows by construction. ----
+  // ---- editing: every op goes through the owning phrase's document
+  // (doc.mjs) and re-renders the tape from the edited timelines — the
+  // preview and the print bytes stay the same rows by construction. ----
   function applyDocOp(op, keepId) {
-    if (!doc || recorder.micOn || decoding) return;
-    const next = applyEdit(doc, op);
-    if (next === doc) return; // op didn't apply (see doc.mjs)
-    doc = next;
+    if (!song || recorder.micOn || decoding) return;
+    const k = phraseOfId(song, op.id);
+    if (k < 0) return;
+    const next = applyEdit(song.phrases[k], op);
+    if (next === song.phrases[k]) return; // op didn't apply (see doc.mjs)
+    song = withPhrase(song, k, next);
     rerenderView();
     selectNote(keepId ?? null);
   }
@@ -541,7 +648,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   let rerenderTimer = 0;
   let rerenderReanalyze = false;
   function scheduleRerender(reanalyze = false) {
-    if (!doc || recorder.micOn || decoding) return;
+    if (!song || recorder.micOn || decoding) return;
     rerenderReanalyze = rerenderReanalyze || reanalyze;
     clearTimeout(rerenderTimer);
     rerenderTimer = setTimeout(() => {
@@ -576,15 +683,25 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     const gen = analysisGen;
     const trk = createNoteTracker(trackerValues());
     const total = Math.floor((recorder.length - WINDOW) / HOP) + 1;
+    // per-phrase floors: each phrase's window analyzes in its own band
+    const segs = song
+      ? song.phrases.map((p, k) => {
+          const [, b] = phraseWindow(song, k);
+          return { end: b, fMin: p.decode.melodyFloorHz };
+        })
+      : [{ end: Infinity, fMin: settings().melodyFloor }];
+    const floorAt = (tSec) =>
+      (segs.find((s) => tSec < s.end) ?? segs[segs.length - 1]).fMin;
     for (let f = 0; f < total; f++) {
       const start = f * HOP;
       const win = new Float32Array(WINDOW);
       win.set(recorder.samples().subarray(start, start + WINDOW));
+      const tMs = ((start + WINDOW) / recorder.sampleRate) * 1000;
       const m = await analyzer.analyze(win, {
         sr: recorder.sampleRate,
-        t: ((start + WINDOW) / recorder.sampleRate) * 1000,
+        t: tMs,
         mode: 'harm',
-        fMin: settings().melodyFloor,
+        fMin: floorAt(tMs / 1000),
         gen,
         holdF0: holdFreq(trk),
       });
@@ -617,7 +734,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     // the fine frames may reveal ornaments (and revived notes) the
     // neural decode missed — re-render the tape with them. If audio is
     // mid-play, defer: a reset now would yank the playhead
-    if (doc && !recorder.micOn && analysisGen === gen) {
+    if (song && !recorder.micOn && analysisGen === gen) {
       deriveStale = true;
       if (player.state === 'stopped') rerenderView();
       else pendingRerender = true;
@@ -634,29 +751,105 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     return btoa(s);
   }
 
+  function takeName() {
+    return get().currentTake?.name || 'Tape take';
+  }
+
+  async function postPrintJob({ rows, bytes, name }) {
+    const png = await rowsToPngBytes(rows);
+    const r = await fetch('/api/tape/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bytes: b64(bytes),
+        png: b64(png),
+        width: 576,
+        height: rows.length,
+        name,
+      }),
+    });
+    const body = await r.json();
+    if (!body.id) throw new Error(body.error || 'print failed');
+  }
+
+  // the visible tape prints as shown: the whole song (with caesura
+  // marks) in song view, just the active phrase in focus view
   async function print() {
     if (!renderer?.rows.length || get().printState === 'queuing') return;
     if (recorder.micOn) stopMic();
     set({ printState: 'queuing' });
     try {
-      const png = await view.exportPng();
-      const r = await fetch('/api/tape/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bytes: b64(renderer.toEscpos()),
-          png: b64(png),
-          width: 576,
-          height: renderer.rows.length,
-          name: 'Tape take',
-        }),
+      const focus = song && get().phraseView === 'focus';
+      const name = focus
+        ? `${takeName()} · phrase ${activeIdx() + 1} of ${song.phrases.length}`
+        : takeName();
+      await postPrintJob({
+        rows: renderer.rows,
+        bytes: renderer.toEscpos(),
+        name,
       });
-      const body = await r.json();
-      set({
-        status: body.id
-          ? 'sent to the print queue'
-          : body.error || 'print failed',
+      set({ status: 'sent to the print queue' });
+    } catch (e) {
+      set({ status: e.message });
+    }
+    set({ printState: 'idle' });
+  }
+
+  // render a phrase timeline into a fresh renderer — same layout, its
+  // own clef and key signature, boundary-free (a standalone receipt)
+  function renderStandalone(timeline) {
+    const r = createTapeRenderer(layoutValues());
+    const q = [];
+    for (const n of timeline) {
+      if (n.mark) {
+        q.push({ type: 'mark', tMs: n.t0 * 1000 });
+        continue;
+      }
+      q.push({
+        type: 'on',
+        tMs: n.t0 * 1000,
+        midi: n.midi,
+        grace: n.grace,
+        slide: n.slide,
+        ornament: n.ornament,
       });
+      q.push({ type: 'off', tMs: n.t1 * 1000 });
+    }
+    q.sort(
+      (a, b) =>
+        a.tMs - b.tMs || (EV_RANK[a.type] ?? 3) - (EV_RANK[b.type] ?? 3),
+    );
+    for (const e of q) {
+      r.advance(e.tMs);
+      if (e.type === 'mark') r.markNow();
+      else if (e.type === 'on') {
+        r.noteOn(e.midi, e.tMs, e.grace, {
+          slide: e.slide,
+          ornament: e.ornament,
+        });
+      } else r.noteOff(e.tMs);
+    }
+    return r;
+  }
+
+  // one receipt per phrase, queued in order
+  async function printPhrases() {
+    if (!song || song.phrases.length < 2) return;
+    if (get().printState === 'queuing') return;
+    if (recorder.micOn) stopMic();
+    set({ printState: 'queuing' });
+    const total = song.phrases.length;
+    try {
+      for (let k = 0; k < total; k++) {
+        set({ status: `queuing phrase ${k + 1} of ${total}…` });
+        const r = renderStandalone(song.phrases[k].timeline);
+        await postPrintJob({
+          rows: r.rows,
+          bytes: r.toEscpos(),
+          name: `${takeName()} · phrase ${k + 1} of ${total}`,
+        });
+      }
+      set({ status: `${total} phrases sent to the print queue` });
     } catch (e) {
       set({ status: e.message });
     }
@@ -679,21 +872,23 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // it in place — document/settings/name only, no audio re-upload; when
   // untied (or asNew), create a fresh record and tie to it.
   async function persistTake(name, asNew) {
-    if (!doc || !recorder.length || recorder.micOn || decoding) return false;
+    if (!song || !recorder.length || recorder.micOn || decoding) return false;
     if (get().persistBusy) return false;
     set({ persistBusy: true });
     let ok = false;
     try {
       const cur = get().currentTake;
-      const noteCount = doc.timeline.filter((e) => !e.mark).length;
+      const noteCount = mainCount(song);
       const onStatus = (msg) => set({ status: msg });
+      // the payload keeps the 'doc' key: a song IS the document now, and
+      // load detects the shape (legacy single-doc takes still open)
       const take =
         cur && !asNew
           ? await apiUpdateTake(cur.id, {
               name,
               noteCount,
               settings: settings(),
-              doc,
+              doc: song,
               onStatus,
             })
           : await apiSaveTake({
@@ -702,7 +897,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
               sampleRate: recorder.sampleRate,
               noteCount,
               settings: settings(),
-              doc,
+              doc: song,
               wav: recorder.toWavBlob(),
               onStatus,
             });
@@ -732,16 +927,22 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       if (loaded.audio) await recorder.loadFile(loaded.audio);
       else recorder.reset();
       player.invalidate();
-      doc = loaded.doc;
+      // takes saved before phrases existed are single-doc: adopt them
+      song = loaded.doc.phrases ? loaded.doc : songFromDoc(loaded.doc);
       deriveStale = false;
+      pendingFloor = null;
+      set({ activePhrase: 0, phraseView: 'song' }); // land on the Song tab
       resetTake(false);
       set({
         status: `loaded "${loaded.take.name}" — ${renderTimeline()}`,
         hasTake: true,
         currentTake: { id: loaded.take.id, name: loaded.take.name },
       });
-      syncEditState();
+      syncPhraseState();
       syncAudioState();
+      if (get().phraseView === 'focus') {
+        player.setWindow(windowSecs(activeIdx()));
+      }
       traceBackfill(); // no-op without audio; refills the trace with it
     } catch (e) {
       set({ status: `load failed: ${e.message}` });
@@ -845,16 +1046,20 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       player.stop(false);
     },
     setSetting(key, value) {
-      // freeze-on-edit: the floor changes the derivation, which would
-      // replace the edited timeline (the slider is disabled in the UI;
-      // this is the belt to that suspender)
-      if (key === 'melodyFloor' && doc && doc.edits.length) return;
-      set((s) => ({ settings: { ...s.settings, [key]: value } }));
+      // the floor is per phrase: it re-derives only the ACTIVE phrase.
+      // Freeze-on-edit: a phrase with edits keeps its floor (the slider
+      // is disabled in the UI; this is the belt to that suspender)
       if (key === 'melodyFloor') {
+        const p = activePhraseDoc();
+        if (p?.edits.length) return;
+        set((s) => ({ settings: { ...s.settings, [key]: value } }));
+        pendingFloor = { k: activeIdx(), hz: value };
         // the register split changes the decode AND the trace analysis
-        deriveStale = true;
         scheduleRerender(true);
-      } else if (key === 'traceZoom') {
+        return;
+      }
+      set((s) => ({ settings: { ...s.settings, [key]: value } }));
+      if (key === 'traceZoom') {
         view.setTraceZoom(value);
         if (get().traceMode === 'linear') view.rebuildTrace(traceFrames);
       } else {
@@ -910,34 +1115,135 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       const sel = get().selection;
       if (sel) applyDocOp({ op: 'remove', id: sel.id }, null);
     },
+    // undo/redo act on the ACTIVE phrase's history
     undoEdit() {
-      if (!doc || recorder.micOn || decoding) return;
-      const next = undo(doc);
-      if (next === doc) return;
-      doc = next;
+      const p = activePhraseDoc();
+      if (!p || recorder.micOn || decoding) return;
+      const next = undo(p);
+      if (next === p) return;
+      song = withPhrase(song, activeIdx(), next);
       rerenderView();
     },
     redoEdit() {
-      if (!doc || recorder.micOn || decoding) return;
-      const next = redo(doc);
-      if (next === doc) return;
-      doc = next;
+      const p = activePhraseDoc();
+      if (!p || recorder.micOn || decoding) return;
+      const next = redo(p);
+      if (next === p) return;
+      song = withPhrase(song, activeIdx(), next);
       rerenderView();
     },
-    // the explicit unfreeze: re-derive from the recording at the current
-    // floor. reDerive snapshots the edited tape into doc.versions first,
-    // so nothing is lost — the recovery UI is a later phase.
+    // the explicit unfreeze for the ACTIVE phrase: re-derive it from the
+    // recording at the current floor. reDerive snapshots the edited
+    // phrase into its versions first, so nothing is lost.
     reread() {
-      if (!doc || recorder.micOn || decoding) return;
+      const p = activePhraseDoc();
+      if (!p || recorder.micOn || decoding) return;
       selectNote(null); // ids change wholesale; keep nothing selected
-      doc = reDerive(doc, {
-        melodyFloorHz: settings().melodyFloor,
+      const k = activeIdx();
+      song = withPhrase(
+        song,
+        k,
+        reDerive(p, {
+          melodyFloorHz: settings().melodyFloor,
+          fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+          savedAt: Date.now(),
+        }),
+      );
+      rerenderView();
+    },
+
+    // ---- phrases (Phase 4): the song is the project, phrases are its
+    // pages. selectTab(-1) opens the Song overview; selectTab(k) opens
+    // phrase k's own tape (edit, settings, confined playback). ----
+    selectTab(k) {
+      if (!song || recorder.micOn || decoding) return;
+      if (k < 0) {
+        // the Song overview
+        if (get().phraseView !== 'song') {
+          set({ phraseView: 'song' });
+          rerenderView();
+        }
+        return;
+      }
+      if (k >= song.phrases.length) return;
+      const changed = k !== get().activePhrase || get().phraseView !== 'focus';
+      setActivePhraseState(k);
+      set({ phraseView: 'focus' });
+      if (changed) {
+        selectNote(null);
+        rerenderView(); // renders the phrase's own tape
+      }
+    },
+    // toggle a cut at the selected note's attack
+    cutBefore() {
+      const sel = get().selection;
+      if (!sel || !song || recorder.micOn || decoding) return;
+      const t = sel.t0;
+      const opts = { fineFrames: traceFrames, savedAt: Date.now() };
+      const i = song.cuts.indexOf(t);
+      let next;
+      if (i >= 0) {
+        next = removeCut(song, i, opts);
+      } else {
+        // a cut before the song's first note would make an empty phrase
+        const first = assembled(song).find((e) => !e.mark);
+        if (!first || t <= first.t0) return;
+        next = addCut(song, t, opts);
+      }
+      if (next === song) return;
+      song = next;
+      rerenderView();
+      // the phrases re-derived; reselect the same note by its time
+      const again = assembled(song).find(
+        (e) => !e.mark && Math.abs(e.t0 - t) < 1e-6,
+      );
+      selectNote(again ? again.id : null);
+    },
+    // seed cuts at every rest long enough to be a phrase breath
+    cutAtBreaths() {
+      if (!song || recorder.micOn || decoding) return;
+      const thr = (2 * settings().breathGapMs) / 1000;
+      const mains = assembled(song).filter((e) => !e.mark);
+      let next = song;
+      let added = 0;
+      const opts = { fineFrames: traceFrames, savedAt: Date.now() };
+      for (let i = 1; i < mains.length; i++) {
+        const t = mains[i].t0;
+        if (t - mains[i - 1].t1 >= thr && !next.cuts.includes(t)) {
+          const grown = addCut(next, t, opts);
+          if (grown !== next) {
+            next = grown;
+            added++;
+          }
+        }
+      }
+      if (!added) {
+        set({
+          status:
+            'no rests long enough to cut at — select a note and use Cut before',
+        });
+        return;
+      }
+      song = next;
+      rerenderView();
+      set({
+        status: `${added} ${added === 1 ? 'cut' : 'cuts'} added — ${song.phrases.length} phrases`,
+      });
+    },
+    // merge phrase i+1 back into phrase i (a chip's ✕)
+    removeCutAt(i) {
+      if (!song || recorder.micOn || decoding) return;
+      const next = removeCut(song, i, {
         fineFrames: traceFrames,
         savedAt: Date.now(),
       });
-      deriveStale = false;
+      if (next === song) return;
+      selectNote(null);
+      song = next;
+      set((s) => ({ activePhrase: Math.min(s.activePhrase, i) }));
       rerenderView();
     },
+    printPhrases,
     // ---- saved takes (Phase 3) ----
     saveTake: (name) => persistTake(name, false),
     saveTakeAsNew: (name) => persistTake(name, true),

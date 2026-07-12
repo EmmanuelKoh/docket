@@ -70,7 +70,11 @@ plugins server-side. No process polls on its own timer except the device.
   React reading the store. Editing (click a note → inspector strip)
   re-renders the whole tape from the edited timeline; detection
   freezes while edits exist ("Start over" re-derives, snapshotting
-  the edited tape into doc.versions first). Saved takes:
+  the edited tape into doc.versions first). A song splits at cuts
+  into phrases (`song.mjs`): each phrase is its own doc — own melody
+  floor, edits, undo, freeze — stitched into one roll (printed
+  caesura at cuts) or focused one at a time; phrases print as
+  standalone receipts. Saved takes:
   `lib/tape-store.js` (meta in one Redis key, document JSON + lossless
   WAV in Blob; json driver = files in `data/tape/`) behind
   `/api/tape/takes*`; hosted audio uploads go browser→Blob via a

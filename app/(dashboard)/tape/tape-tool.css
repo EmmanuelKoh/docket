@@ -272,6 +272,58 @@
   margin-left: auto;
 }
 
+/* the phrase strip: the song's tabs — "Song" (overview) plus one per
+   phrase — and the cut/print actions. Tabs are compact mono chips; the
+   selected one darkens to ink via .active. */
+.tape-phrases {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tape-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tape-chip.active {
+  border-color: var(--ink);
+}
+.tape-chip-btn {
+  background: var(--raised);
+  color: var(--ink-muted);
+  border: none;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.tape-chip.active .tape-chip-btn {
+  color: var(--ink);
+}
+.tape-chip-btn:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.tape-chip-x {
+  background: var(--raised);
+  color: var(--ink-faint);
+  border: none;
+  border-left: 0.5px solid var(--border);
+  padding: 0 6px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.tape-chip-x:hover {
+  color: var(--ink);
+}
+.tape-chip-x:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
 .tape-transport {
   display: flex;
   gap: 8px;

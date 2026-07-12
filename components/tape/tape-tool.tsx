@@ -57,6 +57,8 @@ function Controls({ ctl }: { ctl: Controller | null }) {
   const viewMode = useTape((s) => s.viewMode);
   const traceMode = useTape((s) => s.traceMode);
   const editCount = useTape((s) => s.editCount);
+  const activePhrase = useTape((s) => s.activePhrase);
+  const phraseCount = useTape((s) => s.phrases.length);
 
   return (
     <div className="tape-controls">
@@ -105,7 +107,11 @@ function Controls({ ctl }: { ctl: Controller | null }) {
       </div>
 
       <div className="tape-group">
-        <span className="label">Detection</span>
+        <span className="label">
+          {phraseCount > 1
+            ? `Detection · phrase ${activePhrase + 1}`
+            : 'Detection'}
+        </span>
         <Slider
           ctl={ctl}
           k="melodyFloor"
@@ -118,8 +124,9 @@ function Controls({ ctl }: { ctl: Controller | null }) {
         {editCount > 0 && (
           <>
             <p className="tape-hint">
-              Detection locks while the take has edits. Start over re-reads the
-              recording; the edited tape is kept as a snapshot.
+              {phraseCount > 1
+                ? `Detection locks while phrase ${activePhrase + 1} has edits. Start over re-reads it; the edited phrase is kept as a snapshot.`
+                : 'Detection locks while the take has edits. Start over re-reads the recording; the edited tape is kept as a snapshot.'}
             </p>
             <button
               type="button"
@@ -363,6 +370,96 @@ function Takes({ ctl }: { ctl: Controller | null }) {
   );
 }
 
+// the song is the project; phrases are its pages. Tabs: "Song" opens
+// the overview roll (cut management, whole-take print), each numbered
+// tab opens that phrase's own tape (edit, settings, confined playback).
+// A chip's ✕ merges the phrase into its predecessor.
+function PhraseStrip({ ctl }: { ctl: Controller | null }) {
+  const hasTake = useTape((s) => s.hasTake);
+  const phrases = useTape((s) => s.phrases);
+  const active = useTape((s) => s.activePhrase);
+  const view = useTape((s) => s.phraseView);
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  const printState = useTape((s) => s.printState);
+  if (!hasTake) return null;
+  const busy = micOn || decoding;
+  const many = phrases.length > 1;
+
+  return (
+    <div className="tape-phrases">
+      <span className="label">Phrases</span>
+      {many && (
+        <span className={view === 'song' ? 'tape-chip active' : 'tape-chip'}>
+          <button
+            type="button"
+            className="tape-chip-btn"
+            disabled={busy}
+            onClick={() => ctl?.selectTab(-1)}
+          >
+            Song
+          </button>
+        </span>
+      )}
+      {many &&
+        phrases.map((p, k) => (
+          <span
+            key={`${p.t0}-${p.t1}`}
+            className={
+              view === 'focus' && k === active
+                ? 'tape-chip active'
+                : 'tape-chip'
+            }
+          >
+            <button
+              type="button"
+              className="tape-chip-btn"
+              disabled={busy}
+              onClick={() => ctl?.selectTab(k)}
+            >
+              {k + 1} · {fmtTime(p.t0)}–{fmtTime(p.t1)}
+              {p.editCount ? ' · edited' : ''}
+            </button>
+            {k > 0 && (
+              <button
+                type="button"
+                className="tape-chip-x"
+                disabled={busy}
+                aria-label={`Merge phrase ${k + 1} into phrase ${k}`}
+                onClick={() => ctl?.removeCutAt(k - 1)}
+              >
+                ✕
+              </button>
+            )}
+          </span>
+        ))}
+      <button
+        type="button"
+        className="btn small"
+        disabled={busy}
+        onClick={() => ctl?.cutAtBreaths()}
+      >
+        Cut at breaths
+      </button>
+      {many && (
+        <button
+          type="button"
+          className="btn small"
+          disabled={busy || printState === 'queuing'}
+          onClick={() => ctl?.printPhrases()}
+        >
+          Print phrases ({phrases.length})
+        </button>
+      )}
+      {!many && (
+        <span className="tape-hint">
+          cut at breaths, or select a note and use Cut before
+        </span>
+      )}
+    </div>
+  );
+}
+
 function StageHead() {
   const noteNow = useTape((s) => s.noteNow);
   const truncated = useTape((s) => s.truncated);
@@ -405,6 +502,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
   const redoCount = useTape((s) => s.redoCount);
   const playTime = useTape((s) => s.playTime);
   const viewMode = useTape((s) => s.viewMode);
+  const cuts = useTape((s) => s.cuts);
   if (!hasTake) return null;
   const canSplit =
     !!selection &&
@@ -461,6 +559,15 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             onClick={() => ctl?.joinNext()}
           >
             Join next
+          </button>
+          <button
+            type="button"
+            className={
+              cuts.includes(selection.t0) ? 'btn small pressed' : 'btn small'
+            }
+            onClick={() => ctl?.cutBefore()}
+          >
+            Cut before
           </button>
           <button
             type="button"
@@ -569,6 +676,9 @@ function Bottom({ ctl }: { ctl: Controller | null }) {
   const status = useTape((s) => s.status);
   const canPrint = useTape((s) => s.canPrint);
   const printState = useTape((s) => s.printState);
+  const focused = useTape(
+    (s) => s.phraseView === 'focus' && s.phrases.length > 1,
+  );
 
   return (
     <div className="tape-bottom">
@@ -588,7 +698,11 @@ function Bottom({ ctl }: { ctl: Controller | null }) {
           disabled={!canPrint || printState === 'queuing'}
           onClick={() => ctl?.print()}
         >
-          {printState === 'queuing' ? 'Queuing…' : 'Print take'}
+          {printState === 'queuing'
+            ? 'Queuing…'
+            : focused
+              ? 'Print phrase'
+              : 'Print take'}
         </button>
       </div>
     </div>
@@ -660,6 +774,7 @@ export function TapeTool() {
           <SelectionBand />
           <Playhead elRef={playheadRef} />
         </div>
+        <PhraseStrip ctl={ctl} />
         <Transport ctl={ctl} />
         <Inspector ctl={ctl} />
         <Bottom ctl={ctl} />
