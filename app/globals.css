@@ -129,3 +129,35 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ---- receipt accents (design-spec — material & type) ---- */
+
+/* perforation: the dotted tear-off rule between major page zones */
+.perf {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--dash) 0 5px,
+    transparent 5px 11px
+  );
+}
+
+/* ledger leader: the dotted run between a row's name and its rail,
+   like a receipt line item (name……………value). Round 2px dots on a 7px
+   rhythm — a 1px dotted border reads as a faint line, not dots. Rides
+   inside a baseline flex next to a truncating name. */
+.leader {
+  flex: 1 1 16px;
+  min-width: 16px;
+  height: 3px;
+  background-image: radial-gradient(
+    circle,
+    var(--ink-muted) 0.75px,
+    transparent 1.25px
+  );
+  background-size: 7px 3px;
+  margin: 0 4px 0 6px;
+  align-self: baseline;
+  position: relative;
+  top: 1px;
+}

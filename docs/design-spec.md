@@ -107,16 +107,25 @@ Green is not used anywhere.
   --ink-faint underline.
 - List containers: one --raised box, radius 0; rows inside at 16px 20px
   with 0.5px --hairline separators (no per-row cards).
-- Rows: 24px column gap, 16px 20px padding; right meta column fixed 118px, right-aligned, mono
-  12px, never wraps ("canceled · 33m" is the sizing case), so timestamps
-  rail-align down the page. Rows with a thumbnail TOP-ALIGN all content to
-  the media (text centered against tall media floats in dead space); only
-  single-line rows center vertically.
+- Rows: 24px column gap, 16px 20px padding. The row's FIRST LINE is the
+  LEDGER LINE: name, leader dots, and the rail meta (status · time, and
+  any row action button) share ONE baseline flex — the leader runs into
+  the rail, buttons baseline-align by their label text, and everything
+  flushes right so timestamps rail-align down the page by their right
+  edge (mono 12px, never wraps; "canceled · 33m" is the sizing case).
+  Rows with a thumbnail TOP-ALIGN all content to the media (text
+  centered against tall media floats in dead space); only single-line
+  rows center vertically.
 - Labels: 13px, --ink, semibold — sentence case, no letter-spacing
   (the old 11px caps idiom is retired everywhere).
 - Body 13px; meta/sub 12px; stat numbers 28px mono.
-- Dashed divider between major page zones: 1px dashed --dash, inside the
+- PERFORATION divider between major page zones: a 1px dotted tear-off
+  rule (5px dash / 6px gap of --dash — the .perf utility), inside the
   gutters.
+- LEDGER LEADERS in list rows: a dotted --border run fills the space
+  between a row's truncating name and its rail (name……………status · time,
+  the .leader utility) — Queue cards, History rows, the Overview Recent
+  list, and the tape studio's takes list all speak it.
 
 ## Components
 

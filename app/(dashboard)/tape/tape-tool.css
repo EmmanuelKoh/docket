@@ -580,9 +580,17 @@
   order: 1;
   flex: 1 1 12px;
   min-width: 12px;
-  border-bottom: 1px dotted var(--ink-muted);
-  margin: 0 2px 3px;
-  align-self: flex-end;
+  height: 3px;
+  background-image: radial-gradient(
+    circle,
+    var(--ink-muted) 0.75px,
+    transparent 1.25px
+  );
+  background-size: 7px 3px;
+  margin: 0 2px;
+  align-self: baseline;
+  position: relative;
+  top: 1px;
 }
 .tape-take-sub {
   order: 2;

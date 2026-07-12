@@ -135,7 +135,7 @@ export default async function OverviewPage() {
         <span className="ml-auto text-ink-faint">v{pkg.version}</span>
       </div>
 
-      <div className="border-t border-dashed border-dash" />
+      <div className="perf" />
 
       {/* recent */}
       <section>
@@ -164,8 +164,20 @@ export default async function OverviewPage() {
                   />
                 </div>
                 <div className="min-w-0 grow">
-                  <div className="truncate font-mono text-[13px] text-ink">
-                    {j.name || j.id}
+                  {/* the ledger line: name……………status · time share ONE
+                      baseline so the leader runs into the rail text */}
+                  <div className="flex min-w-0 items-baseline">
+                    <div className="truncate font-mono text-[13px] text-ink">
+                      {j.name || j.id}
+                    </div>
+                    <span className="leader" aria-hidden="true" />
+                    <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs sm:inline">
+                      <span className={statusColor(j.status)}>{j.status}</span>
+                      <span className="text-ink-faint">
+                        {' '}
+                        · {agoShort(j.createdAt)}
+                      </span>
+                    </span>
                   </div>
                   <div className="mt-0.5 text-xs text-ink-muted">
                     {j.source || '—'}
@@ -177,13 +189,6 @@ export default async function OverviewPage() {
                       · {agoShort(j.createdAt)}
                     </span>
                   </div>
-                </div>
-                <div className="hidden w-[118px] shrink-0 whitespace-nowrap text-right font-mono text-xs sm:block">
-                  <span className={statusColor(j.status)}>{j.status}</span>
-                  <span className="text-ink-faint">
-                    {' '}
-                    · {agoShort(j.createdAt)}
-                  </span>
                 </div>
               </div>
             ))}

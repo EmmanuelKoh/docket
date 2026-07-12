@@ -80,8 +80,42 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
               />
             </div>
             <div className="min-w-0 grow pt-0.5">
-              <div className="truncate font-mono text-[13px] text-ink">
-                {job.name}
+              {/* the ledger line: name……………status [action] share ONE
+                  baseline — the button aligns by its label text */}
+              <div className="flex min-w-0 items-baseline gap-3">
+                <div className="truncate font-mono text-[13px] text-ink">
+                  {job.name}
+                </div>
+                <span className="leader" aria-hidden="true" />
+                <span
+                  className={`hidden shrink-0 font-mono text-xs sm:inline ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
+                >
+                  {job.statusText}
+                </span>
+                {job.inflight ? (
+                  <>
+                    <span className="hidden shrink-0 font-mono text-xs text-ink-faint sm:inline">
+                      claimed {job.claimedAgo}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="hidden h-auto shrink-0 px-2.5 py-1 text-xs font-normal sm:inline-flex"
+                      onClick={() => requeue(job.id)}
+                    >
+                      Requeue
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hidden h-auto shrink-0 px-2.5 py-1 text-xs font-normal sm:inline-flex"
+                    onClick={() => cancel(job.id)}
+                  >
+                    Cancel
+                  </Button>
+                )}
               </div>
               <div className="mt-0.5 text-xs text-ink-muted">
                 {job.source} · created {job.createdTime}
@@ -117,35 +151,6 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
                   </Button>
                 )}
               </div>
-            </div>
-            <span
-              className={`hidden pt-0.5 font-mono text-xs sm:inline ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
-            >
-              {job.statusText}
-            </span>
-            <div className="hidden w-[118px] shrink-0 pt-0.5 text-right font-mono text-xs text-ink-faint sm:block">
-              {job.inflight ? (
-                <div className="flex flex-col items-end gap-1.5">
-                  <span>claimed {job.claimedAgo}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto px-2.5 py-1 text-xs font-normal"
-                    onClick={() => requeue(job.id)}
-                  >
-                    Requeue
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-auto px-2.5 py-1 text-xs font-normal"
-                  onClick={() => cancel(job.id)}
-                >
-                  Cancel
-                </Button>
-              )}
             </div>
           </div>
         </div>
