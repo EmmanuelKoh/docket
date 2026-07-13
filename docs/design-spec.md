@@ -425,11 +425,24 @@ icon-only Play/Pause/Stop transport, chevron pitch nudges and note
 walk, scissors on Cut before, trash for Remove, curved Undo/Redo
 arrows (tooltips carry shortcuts), printer glyph on print buttons.
 Domain actions (Ornament, Slide from prev, Split at playhead, Join
-next) stay as words. (Agreed direction, not yet built elsewhere: this
-three-material system replaces outline buttons app-wide, and the
-print vocabulary grows rubber-stamp statuses in History, ledger-line
-actions in list rows, and job-id barcodes on detail views — no
-end-of-roll stripes.) The one BOLD element (borrowed
+next) stay as words. This three-material system is APP-WIDE (July
+2026): the shadcn Button primitive carries it everywhere — variant
+default is the committing knockout (with the bite), outline is the
+register key with the second-strike edge, link is quiet lowercase
+text, destructive is the red knockout, and disabled is unprinted on
+all of them; mono 13px, radius 0. Committing actions per page:
+Sign in / Create account, Pair, New invite, Print test, Studio Save
+and Print, Photo Take and Print (the Photo page's own .btn copy
+carries the same materials; the engine's ids/classes are untouched).
+The shared accents live in globals.css: --key-shadow, .bite, .stamp,
+.stamp-red, .barcode (plus the existing .perf and .leader). PRINT
+VOCABULARY in the flow pages: Queue rows' Cancel/Requeue are quiet
+lowercase LEDGER ACTIONS in the rail — buttons no longer invade
+tables; History's expanded record carries a rotated ink-starved
+RUBBER STAMP on the receipt preview (PRINTED in ink, FAILED in red —
+paper-fixed colors, never theme ink, because stamps sit on the
+always-white paper) and signs off with the job id as a false BARCODE
+bottom-right. No end-of-roll stripes, by decision. The one BOLD element (borrowed
 from the plugin receipts' FULL TIME knockout bar): the TAKE BANNER
 over the roll — an inverted ink bar, centered 15px/700 knockout type,
 naming the open take ("unsaved take · 2 phrases", or "name · phrase 2

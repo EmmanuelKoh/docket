@@ -5,11 +5,18 @@
    page used — do not rename classes here without updating it. Tokens come
    from app/globals.css. */
 
-/* material controls (design-spec — material & type): flat, square,
-   ink-framed; hover inverts like thermal print */
+/* materials, not outlines (design-spec — material & type): workbench
+   actions are REGISTER KEYS — raised fill, ink edge, a hard
+   second-strike offset (ink in both themes); hover lifts, press sinks
+   flat. The two COMMITTING actions (take, print) are KNOCKOUT blocks
+   below. Disabled is UNPRINTED: a dashed placeholder, no material. */
 .btn {
-  display: inline-block;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+  background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--ink);
   border-radius: 0;
@@ -17,23 +24,68 @@
   font-family: var(--font-mono);
   font-size: 13px;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--key-shadow);
 }
 .btn:hover {
-  background: var(--ink);
-  color: var(--raised);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--key-shadow);
+  transform: translate(-1px, -1px);
+}
+.btn:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
 }
 .btn.small {
   padding: 6px 11px;
   font-size: 13px;
 }
 .btn:disabled {
-  border-color: var(--border);
-  color: var(--ink-muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--ink-faint);
   cursor: default;
+  box-shadow: none;
+  transform: none;
 }
 .btn:disabled:hover {
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--ink-faint);
+  box-shadow: none;
+  transform: none;
+}
+/* the page's committing pair: capture and print — solid ink, the
+   double-strike hover, the bite (class in markup) */
+#takeBtn,
+#printBtn {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--raised);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: none;
+}
+#takeBtn:hover,
+#printBtn:hover {
+  background: var(--ink);
+  color: var(--raised);
+  box-shadow: none;
+  transform: none;
+  text-shadow: 0.6px 0 currentColor;
+}
+#takeBtn:active,
+#printBtn:active {
+  transform: translateY(1px);
+}
+#printBtn:disabled,
+#printBtn:disabled:hover {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--ink-faint);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-shadow: none;
+  transform: none;
 }
 
 .label {

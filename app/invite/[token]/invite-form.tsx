@@ -63,12 +63,7 @@ export function InviteForm({
         placeholder="password (8+ characters)"
         aria-label="Password"
       />
-      <Button
-        type="submit"
-        variant="outline"
-        className="w-full"
-        disabled={busy}
-      >
+      <Button type="submit" className="w-full" disabled={busy}>
         {busy ? 'Creating account…' : 'Create account'}
       </Button>
       {error ? <p className="text-xs text-red">{error}</p> : null}

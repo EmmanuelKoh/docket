@@ -493,7 +493,7 @@ export function StudioEditor() {
         >
           New
         </Button>
-        <Button variant="outline" size="sm" className={btnCls} onClick={save}>
+        <Button size="sm" className={btnCls} onClick={save}>
           Save
         </Button>
         <Button
@@ -506,7 +506,6 @@ export function StudioEditor() {
         </Button>
         <div className="grow" />
         <Button
-          variant="outline"
           size="sm"
           className={btnCls}
           onClick={print}

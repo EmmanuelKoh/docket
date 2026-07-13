@@ -14,7 +14,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { QueueJob } from '@/app/_lib/queue-data';
-import { Button } from '@/components/ui/button';
 
 const POLL_MS = 3000;
 const EASE_AFTER_MS = 2 * 60 * 1000;
@@ -160,24 +159,22 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
                     <span className="hidden shrink-0 font-mono text-xs text-ink-faint sm:inline">
                       claimed {job.claimedAgo}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="hidden h-auto shrink-0 px-2.5 py-1 text-xs font-normal sm:inline-flex"
+                    <button
+                      type="button"
+                      className="hidden shrink-0 font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink sm:inline"
                       onClick={() => requeue(job.id)}
                     >
-                      Requeue
-                    </Button>
+                      requeue
+                    </button>
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="hidden h-auto shrink-0 px-2.5 py-1 text-xs font-normal sm:inline-flex"
+                  <button
+                    type="button"
+                    className="hidden shrink-0 font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink sm:inline"
                     onClick={() => cancel(job.id)}
                   >
-                    Cancel
-                  </Button>
+                    cancel
+                  </button>
                 )}
               </div>
               <div className="mt-0.5 text-xs text-ink-muted">
@@ -194,24 +191,22 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
                     <span className="font-mono text-xs text-ink-faint">
                       claimed {job.claimedAgo}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-auto px-2.5 py-1 text-xs font-normal"
+                    <button
+                      type="button"
+                      className="font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink"
                       onClick={() => requeue(job.id)}
                     >
-                      Requeue
-                    </Button>
+                      requeue
+                    </button>
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto px-2.5 py-1 text-xs font-normal"
+                  <button
+                    type="button"
+                    className="font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink"
                     onClick={() => cancel(job.id)}
                   >
-                    Cancel
-                  </Button>
+                    cancel
+                  </button>
                 )}
               </div>
             </div>

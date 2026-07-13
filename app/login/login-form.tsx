@@ -50,12 +50,7 @@ export function LoginForm() {
         placeholder="password"
         aria-label="Password"
       />
-      <Button
-        type="submit"
-        variant="outline"
-        className="w-full"
-        disabled={busy}
-      >
+      <Button type="submit" className="w-full" disabled={busy}>
         {busy ? 'Signing in…' : 'Sign in'}
       </Button>
       {error ? <p className="text-xs text-red">{error}</p> : null}

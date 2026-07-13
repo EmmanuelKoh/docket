@@ -126,12 +126,21 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     <div className="text-[13px] font-semibold text-ink">
                       Printed
                     </div>
-                    <div className="mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
+                    {/* the terminal state is STAMPED on the record —
+                        rotated, ink-starved; red only for failure */}
+                    <div className="relative mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
                       <img
                         src={`/api/jobs/png?job=${encodeURIComponent(row.id)}`}
                         alt={row.name}
                         className="w-[200px]"
                       />
+                      <span
+                        className={`stamp bite absolute top-2 right-2 ${
+                          row.statusColor.includes('red') ? 'stamp-red' : ''
+                        }`}
+                      >
+                        {row.statusColor.includes('red') ? 'FAILED' : 'PRINTED'}
+                      </span>
                     </div>
                   </div>
                   <div className="min-w-0">
@@ -155,11 +164,11 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                     </pre>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-4 flex items-end gap-3">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-auto px-3 py-1.5 text-xs font-normal"
+                    className="h-auto px-3 py-1.5 text-xs"
                     onClick={() => reprint(row.id)}
                   >
                     Reprint
@@ -171,6 +180,13 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                       {status}
                     </span>
                   ) : null}
+                  {/* the record signs off with its id as a false barcode */}
+                  <span className="ml-auto hidden flex-col items-end gap-1 sm:flex">
+                    <span className="barcode" aria-hidden="true" />
+                    <span className="font-mono text-[10.5px] tracking-[0.3em] text-ink-muted">
+                      {row.id.toUpperCase()}
+                    </span>
+                  </span>
                 </div>
               </div>
             ) : null}

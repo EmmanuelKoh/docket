@@ -38,7 +38,7 @@ export function NewInviteForm() {
         className="max-w-xs"
         aria-label="Invite email"
       />
-      <Button type="submit" variant="outline" disabled={busy}>
+      <Button type="submit" disabled={busy}>
         New invite
       </Button>
     </form>
