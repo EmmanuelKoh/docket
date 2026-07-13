@@ -86,6 +86,11 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* the session row (Record / Load audio) fills the column edge to edge:
+   two equal halves, no leftover rail on the right */
+.tape-controls > .tape-btnrow > .btn {
+  flex: 1;
+}
 
 .tape-field {
   display: flex;
@@ -325,8 +330,60 @@
 }
 .tape-roll canvas {
   display: block;
-  touch-action: none; /* pointer drags scrub; the scrollbar still pans */
+  /* mouse drags scrub (the view captures them); touch drags PAN the
+     roll natively — a phone has no scrollbar — and only a tap seeks */
+  touch-action: pan-x;
   cursor: crosshair;
+}
+
+/* the empty-paper note: a bold knockout bar printed on the paper —
+   the banner idiom, so the page opens on the same voice it keeps. The
+   roll is ALWAYS white paper, so fixed ink-on-paper colors rather than
+   theme tokens. The canvases are hidden in this mode, so the note also
+   gives the paper its height — a short strip, not a full blank staff. */
+.tape-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 0 24px;
+  text-align: center;
+}
+.tape-empty span {
+  display: inline-block;
+  background: #1a1a1a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 8px 16px;
+}
+
+/* the recording screen's control row: Stop, and the quiet escape */
+.tape-recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* quiet lowercase text button — secondary actions (discard, download) */
+.tape-quiet {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.tape-quiet:hover {
+  color: var(--ink);
+}
+.tape-quiet:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  text-decoration: none;
 }
 
 /* the playhead is a DOM overlay, never drawn into the canvas — the
@@ -344,33 +401,20 @@
   background: var(--red);
 }
 
-/* the empty-paper note: the roll is ALWAYS white paper, so this uses a
-   fixed paper-gray rather than theme tokens. The demo action inside it
-   is clickable; the note itself never blocks the tape. */
-.tape-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 24px;
-  text-align: center;
-  font-size: 13px;
-  color: #8a8a8a;
-  pointer-events: none;
-}
+/* the demo action inside the empty-note bar: knockout type like the
+   rest of the sentence, the underline marks it clickable */
 .tape-demo {
   background: none;
   border: none;
   padding: 0;
-  font-size: 13px;
-  color: #6a6a6a;
+  font: inherit;
+  color: inherit;
   text-decoration: underline;
   cursor: pointer;
   pointer-events: auto;
 }
 .tape-demo:hover {
-  color: #333;
+  color: #d9d9d9;
 }
 
 /* the selected note: an ink-wash band over the tape pane only — a DOM
@@ -447,6 +491,26 @@
   display: none;
 }
 
+/* ---- page modes (data-mode on .tape-tool). The canvases never
+   unmount; each mode shows its own face of the roll. ---- */
+
+/* empty: bare paper carries the entry panel, no canvases, no trace */
+.tape-tool[data-mode="empty"] .tape-paper,
+.tape-tool[data-mode="empty"] .tape-trace {
+  display: none;
+}
+
+/* recording: the paper hides — the tape is only ever written by the
+   real transcription — and the live trace IS the screen, full height,
+   even when the View setting keeps the pane hidden on finished takes */
+.tape-tool[data-mode="recording"] .tape-paper {
+  display: none;
+}
+.tape-tool[data-mode="recording"] .tape-trace {
+  display: block;
+  border-top: 0;
+}
+
 /* the bottom row: transient status on the left, print actions right */
 .tape-bottom {
   display: flex;
@@ -474,52 +538,121 @@
    other pages (page css loads globally once visited). ---- */
 .tape-tool {
   font-family: var(--font-mono);
+  /* the key's hard offset edge is not a shadow — it is a second strike,
+     slightly misregistered, so it prints in INK in both themes (light
+     ink on the dark page included: deliberately visible) */
+  --key-shadow: var(--ink);
 }
+
+/* buttons: three ranks, three materials, no outlines. Thermal print has
+   two materials — ink and paper — and the machine has keys; a control
+   is always one of them, never a bare rectangle.
+     .btn          = workbench KEY: raised fill, hairline edge, hard
+                     unblurred shadow; hover lifts, press sinks flat
+     .btn.primary  = committing KNOCKOUT: solid ink block, paper text;
+                     hover double-strikes (the platen hits twice)
+     .tape-quiet   = housekeeping: lowercase underlined text
+   Disabled is UNPRINTED: no material at all, a faint dashed placeholder
+   where the control would print. */
 .tape-tool .btn {
+  /* one box for every button — the Load-audio <label> otherwise keeps
+     inline-block text metrics and renders taller than its row mates */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
   font-family: inherit;
   font-size: 13px;
   padding: 8px 14px;
   border-radius: 0;
   border: 1px solid var(--ink);
-  background: transparent;
+  background: var(--raised);
   color: var(--ink);
+  box-shadow: 2px 2px 0 var(--key-shadow);
 }
 .tape-tool .btn:hover {
-  background: var(--ink);
+  background: var(--raised);
   border-color: var(--ink);
-  color: var(--raised);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--key-shadow);
+  transform: translate(-1px, -1px);
+}
+.tape-tool .btn:active {
+  box-shadow: none;
+  transform: translate(2px, 2px);
 }
 .tape-tool .btn.small {
   padding: 6px 11px;
   font-size: 13px;
 }
+.tape-tool .btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--raised);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: none;
+}
+.tape-tool .btn.primary:hover {
+  background: var(--ink);
+  color: var(--raised);
+  box-shadow: none;
+  transform: none;
+  text-shadow: 0.6px 0 currentColor;
+}
+.tape-tool .btn.primary:active {
+  transform: translateY(1px);
+}
 .tape-tool .btn:disabled,
 .tape-tool .btn.disabled {
-  border-color: var(--border);
-  color: var(--ink-muted);
   background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--ink-faint);
+  font-weight: 400;
+  letter-spacing: normal;
+  box-shadow: none;
+  transform: none;
+  text-shadow: none;
 }
+/* a toggle held ON: a key sunk into the machine — ink fill, no travel */
 .tape-tool .btn.pressed {
   background: var(--ink);
   color: var(--raised);
   border-color: var(--ink);
+  box-shadow: none;
 }
-/* the live capture: red lamp, red frame; inverts to red when hovered */
+/* the live capture: a red key (transport while audio runs), a red
+   knockout when the live thing IS the committing control (Stop) */
 .tape-tool .btn.on {
   color: var(--red);
   border-color: var(--red);
-  background: transparent;
+  background: var(--raised);
+  box-shadow: 2px 2px 0 var(--red);
 }
 .tape-tool .btn.on:hover {
+  color: var(--red);
+  border-color: var(--red);
+  box-shadow: 3px 3px 0 var(--red);
+}
+.tape-tool .btn.primary.on {
   background: var(--red);
   border-color: var(--red);
   color: #fff;
+  box-shadow: none;
+}
+.tape-tool .btn.primary.on:hover {
+  background: var(--red);
+  color: #fff;
+  box-shadow: none;
+  text-shadow: 0.6px 0 currentColor;
 }
 .tape-lamp {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   border: 1px solid currentColor;
+  background: currentColor;
   flex: none;
 }
 .tape-lamp.live {
@@ -646,10 +779,35 @@
   border-color: #fff;
 }
 
-/* the transport readout as a deck counter — score-numeral weight */
-.tape-transport .tape-val {
-  font-size: 17px;
-  font-weight: 700;
+/* the bite: the ink on solid surfaces carries a whisper of print
+   texture — three thresholded fractal-noise layers multiplied into one
+   mask (sparse speckle + occasional splatter clump + a micro dust so
+   fine it lands at half a pixel). The texture is authored at 480px and
+   displayed at 240px, which is what pushes the finest dots sub-pixel.
+   Coverage is 1-2%: the ink reads solid at a glance. Knockouts and the
+   banner only; keys, body text, and paper stay crisp. */
+.tape-tool .btn.primary,
+.tape-tool .tape-banner,
+.tape-tool .tape-empty span {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27480%27 height=%27480%27%3E%3Cfilter id=%27f%27 x=%270%27 y=%270%27 width=%27100%%27 height=%27100%%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.08%27 numOctaves=%274%27 seed=%275%27 stitchTiles=%27stitch%27 result=%27n0%27/%3E%3CfeComponentTransfer in=%27n0%27 result=%27t0%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.0225%27 numOctaves=%273%27 seed=%2717%27 stitchTiles=%27stitch%27 result=%27n1%27/%3E%3CfeComponentTransfer in=%27n1%27 result=%27t1%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeComposite in=%27t0%27 in2=%27t1%27 operator=%27in%27 result=%27c1%27/%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.75%27 numOctaves=%272%27 seed=%274%27 stitchTiles=%27stitch%27 result=%27n2%27/%3E%3CfeComponentTransfer in=%27n2%27 result=%27t2%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeComposite in=%27c1%27 in2=%27t2%27 operator=%27in%27/%3E%3C/filter%3E%3Crect width=%27480%27 height=%27480%27 filter=%27url(%23f)%27/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27480%27 height=%27480%27%3E%3Cfilter id=%27f%27 x=%270%27 y=%270%27 width=%27100%%27 height=%27100%%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.08%27 numOctaves=%274%27 seed=%275%27 stitchTiles=%27stitch%27 result=%27n0%27/%3E%3CfeComponentTransfer in=%27n0%27 result=%27t0%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.0225%27 numOctaves=%273%27 seed=%2717%27 stitchTiles=%27stitch%27 result=%27n1%27/%3E%3CfeComponentTransfer in=%27n1%27 result=%27t1%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeComposite in=%27t0%27 in2=%27t1%27 operator=%27in%27 result=%27c1%27/%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.75%27 numOctaves=%272%27 seed=%274%27 stitchTiles=%27stitch%27 result=%27n2%27/%3E%3CfeComponentTransfer in=%27n2%27 result=%27t2%27%3E%3CfeFuncA type=%27discrete%27 tableValues=%271 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0%27/%3E%3C/feComponentTransfer%3E%3CfeComposite in=%27c1%27 in2=%27t2%27 operator=%27in%27/%3E%3C/filter%3E%3Crect width=%27480%27 height=%27480%27 filter=%27url(%23f)%27/%3E%3C/svg%3E");
+  -webkit-mask-size: 240px 240px;
+  mask-size: 240px 240px;
+}
+
+/* the transport readout: one quiet unit, never wrapping — the duration
+   half sits a shade fainter than the elapsed half */
+.tape-time {
+  white-space: nowrap;
+}
+.tape-time .tape-dur {
+  color: var(--ink-faint);
+}
+
+/* the recording screen's Stop earns weight — the one big control */
+.tape-tool .btn.big {
+  padding: 12px 28px;
+  font-size: 15px;
 }
 
 /* fader-style sliders: hairline track, square ink thumb */
@@ -691,11 +849,73 @@
   border-radius: 0;
 }
 
+/* ---- touch & small screens ---- */
+
+/* the transport hint speaks the input language of the device */
+.tape-hint-touch {
+  display: none;
+}
+
+/* finger-sized targets on touch devices: taller buttons and rows, a
+   grabbable fader thumb. Same layout, more air. */
+@media (pointer: coarse) {
+  .tape-tool .btn {
+    padding: 12px 16px;
+  }
+  .tape-tool .btn.small {
+    padding: 11px 14px;
+  }
+  .tape-tool .tape-select,
+  .tape-tool .tape-name {
+    padding: 11px 12px;
+  }
+  .tape-tool input[type="range"] {
+    height: 34px;
+  }
+  .tape-tool input[type="range"]::-webkit-slider-thumb {
+    width: 13px;
+    height: 29px;
+    margin-top: -14px;
+  }
+  .tape-tool input[type="range"]::-moz-range-thumb {
+    width: 13px;
+    height: 29px;
+  }
+  .tape-chip-x {
+    padding: 8px 12px;
+  }
+  .tape-take-open,
+  .tape-phrase-item {
+    padding: 8px 0;
+  }
+  .tape-hint-kbd {
+    display: none;
+  }
+  .tape-hint-touch {
+    display: inline;
+  }
+}
+
+/* narrow screens: the tape leads, the project column follows; the
+   transport wraps instead of overflowing */
 @media (max-width: 900px) {
   .tape-tool {
     flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tape-stage {
+    order: -1;
+    width: 100%;
   }
   .tape-controls {
     width: 100%;
+  }
+  .tape-transport,
+  .tape-bottom {
+    flex-wrap: wrap;
+  }
+  .tape-transport .tape-hint {
+    margin-left: 0;
+    flex-basis: 100%;
   }
 }

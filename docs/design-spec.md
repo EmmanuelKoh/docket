@@ -333,18 +333,35 @@ a toggle that's on, never red.
 ### Tape
 
 Full-bleed workbench at /tape (sidebar collapses on entry, like the
-Studio). Notation glyphs (treble clef, key signature, accidentals,
+Studio). The page commits to ONE of three MODES and shows only that
+mode's controls — no state ever renders another state's chrome grayed
+out. EMPTY (nothing on deck): the session buttons (Record / Load
+audio) sit at the top of the controls column — the SAME place they
+hold in loaded mode, so they never move between states — followed by
+the takes list and nothing else; the bare paper shrinks to a short
+strip carrying a BOLD KNOCKOUT BAR (fixed ink-on-paper: #1a1a1a bar,
+white 700 type, the bite like every knockout) reading "nothing on
+tape yet — press Record, open a saved take, or try the demo phrase",
+with the demo phrase underlined and clickable inside it. RECORDING:
+the paper hides entirely — the tape is only ever written by the real
+transcription, never sketched — and the raw pitch trace becomes the
+screen, full height (320px) in linear time, auto-following; above it
+the red REC banner, below it one big Stop and a quiet lowercase
+"discard" (the false-start escape: stop without transcribing). A
+screen wake lock (best-effort) keeps a phone's display — and its mic
+stream — alive through a take. LOADED: the full bench described
+below. The roll never moves between modes; the chrome around it
+changes. Notation glyphs (treble clef, key signature, accidentals,
 breath commas) are engraved shapes rasterized from Bravura (SIL OFL),
 sized to the staff; the take opens with bare paper, then the clef and
-key signature before the first note. Before anything is on tape, the
-paper carries a centered fixed-gray note ("nothing on tape yet —
-press Record, open a saved take, or try the demo phrase" — the demo
-is a clickable underlined action there). The canvases track the
+key signature before the first note. The canvases track the
 roll's width via a ResizeObserver (the app sidebar collapses after
-mount). Monophonic transcription in two
-regimes: while the mic is live, a lightweight pitch tracker sketches
-the tape and trace in real time; when the take ends (Stop or Load
-clip) the recording is transcribed by a neural model (Basic
+mount) and stay mounted across modes (CSS hides them; the controller
+holds their refs). Monophonic transcription: while the mic is live,
+only the raw pitch trace draws (live notation was deliberately
+dropped — the sketch was discarded on Stop anyway, and a plausible
+fiction teaches distrust of the tape); when the take ends (Stop or
+Load audio) the recording is transcribed by a neural model (Basic
 Pitch, bundled, in-browser) and decoded into main notes,
 rearticulation splits, slide connectors (a thin diagonal between
 pitches; a dip scoop for a same-pitch slide), and ornament marks (a
@@ -352,9 +369,7 @@ small backwards "c" — a procedurally drawn arc opening toward the
 earlier tape — above the staff at the attack of every ornamented main
 note). Ornaments never render as small notes on the staff; the arc is
 painted OVER the preceding tape rather than inserting rows, so main
-notes stay close together. (The renderer still draws small grace
-noteheads with shrunk accidentals for the live sketch's tracker
-events.) The final tape replaces the sketch. The
+notes stay close together. The
 preview canvas shows the exact raster rows the printer would receive,
 in reading orientation (staff horizontal, time flowing left to right,
 new tape entering at the right; the strip auto-follows unless the user
@@ -370,33 +385,67 @@ Tape material & type (the studio borrows its chrome from the machine;
 scoped to this page): ONE typeface — the receipt mono — at TWO sizes
 (13px words, 12px asides) and TWO colors (--ink, --ink-muted); no
 uppercase, no letter-spacing, section titles differ by weight (700)
-alone. Controls are FLAT and SQUARE: 1px ink borders, transparent
-fill, zero radius; hover and pressed states INVERT like thermal print
-(ink fill, --raised text); disabled drops to hairline border +
-muted text. Record carries a round LAMP (outline circle idle, filled
-red with a slow blink while live) and the live button inverts to red
-on hover. Sections separate with dotted PERFORATION rules (5px dash /
+alone. Controls are square, radius 0, and carry exactly ONE of three
+MATERIALS by rank — thermal print's two materials plus the machine's
+— never a bare outlined rectangle (the wireframe idiom; retired):
+COMMITTING actions (Record/Stop, Save take, Print take) are KNOCKOUT
+BLOCKS — solid ink, --raised text, 700 weight; hover DOUBLE-STRIKES
+(a 0.6px text-shadow thickens the strokes, the platen hitting twice),
+press nudges down 1px. Knockouts and the take banner carry the BITE:
+a whisper of print texture — a CSS mask of three tail-thresholded
+fractal-noise layers multiplied together (sparse speckle, an
+occasional splatter clump, and micro dust so fine it lands at half a
+pixel; the texture is authored at 480px and displayed at 240px to
+push the dust sub-pixel). Coverage stays near 1–2% so the ink reads
+solid at a glance; holes are always full paper-white, never faded
+gray, and never touch body text, keys, or the paper itself. (Band
+thresholds are forbidden — cutting a band out of smooth noise yields
+hollow rings, not clumps.) WORKBENCH actions (transport, inspector verbs,
+Load audio, Save as new, Print phrases) are REGISTER KEYS — raised
+fill, 1px ink edge, a hard unblurred 2px offset edge that is a SECOND
+STRIKE, not a shadow: always ink, in both themes (in dark it prints
+light against the page, a misregistered double impression,
+deliberately visible); hover lifts the key (3px offset, −1px
+translate), press sinks it flat (2px translate, no offset); a
+toggle held ON (Ornament, Slide) is a key sunk in ink fill with no
+travel. HOUSEKEEPING stays lowercase underlined text (discard,
+download take). DISABLED is UNPRINTED: transparent fill, --ink-faint
+text, a 1px dashed hairline placeholder — no material at all. Live
+capture red per the red rules: Stop while recording is the red
+knockout, Play while audio runs a red-edged key. Record carries a
+round LAMP (outline circle idle, filled red with a slow blink while
+live). Sections separate with dotted PERFORATION rules (5px dash /
 6px gap hairlines) in both columns; the takes list draws LEDGER
 LEADERS (name……………duration) like receipt line items; the roll is
 framed as a receipt strip — square hairline frame with a TORN
 sawtooth right edge (card-color triangles over the paper). Sliders
 are FADERS: 1px track, 7×15px square ink thumb. Lucide icons where a
-symbol is universal: icon-only Play/Pause/Stop transport, chevron
-pitch nudges, scissors on Cut before, trash for Remove, curved
-Undo/Redo arrows (tooltips carry shortcuts), printer glyph on print
-buttons. Domain actions (Ornament, Slide from prev, Split at
-playhead, Join next) stay as words. The one BOLD element (borrowed
+symbol is universal, sized 13–16px so they read at arm's length:
+icon-only Play/Pause/Stop transport, chevron pitch nudges and note
+walk, scissors on Cut before, trash for Remove, curved Undo/Redo
+arrows (tooltips carry shortcuts), printer glyph on print buttons.
+Domain actions (Ornament, Slide from prev, Split at playhead, Join
+next) stay as words. (Agreed direction, not yet built elsewhere: this
+three-material system replaces outline buttons app-wide, and the
+print vocabulary grows rubber-stamp statuses in History, ledger-line
+actions in list rows, and job-id barcodes on detail views — no
+end-of-roll stripes.) The one BOLD element (borrowed
 from the plugin receipts' FULL TIME knockout bar): the TAKE BANNER
 over the roll — an inverted ink bar, centered 15px/700 knockout type,
 naming the open take ("unsaved take · 2 phrases", or "name · phrase 2
 of 3" in focus); while the mic is live it turns --red with a blinking
 white lamp and a running counter ("● REC 0:12.4") — the loudest red
-on the page, earned by an active capture. The transport readout sets
-in deck-counter weight (17px/700 mono).
+on the page, earned by an active capture. The transport readout is a
+quiet one-line unit that never wraps: elapsed in the ordinary mono
+value size, " / duration" a shade fainter (--ink-faint) — the REC
+banner already carries the loud counter, so the transport doesn't.
 
-Left column (300px), project-first: session buttons (Record / New
-take — the demo phrase is NOT a main button; it lives as an
-underlined action inside the empty-paper note), then the TAKES list —
+Left column (300px, loaded mode; the empty page shows only the takes
+list here), project-first: session buttons (Record / Load audio —
+two equal halves filling the column edge to edge; both start a NEW
+take; there is no separate New-take button, Record always resets, and
+the demo phrase is NOT a main button; it lives in the empty note's
+bar on the paper), then the TAKES list —
 every saved take is a PROJECT. Rows are plain text (name + mono duration; no note counts),
 clicking a row opens it, the open row renders bold and expands to its
 PHRASE LIST (see Phrases below) indented under a hairline; an unsaved
@@ -407,8 +456,11 @@ says so, and an underlined inline "undo" restores. The save row (name
 input + Save) appears once a take exists: a session saved or loaded
 stays TIED to its record — "Save" updates in place without
 re-uploading audio, the name field renames on save, "Save as new"
-forks; the tie clears when the audio genuinely changes (New take,
-fresh recording, Demo, Load clip). Saving round-trips the whole song
+forks; the tie clears when the audio genuinely changes (fresh
+recording, Demo, Load audio, discard). Under the save row, a quiet
+lowercase "download take (wav)" writes the audio to the user's
+machine, named after the take — a download, deliberately not called
+saving. Saving round-trips the whole song
 document (phrases, edits, versions, layout) plus the recording as
 lossless WAV, so a loaded take comes back frozen where edited and
 re-transcribes identically. Below the list: the KEY picker (the one
@@ -429,8 +481,9 @@ space only when open): DETECTION (the Melody floor slider, value
 shown as "230 Hz / A♯3" — a note name, not bare Hz), VIEW (Notation:
 Full / Main notes only; Pitch trace: Hidden / Aligned under the tape /
 Linear time, with the Trace stretch slider only in Linear), LAYOUT
-(the five geometry sliders + hint), and CLIP FILE (Save clip / Load
-clip WAV round-trip; a loaded clip opens as its own new take). Status
+(the five geometry sliders + hint). There is no Clip-file group:
+loading lives in the session buttons and the entry panel (a loaded
+file opens as its own new take), downloading in the Takes group. Status
 during a decode: "transcribing… N%", then the line clears — no note
 or ornament counts, ever; while the decode runs, the session, clip,
 and transport controls disable rather than race it. The mic button
@@ -460,7 +513,14 @@ to a breath mark, glyphs occupy timeless rows), so the playhead follows
 the renderer's time-to-row timeline: it sweeps steadily through notes
 and skips across breath marks, matching the ear. Both panes are the
 scrub surface (crosshair cursor, hint right-aligned in the transport
-row): dragging pauses and seeks, releasing resumes if it was playing.
+row): a mouse drag pauses and seeks, releasing resumes if it was
+playing. TOUCH is different — a phone has no scrollbar, so the drag
+gesture belongs to navigation: touch drags PAN the roll natively
+(touch-action: pan-x) and only a TAP seeks (and selects, with a
+~24px slack toward the nearest note — note bars can be 2px wide).
+The transport hint speaks the device's input language: keyboard
+shortcuts on fine pointers, "tap the tape to seek · tap a note to
+edit" on coarse ones.
 While playing the roll auto-scrolls to keep the bar in view.
 
 Editing: once a take is decoded, clicking a note on the tape selects
@@ -468,12 +528,14 @@ it — the same click still seeks. The selection is an ink-wash band
 (8% ink, hairline --ink-muted edges) over the tape pane only, drawn as
 a DOM overlay like the playhead, never into the canvas (exact print
 bytes). An inspector strip under the transport shows the selected note
-in mono ("A♯4 · 0:00.07–0:02.23") with its actions: Pitch −/+,
+in mono ("A♯4 · 0:00.07–0:02.23") with its actions: prev/next note
+chevrons at the left (the buttons for the ←/→ walk — the only edit
+verb that had no touch path), Pitch −/+,
 Ornament and Slide-from-prev toggles (a pressed toggle inverts to ink
 on raised — red stays reserved), Split at playhead (enabled while the
 playhead rests inside the note; edits keep the playback position),
 Join next, Remove, and Undo (n) / Redo pushed to the right. Before a
-selection the strip teaches the affordance ("click a note on the tape
+selection the strip teaches the affordance ("pick a note on the tape
 to edit it"); the Main-notes-only view doesn't edit ("switch to Full
 notation to edit"). Keyboard (YouTube-spirited; skipped while a form control has focus):
 space play/pause, ⇧< / ⇧> seek ±5s (also on the transport as deck
@@ -525,6 +587,17 @@ raw job id). Jobs carry the take's saved name; a phrase prints as
 its own standalone receipt (fresh clef and key signature each). The
 jobs appear in Queue and History like any other, but carry no
 template, so Reprint declines them with a pointer back to the tool.
+
+Small screens and touch. Under 900px the columns stack with the STAGE
+FIRST — banner, roll, transport, inspector, print — and the project
+column after; the phone is the recorder, and the empty and recording
+modes each fit a single screen. Coarse pointers (@media pointer:
+coarse) get finger-sized targets: taller buttons, selects, and list
+rows, and a 13×29px fader thumb — same layout, more air. The page
+pads its bottom with the safe-area inset. The transport wraps rather
+than overflows; the keyboard hint swaps for the touch hint (see the
+scrub paragraph above). Everything else — modes, entry panel, the
+full-height recording trace — is the same design on every width.
 
 ### Queue
 Title "Queue" with "What prints next." subtitle; job count right (mono).
