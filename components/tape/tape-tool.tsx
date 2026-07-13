@@ -2,8 +2,9 @@
 
 // components/tape/tape-tool.tsx — the Tape studio's React layer. The
 // page commits to the session's state (data-mode on the root): EMPTY
-// shows an entry panel on the paper (Record / load audio / demo) plus
-// the takes list and nothing else; RECORDING reduces to the REC banner,
+// keeps the session buttons in their fixed column spot over the takes
+// list, and the short paper strip carries the note (with the demo
+// action); RECORDING reduces to the REC banner,
 // the full-height live trace, Stop, and discard; LOADED is the full
 // bench — stage (roll, transport, inspector, print) and the project
 // column (takes, key, collapsible settings). Controls read the shared
@@ -224,7 +225,7 @@ function Projects({ ctl }: { ctl: Controller | null }) {
           />
           <button
             type="button"
-            className="btn small"
+            className="btn small primary"
             disabled={!canSave}
             onClick={() => ctl?.saveTake(name.trim() || 'Take')}
           >
@@ -413,7 +414,7 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
         <div className="tape-btnrow">
           <button
             type="button"
-            className="btn icon"
+            className="btn icon primary"
             disabled={decoding}
             onClick={() => ctl?.toggleMic()}
           >
@@ -432,7 +433,7 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
       <div className="tape-btnrow">
         <button
           type="button"
-          className="btn icon"
+          className="btn icon primary"
           disabled={decoding}
           onClick={() => ctl?.toggleMic()}
         >
@@ -604,7 +605,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
         title="Previous note (←)"
         onClick={() => ctl?.selectAdjacent(-1)}
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={16} />
       </button>
       <button
         type="button"
@@ -613,7 +614,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
         title="Next note (→)"
         onClick={() => ctl?.selectAdjacent(1)}
       >
-        <ChevronRight size={14} />
+        <ChevronRight size={16} />
       </button>
       {selection ? (
         <>
@@ -627,7 +628,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             title="Pitch down a semitone (↓)"
             onClick={() => ctl?.nudgePitch(-1)}
           >
-            <ChevronDown size={14} />
+            <ChevronDown size={16} />
           </button>
           <button
             type="button"
@@ -636,7 +637,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             title="Pitch up a semitone (↑)"
             onClick={() => ctl?.nudgePitch(1)}
           >
-            <ChevronUp size={14} />
+            <ChevronUp size={16} />
           </button>
           <button
             type="button"
@@ -685,7 +686,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             title="Start a new phrase at this note (C)"
             onClick={() => ctl?.cutBefore()}
           >
-            <Scissors size={12} /> Cut before
+            <Scissors size={14} /> Cut before
           </button>
           <button
             type="button"
@@ -694,7 +695,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
             title="Remove note (⌫)"
             onClick={() => ctl?.removeNote()}
           >
-            <Trash2 size={13} />
+            <Trash2 size={15} />
           </button>
         </>
       ) : (
@@ -713,7 +714,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
         title="Undo (⌘Z)"
         onClick={() => ctl?.undoEdit()}
       >
-        <Undo2 size={13} />
+        <Undo2 size={15} />
         {editCount ? ` ${editCount}` : ''}
       </button>
       <button
@@ -724,7 +725,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
         title="Redo (⇧⌘Z)"
         onClick={() => ctl?.redoEdit()}
       >
-        <Redo2 size={13} />
+        <Redo2 size={15} />
       </button>
     </div>
   );
@@ -822,7 +823,7 @@ function RecordingControls({ ctl }: { ctl: Controller | null }) {
     <div className="tape-recording-controls">
       <button
         type="button"
-        className="btn icon on big"
+        className="btn icon primary on big"
         onClick={() => ctl?.toggleMic()}
       >
         <span className="tape-lamp live" />
@@ -869,7 +870,7 @@ function Transport({ ctl }: { ctl: Controller | null }) {
         title="Back 5 seconds (⇧<)"
         onClick={() => ctl?.seekBy(-5)}
       >
-        <Rewind size={13} />
+        <Rewind size={15} />
       </button>
       <button
         type="button"
@@ -881,7 +882,7 @@ function Transport({ ctl }: { ctl: Controller | null }) {
         title={playState === 'playing' ? 'Pause (space)' : 'Play (space)'}
         onClick={() => ctl?.playPause()}
       >
-        {playState === 'playing' ? <Pause size={13} /> : <Play size={13} />}
+        {playState === 'playing' ? <Pause size={15} /> : <Play size={15} />}
       </button>
       <button
         type="button"
@@ -891,7 +892,7 @@ function Transport({ ctl }: { ctl: Controller | null }) {
         title="Forward 5 seconds (⇧>)"
         onClick={() => ctl?.seekBy(5)}
       >
-        <FastForward size={13} />
+        <FastForward size={15} />
       </button>
       <button
         type="button"
@@ -901,7 +902,7 @@ function Transport({ ctl }: { ctl: Controller | null }) {
         title="Stop"
         onClick={() => ctl?.stopPlay()}
       >
-        <Square size={11} />
+        <Square size={13} />
       </button>
       <select
         className="tape-select tape-speed"
@@ -948,16 +949,16 @@ function Bottom({ ctl }: { ctl: Controller | null }) {
             disabled={!canPrint || printState === 'queuing'}
             onClick={() => ctl?.printPhrases()}
           >
-            <Printer size={12} /> Print phrases ({phraseCount})
+            <Printer size={14} /> Print phrases ({phraseCount})
           </button>
         )}
         <button
           type="button"
-          className="btn icon"
+          className="btn icon primary"
           disabled={!canPrint || printState === 'queuing'}
           onClick={() => ctl?.print()}
         >
-          <Printer size={13} />{' '}
+          <Printer size={15} />{' '}
           {printState === 'queuing'
             ? 'Queuing…'
             : focused

@@ -339,8 +339,10 @@ out. EMPTY (nothing on deck): the session buttons (Record / Load
 audio) sit at the top of the controls column — the SAME place they
 hold in loaded mode, so they never move between states — followed by
 the takes list and nothing else; the bare paper shrinks to a short
-strip carrying the fixed-gray "nothing on tape yet" note with the
-demo phrase as its underlined quiet action. RECORDING:
+strip carrying a BOLD KNOCKOUT BAR (fixed ink-on-paper: #1a1a1a bar,
+white 700 type, the bite like every knockout) reading "nothing on
+tape yet — press Record, open a saved take, or try the demo phrase",
+with the demo phrase underlined and clickable inside it. RECORDING:
 the paper hides entirely — the tape is only ever written by the real
 transcription, never sketched — and the raw pitch trace becomes the
 screen, full height (320px) in linear time, auto-following; above it
@@ -383,22 +385,51 @@ Tape material & type (the studio borrows its chrome from the machine;
 scoped to this page): ONE typeface — the receipt mono — at TWO sizes
 (13px words, 12px asides) and TWO colors (--ink, --ink-muted); no
 uppercase, no letter-spacing, section titles differ by weight (700)
-alone. Controls are FLAT and SQUARE: 1px ink borders, transparent
-fill, zero radius; hover and pressed states INVERT like thermal print
-(ink fill, --raised text); disabled drops to hairline border +
-muted text. Record carries a round LAMP (outline circle idle, filled
-red with a slow blink while live) and the live button inverts to red
-on hover. Sections separate with dotted PERFORATION rules (5px dash /
+alone. Controls are square, radius 0, and carry exactly ONE of three
+MATERIALS by rank — thermal print's two materials plus the machine's
+— never a bare outlined rectangle (the wireframe idiom; retired):
+COMMITTING actions (Record/Stop, Save take, Print take) are KNOCKOUT
+BLOCKS — solid ink, --raised text, 700 weight; hover DOUBLE-STRIKES
+(a 0.6px text-shadow thickens the strokes, the platen hitting twice),
+press nudges down 1px. Knockouts and the take banner carry the BITE:
+a whisper of print texture — a CSS mask of three tail-thresholded
+fractal-noise layers multiplied together (sparse speckle, an
+occasional splatter clump, and micro dust so fine it lands at half a
+pixel; the texture is authored at 480px and displayed at 240px to
+push the dust sub-pixel). Coverage stays near 1–2% so the ink reads
+solid at a glance; holes are always full paper-white, never faded
+gray, and never touch body text, keys, or the paper itself. (Band
+thresholds are forbidden — cutting a band out of smooth noise yields
+hollow rings, not clumps.) WORKBENCH actions (transport, inspector verbs,
+Load audio, Save as new, Print phrases) are REGISTER KEYS — raised
+fill, 1px ink edge, a hard unblurred 2px offset edge that is a SECOND
+STRIKE, not a shadow: always ink, in both themes (in dark it prints
+light against the page, a misregistered double impression,
+deliberately visible); hover lifts the key (3px offset, −1px
+translate), press sinks it flat (2px translate, no offset); a
+toggle held ON (Ornament, Slide) is a key sunk in ink fill with no
+travel. HOUSEKEEPING stays lowercase underlined text (discard,
+download take). DISABLED is UNPRINTED: transparent fill, --ink-faint
+text, a 1px dashed hairline placeholder — no material at all. Live
+capture red per the red rules: Stop while recording is the red
+knockout, Play while audio runs a red-edged key. Record carries a
+round LAMP (outline circle idle, filled red with a slow blink while
+live). Sections separate with dotted PERFORATION rules (5px dash /
 6px gap hairlines) in both columns; the takes list draws LEDGER
 LEADERS (name……………duration) like receipt line items; the roll is
 framed as a receipt strip — square hairline frame with a TORN
 sawtooth right edge (card-color triangles over the paper). Sliders
 are FADERS: 1px track, 7×15px square ink thumb. Lucide icons where a
-symbol is universal: icon-only Play/Pause/Stop transport, chevron
-pitch nudges, scissors on Cut before, trash for Remove, curved
-Undo/Redo arrows (tooltips carry shortcuts), printer glyph on print
-buttons. Domain actions (Ornament, Slide from prev, Split at
-playhead, Join next) stay as words. The one BOLD element (borrowed
+symbol is universal, sized 13–16px so they read at arm's length:
+icon-only Play/Pause/Stop transport, chevron pitch nudges and note
+walk, scissors on Cut before, trash for Remove, curved Undo/Redo
+arrows (tooltips carry shortcuts), printer glyph on print buttons.
+Domain actions (Ornament, Slide from prev, Split at playhead, Join
+next) stay as words. (Agreed direction, not yet built elsewhere: this
+three-material system replaces outline buttons app-wide, and the
+print vocabulary grows rubber-stamp statuses in History, ledger-line
+actions in list rows, and job-id barcodes on detail views — no
+end-of-roll stripes.) The one BOLD element (borrowed
 from the plugin receipts' FULL TIME knockout bar): the TAKE BANNER
 over the roll — an inverted ink bar, centered 15px/700 knockout type,
 naming the open take ("unsaved take · 2 phrases", or "name · phrase 2
@@ -411,9 +442,10 @@ banner already carries the loud counter, so the transport doesn't.
 
 Left column (300px, loaded mode; the empty page shows only the takes
 list here), project-first: session buttons (Record / Load audio —
-both start a NEW take; there is no separate New-take button, Record
-always resets, and the demo phrase is NOT a main button; it lives in
-the empty page's entry panel), then the TAKES list —
+two equal halves filling the column edge to edge; both start a NEW
+take; there is no separate New-take button, Record always resets, and
+the demo phrase is NOT a main button; it lives in the empty note's
+bar on the paper), then the TAKES list —
 every saved take is a PROJECT. Rows are plain text (name + mono duration; no note counts),
 clicking a row opens it, the open row renders bold and expands to its
 PHRASE LIST (see Phrases below) indented under a hairline; an unsaved
