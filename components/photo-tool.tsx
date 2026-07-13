@@ -25,7 +25,11 @@ export function PhotoTool() {
             <span className="sub">or drop one here</span>
           </span>
         </label>
-        <label className="btn photo-take pnl" id="takeBtn" data-panel="source">
+        <label
+          className="btn photo-take pnl bite"
+          id="takeBtn"
+          data-panel="source"
+        >
           <input
             type="file"
             id="cameraInput"
@@ -250,7 +254,7 @@ export function PhotoTool() {
         </div>
         <div className="photo-actions">
           <span className="status" id="photoStatus" />
-          <button type="button" className="btn" id="printBtn" disabled>
+          <button type="button" className="btn bite" id="printBtn" disabled>
             Print
           </button>
         </div>

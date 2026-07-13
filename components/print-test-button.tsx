@@ -27,9 +27,8 @@ export function PrintTestButton({ slug }: { slug: string }) {
   return (
     <div className="flex items-center gap-3">
       <Button
-        variant="outline"
         size="sm"
-        className="h-auto px-3 py-1.5 text-xs font-normal"
+        className="h-auto px-3 py-1.5 text-xs"
         onClick={printTest}
       >
         Print test

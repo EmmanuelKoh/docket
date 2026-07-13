@@ -71,7 +71,7 @@ export function ClaimDeviceForm() {
         className="max-w-48"
         aria-label="Device name"
       />
-      <Button type="submit" variant="outline" disabled={busy}>
+      <Button type="submit" disabled={busy}>
         {busy ? 'Pairing…' : 'Pair'}
       </Button>
       {error ? <p className="w-full text-xs text-red">{error}</p> : null}
