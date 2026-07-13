@@ -1,16 +1,21 @@
 'use client';
 
 // components/tape/tape-tool.tsx — the Tape studio's React layer. The
-// left column is the PROJECT side: session buttons, the takes list
-// (each saved take is a project; the open one expands to its phrases),
-// the key signature, and collapsible settings groups. The stage is the
-// tape itself: roll, transport, inspector, print actions. Controls read
-// the shared store (store.ts) and call controller methods
-// (controller.js); the only imperative DOM is the canvas island inside
-// .tape-roll, which the controller's view module owns.
+// page commits to the session's state (data-mode on the root): EMPTY
+// shows an entry panel on the paper (Record / load audio / demo) plus
+// the takes list and nothing else; RECORDING reduces to the REC banner,
+// the full-height live trace, Stop, and discard; LOADED is the full
+// bench — stage (roll, transport, inspector, print) and the project
+// column (takes, key, collapsible settings). Controls read the shared
+// store (store.ts) and call controller methods (controller.js); the
+// only imperative DOM is the canvas island inside .tape-roll, which the
+// controller's view module owns — the canvases stay mounted across all
+// modes, CSS hides them.
 
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   FastForward,
   Pause,
@@ -41,6 +46,9 @@ import {
 import { useSidebar } from '@/components/ui/sidebar';
 
 type Controller = ReturnType<typeof createTapeController>;
+
+// which face the page wears; recording wins, then loaded, then empty
+type TapeMode = 'empty' | 'loaded' | 'recording';
 
 const fmtTime = (sec: number) => {
   const s = Math.max(0, sec);
@@ -83,6 +91,34 @@ function Group(props: { title: string; children: React.ReactNode }) {
       <summary className="label">{props.title}</summary>
       <div className="tape-acc-body">{props.children}</div>
     </details>
+  );
+}
+
+// a file input dressed as a button — a loaded file opens as a new take
+function LoadAudio({
+  ctl,
+  label = 'Load audio',
+}: {
+  ctl: Controller | null;
+  label?: string;
+}) {
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  return (
+    <label className={micOn || decoding ? 'btn disabled' : 'btn'}>
+      {label}
+      <input
+        type="file"
+        accept="audio/*"
+        hidden
+        disabled={micOn || decoding}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) ctl?.loadClip(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
   );
 }
 
@@ -205,6 +241,16 @@ function Projects({ ctl }: { ctl: Controller | null }) {
             </button>
           )}
         </div>
+      )}
+      {hasTake && hasAudio && (
+        <button
+          type="button"
+          className="tape-quiet"
+          disabled={micOn || decoding}
+          onClick={() => ctl?.downloadTake()}
+        >
+          download take (wav)
+        </button>
       )}
       <div className="tape-takes">
         {hasTake && !current && (
@@ -348,10 +394,8 @@ function KeyPicker({
   );
 }
 
-function Controls({ ctl }: { ctl: Controller | null }) {
-  const micOn = useTape((s) => s.micOn);
+function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
   const decoding = useTape((s) => s.decoding);
-  const hasAudio = useTape((s) => s.hasAudio);
   const keySig = useTape((s) => s.settings.keySig);
   const viewMode = useTape((s) => s.viewMode);
   const traceMode = useTape((s) => s.traceMode);
@@ -359,26 +403,43 @@ function Controls({ ctl }: { ctl: Controller | null }) {
   const activePhrase = useTape((s) => s.activePhrase);
   const phraseCount = useTape((s) => s.phrases.length);
 
+  // the session buttons sit in the SAME place in every mode — the top
+  // of the column — so Record never moves; the empty page just stops
+  // after the takes list (key and settings appear once there is
+  // something to act on)
+  if (mode === 'empty') {
+    return (
+      <div className="tape-controls">
+        <div className="tape-btnrow">
+          <button
+            type="button"
+            className="btn icon"
+            disabled={decoding}
+            onClick={() => ctl?.toggleMic()}
+          >
+            <span className="tape-lamp" />
+            Record
+          </button>
+          <LoadAudio ctl={ctl} />
+        </div>
+        <Projects ctl={ctl} />
+      </div>
+    );
+  }
+
   return (
     <div className="tape-controls">
       <div className="tape-btnrow">
         <button
           type="button"
-          className={micOn ? 'btn icon on' : 'btn icon'}
+          className="btn icon"
           disabled={decoding}
           onClick={() => ctl?.toggleMic()}
         >
-          <span className={micOn ? 'tape-lamp live' : 'tape-lamp'} />
-          {micOn ? 'Stop' : 'Record'}
+          <span className="tape-lamp" />
+          Record
         </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={decoding}
-          onClick={() => ctl?.newTake()}
-        >
-          New take
-        </button>
+        <LoadAudio ctl={ctl} />
       </div>
 
       <Projects ctl={ctl} />
@@ -501,36 +562,6 @@ function Controls({ ctl }: { ctl: Controller | null }) {
           apply to new tape only.
         </p>
       </Group>
-
-      <Group title="Clip file">
-        <div className="tape-btnrow">
-          <button
-            type="button"
-            className="btn small"
-            disabled={!hasAudio || micOn}
-            onClick={() => ctl?.saveClip()}
-          >
-            Save clip
-          </button>
-          <label
-            className={micOn || decoding ? 'btn small disabled' : 'btn small'}
-          >
-            Load clip
-            <input
-              type="file"
-              accept="audio/*"
-              hidden
-              disabled={micOn || decoding}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) ctl?.loadClip(file);
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-        <p className="tape-hint">a loaded clip opens as its own new take</p>
-      </Group>
     </div>
   );
 }
@@ -566,6 +597,24 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
     playTime < selection.t1 - 0.02;
   return (
     <div className="tape-inspector">
+      <button
+        type="button"
+        className="btn small icon"
+        aria-label="Previous note"
+        title="Previous note (←)"
+        onClick={() => ctl?.selectAdjacent(-1)}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <button
+        type="button"
+        className="btn small icon"
+        aria-label="Next note"
+        title="Next note (→)"
+        onClick={() => ctl?.selectAdjacent(1)}
+      >
+        <ChevronRight size={14} />
+      </button>
       {selection ? (
         <>
           <span className="tape-val">
@@ -651,7 +700,7 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
       ) : (
         <span className="tape-hint">
           {viewMode === 'full'
-            ? 'click a note on the tape to edit it'
+            ? 'pick a note on the tape to edit it'
             : 'switch to Full notation to edit'}
         </span>
       )}
@@ -750,13 +799,10 @@ function TakeBanner() {
   );
 }
 
-// a friendly note on the bare paper before anything is on tape — also
-// where the demo phrase lives, out of the main controls' way
-function EmptyOverlay({ ctl }: { ctl: Controller | null }) {
-  const show = useTape(
-    (s) => !s.hasTake && !s.hasAudio && !s.micOn && !s.decoding,
-  );
-  if (!show) return null;
+// a friendly note on the bare paper before anything is on tape — the
+// real entry buttons keep their fixed place in the controls column;
+// only the demo phrase lives here, out of the way
+function EmptyNote({ ctl }: { ctl: Controller | null }) {
   return (
     <div className="tape-empty">
       <span>
@@ -765,6 +811,30 @@ function EmptyOverlay({ ctl }: { ctl: Controller | null }) {
           try the demo phrase
         </button>
       </span>
+    </div>
+  );
+}
+
+// the recording screen's only controls: Stop transcribes the take;
+// discard is the false-start escape (no transcription, back to empty)
+function RecordingControls({ ctl }: { ctl: Controller | null }) {
+  return (
+    <div className="tape-recording-controls">
+      <button
+        type="button"
+        className="btn icon on big"
+        onClick={() => ctl?.toggleMic()}
+      >
+        <span className="tape-lamp live" />
+        Stop
+      </button>
+      <button
+        type="button"
+        className="tape-quiet"
+        onClick={() => ctl?.discard()}
+      >
+        discard
+      </button>
     </div>
   );
 }
@@ -843,12 +913,16 @@ function Transport({ ctl }: { ctl: Controller | null }) {
         <option value="0.75">0.75×</option>
         <option value="1">1×</option>
       </select>
-      <span className="tape-val">
-        {fmtTime(playTime)} / {fmtTime(clipDur)}
+      <span className="tape-val tape-time">
+        {fmtTime(playTime)}
+        <span className="tape-dur"> / {fmtTime(clipDur)}</span>
       </span>
-      <span className="tape-hint">
+      <span className="tape-hint tape-hint-kbd">
         drag tape to seek · space ▶ · ⇧&lt;&gt; ±5s · ←→ notes · ↑↓ pitch · 0–9
         phrases
+      </span>
+      <span className="tape-hint tape-hint-touch">
+        tap the tape to seek · tap a note to edit
       </span>
     </div>
   );
@@ -984,24 +1058,42 @@ export function TapeTool() {
     return () => window.removeEventListener('keydown', onKey);
   }, [ctl]);
 
+  // the page's mode: recording wins, then anything-on-deck, then empty.
+  // The canvases never unmount across modes (the controller holds their
+  // refs); CSS shows and hides them via data-mode.
+  const micOn = useTape((s) => s.micOn);
+  const decoding = useTape((s) => s.decoding);
+  const hasTake = useTape((s) => s.hasTake);
+  const hasAudio = useTape((s) => s.hasAudio);
+  const mode: TapeMode = micOn
+    ? 'recording'
+    : hasTake || hasAudio || decoding
+      ? 'loaded'
+      : 'empty';
+
   return (
-    <div className="tape-tool">
-      <Controls ctl={ctl} />
+    <div className="tape-tool" data-mode={mode}>
+      {mode !== 'recording' && <Controls ctl={ctl} mode={mode} />}
       <div className="tape-stage">
         <TakeBanner />
         <TruncatedNote />
         <div className="tape-frame">
           <div className="tape-roll" ref={wrapRef}>
-            <canvas ref={canvasRef} />
+            <canvas ref={canvasRef} className="tape-paper" />
             <TraceCanvas elRef={traceRef} />
             <SelectionBand />
             <Playhead elRef={playheadRef} />
-            <EmptyOverlay ctl={ctl} />
+            {mode === 'empty' && <EmptyNote ctl={ctl} />}
           </div>
         </div>
-        <Transport ctl={ctl} />
-        <Inspector ctl={ctl} />
-        <Bottom ctl={ctl} />
+        {mode === 'recording' && <RecordingControls ctl={ctl} />}
+        {mode === 'loaded' && (
+          <>
+            <Transport ctl={ctl} />
+            <Inspector ctl={ctl} />
+            <Bottom ctl={ctl} />
+          </>
+        )}
       </div>
     </div>
   );

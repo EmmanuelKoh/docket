@@ -16,6 +16,7 @@
 const SCALE = 0.75; // preview px per printer dot
 const MAX_VIS_W = 30000; // canvas width guard (~14 min of sounding tape)
 const TRACE_H = 110;
+const LIVE_TRACE_H = 320; // recording mode: the trace IS the screen
 
 // Renderer rows → PNG bytes (printer orientation, like every History
 // thumbnail). Standalone so the controller can thumbnail per-phrase
@@ -142,7 +143,9 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   wrap.addEventListener(
     'scroll',
     () => {
-      follow = wrap.scrollLeft + wrap.clientWidth >= canvas.width - 8;
+      // scrollWidth covers whichever pane is widest (tape, or the live
+      // trace while recording, when the tape canvas is hidden)
+      follow = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 8;
     },
     opts,
   );
@@ -166,23 +169,25 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   // Like the tape, the x-axis is SOUNDING time: silence doesn't advance,
   // so low-clarity dots during a rest pile into one column. ----
   const traceCtx = traceCanvas.getContext('2d');
+  let liveTrace = false; // recording: full-height trace, linear time
+  let traceH = TRACE_H;
   let traceOff = document.createElement('canvas');
   traceOff.width = 4096;
-  traceOff.height = TRACE_H;
+  traceOff.height = traceH;
   let traceOffCtx = traceOff.getContext('2d');
   let traceDirty = false;
   let traceCols = 1; // rightmost drawn column (linear mode extent)
 
   function traceY(midiFloat) {
     // G3 (55) at the bottom .. D6 (86) at the top
-    return TRACE_H - ((midiFloat - 55) / (86 - 55)) * TRACE_H;
+    return traceH - ((midiFloat - 55) / (86 - 55)) * traceH;
   }
 
   function growTraceOff(need) {
     if (need <= traceOff.width) return;
     const bigger = document.createElement('canvas');
     bigger.width = Math.max(need, traceOff.width * 2);
-    bigger.height = TRACE_H;
+    bigger.height = traceH;
     const c = bigger.getContext('2d');
     c.drawImage(traceOff, 0, 0);
     traceOff = bigger;
@@ -191,9 +196,12 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
 
   // aligned mode: one column per tape row (raw pitch sits directly
   // under the note bar it produced, but glyph/gap rows cut the audio);
-  // linear mode: one continuous ribbon of time, traceZoom columns/sec
+  // linear mode: one continuous ribbon of time, traceZoom columns/sec.
+  // Recording is always linear — there is no tape to align to.
   function traceCol(tMs, liveCol) {
-    if (traceMode === 'linear') return Math.round((tMs / 1000) * traceZoom);
+    if (traceMode === 'linear' || liveTrace) {
+      return Math.round((tMs / 1000) * traceZoom);
+    }
     if (liveCol !== null && liveCol !== undefined) return liveCol;
     return renderer ? renderer.rowForTime(tMs) : 0;
   }
@@ -221,7 +229,7 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   // redraw the whole trace from stored frames — used when the mode or
   // zoom changes, or when the tape is re-rendered (aligned columns move)
   function rebuildTrace(frames) {
-    traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
+    traceOffCtx.clearRect(0, 0, traceOff.width, traceH);
     traceCols = 1;
     for (const f of frames) paintTraceFrame(f);
     paintTrace();
@@ -230,11 +238,15 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   function paintTrace() {
     traceDirty = false;
     const cols =
-      traceMode === 'linear' ? Math.max(1, traceCols) : Math.max(1, drawnRows);
-    // linear mode may outgrow the tape; the roll scrolls to the widest
-    const w = Math.max(canvas.width, Math.ceil(cols * SCALE));
+      traceMode === 'linear' || liveTrace
+        ? Math.max(1, traceCols)
+        : Math.max(1, drawnRows);
+    // linear mode may outgrow the tape; the roll scrolls to the widest.
+    // While recording the tape canvas is hidden — fill the viewport.
+    const base = liveTrace ? wrap.clientWidth : canvas.width;
+    const w = Math.max(base, Math.ceil(cols * SCALE));
     if (traceCanvas.width !== w) traceCanvas.width = w;
-    if (traceCanvas.height !== TRACE_H) traceCanvas.height = TRACE_H;
+    if (traceCanvas.height !== traceH) traceCanvas.height = traceH;
     traceCtx.clearRect(0, 0, traceCanvas.width, traceCanvas.height);
     // faint reference rows at A3 / A4 / A5, the duduk-in-A anchors
     traceCtx.globalAlpha = 0.3;
@@ -248,11 +260,11 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
       0,
       0,
       cols,
-      TRACE_H,
+      traceH,
       0,
       0,
       cols * SCALE,
-      TRACE_H,
+      traceH,
     );
   }
 
@@ -276,18 +288,24 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   function frame() {
     raf = requestAnimationFrame(frame);
     const grew = drawNewRows();
-    if (grew) {
-      paintVisible();
-      if (follow) wrap.scrollLeft = canvas.width;
-    }
+    if (grew) paintVisible();
+    const traceGrew = traceDirty;
     if (grew || traceDirty) paintTrace();
+    if (follow) {
+      if (grew) wrap.scrollLeft = canvas.width;
+      else if (liveTrace && traceGrew) wrap.scrollLeft = traceCanvas.width;
+    }
     syncPlayhead();
   }
 
   // ---- scrubbing: the pointer position on the tape maps back to clip
   // time. Both canvases scrub (they share the x-axis); the wrap itself
-  // is only hit via its scrollbar, which must keep scrolling. ----
+  // is only hit via its scrollbar, which must keep scrolling. Touch is
+  // different: a drag pans the roll natively (touch-action: pan-x) and
+  // only a TAP seeks/selects — a phone has no scrollbar to grab, so the
+  // drag gesture belongs to navigation, not the scrub. ----
   let scrubbing = false;
+  let touchTap = null; // { id, x, y } — tap candidate; a real drag pans
 
   function seekToEvent(e) {
     if (!renderer) return;
@@ -303,20 +321,42 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     }
   }
 
+  // the note under the pointer, on the tape canvas only (the trace pane
+  // just seeks). Notes are monophonic so a row range is unambiguous;
+  // slackPx forgives a near-miss (fat fingers, 2px-wide grace notes).
+  // undefined = not a selection surface; null = paper (clear selection)
+  function noteIdAt(e, slackPx) {
+    if (e.target !== canvas || !renderer) return undefined;
+    const rect = canvas.getBoundingClientRect();
+    const row = (e.clientX - rect.left) / SCALE;
+    const hit = renderer.notes.find((g) => row >= g.r0 && row <= g.r1);
+    if (hit) return hit.id;
+    if (slackPx) {
+      let best = null;
+      let bestD = slackPx / SCALE;
+      for (const g of renderer.notes) {
+        const d = row < g.r0 ? g.r0 - row : row - g.r1;
+        if (d < bestD) {
+          bestD = d;
+          best = g;
+        }
+      }
+      if (best) return best.id;
+    }
+    return null;
+  }
+
   wrap.addEventListener(
     'pointerdown',
     (e) => {
       if (e.target === wrap) return;
       if (!hooks.isSeekable?.()) return;
-      // clicking the tape also selects the note under the pointer
-      // (hit-test by row range only — notes are monophonic, so time is
-      // unambiguous; the trace pane below only seeks)
-      if (e.target === canvas && renderer) {
-        const rect = canvas.getBoundingClientRect();
-        const row = (e.clientX - rect.left) / SCALE;
-        const hit = renderer.notes.find((g) => row >= g.r0 && row <= g.r1);
-        hooks.onSelect?.(hit ? hit.id : null);
+      if (e.pointerType === 'touch') {
+        touchTap = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        return; // no capture: the browser may claim the drag as a pan
       }
+      const id = noteIdAt(e, 0);
+      if (id !== undefined) hooks.onSelect?.(id);
       scrubbing = true;
       hooks.onScrubStart?.();
       wrap.setPointerCapture(e.pointerId);
@@ -327,6 +367,11 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   wrap.addEventListener(
     'pointermove',
     (e) => {
+      if (touchTap && e.pointerId === touchTap.id) {
+        const dx = e.clientX - touchTap.x;
+        const dy = e.clientY - touchTap.y;
+        if (dx * dx + dy * dy > 100) touchTap = null; // it's a drag
+      }
       if (scrubbing) seekToEvent(e);
     },
     opts,
@@ -336,8 +381,27 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     scrubbing = false;
     hooks.onScrubEnd?.();
   };
-  wrap.addEventListener('pointerup', endScrub, opts);
-  wrap.addEventListener('pointercancel', endScrub, opts);
+  wrap.addEventListener(
+    'pointerup',
+    (e) => {
+      if (touchTap && e.pointerId === touchTap.id) {
+        touchTap = null;
+        const id = noteIdAt(e, 24);
+        if (id !== undefined) hooks.onSelect?.(id);
+        seekToEvent(e); // a plain seek: playback keeps its state
+      }
+      endScrub();
+    },
+    opts,
+  );
+  wrap.addEventListener(
+    'pointercancel',
+    () => {
+      touchTap = null; // the browser took the gesture (pan/zoom)
+      endScrub();
+    },
+    opts,
+  );
 
   // ---- print/thumbnail export: the exact offscreen rows as a PNG
   // (printer orientation, like every History thumbnail) ----
@@ -369,7 +433,7 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     drawnRows = 0;
     offCtx.fillStyle = '#fff';
     offCtx.fillRect(0, 0, off.width, off.height);
-    traceOffCtx.clearRect(0, 0, traceOff.width, TRACE_H);
+    traceOffCtx.clearRect(0, 0, traceOff.width, traceH);
     traceCols = 1;
     paintVisible();
     paintTrace();
@@ -417,6 +481,21 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     },
     setTraceZoom(z) {
       traceZoom = z;
+    },
+    // recording mode: the trace becomes the whole screen — full height,
+    // linear time. The offscreen accumulates at a fixed height, so
+    // toggling swaps it; the caller rebuilds from its frame list.
+    setLiveTrace(on) {
+      if (liveTrace === on) return;
+      liveTrace = on;
+      traceH = on ? LIVE_TRACE_H : TRACE_H;
+      traceOff = document.createElement('canvas');
+      traceOff.width = 4096;
+      traceOff.height = traceH;
+      traceOffCtx = traceOff.getContext('2d');
+      traceCols = 1;
+      follow = true;
+      traceDirty = true;
     },
     exportPng,
     dispose() {

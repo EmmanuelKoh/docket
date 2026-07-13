@@ -325,8 +325,54 @@
 }
 .tape-roll canvas {
   display: block;
-  touch-action: none; /* pointer drags scrub; the scrollbar still pans */
+  /* mouse drags scrub (the view captures them); touch drags PAN the
+     roll natively — a phone has no scrollbar — and only a tap seeks */
+  touch-action: pan-x;
   cursor: crosshair;
+}
+
+/* the empty-paper note: the roll is ALWAYS white paper, so fixed
+   paper-grays rather than theme tokens. The demo action inside it is
+   clickable; the note itself never blocks the tape. The canvases are
+   hidden in this mode, so the note also gives the paper its height —
+   a short strip, not a full blank staff. */
+.tape-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 0 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #8a8a8a;
+}
+
+/* the recording screen's control row: Stop, and the quiet escape */
+.tape-recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* quiet lowercase text button — secondary actions (discard, download) */
+.tape-quiet {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.tape-quiet:hover {
+  color: var(--ink);
+}
+.tape-quiet:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+  text-decoration: none;
 }
 
 /* the playhead is a DOM overlay, never drawn into the canvas — the
@@ -344,21 +390,7 @@
   background: var(--red);
 }
 
-/* the empty-paper note: the roll is ALWAYS white paper, so this uses a
-   fixed paper-gray rather than theme tokens. The demo action inside it
-   is clickable; the note itself never blocks the tape. */
-.tape-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 24px;
-  text-align: center;
-  font-size: 13px;
-  color: #8a8a8a;
-  pointer-events: none;
-}
+/* the demo action inside the empty-paper note */
 .tape-demo {
   background: none;
   border: none;
@@ -445,6 +477,26 @@
 }
 .tape-trace-hidden {
   display: none;
+}
+
+/* ---- page modes (data-mode on .tape-tool). The canvases never
+   unmount; each mode shows its own face of the roll. ---- */
+
+/* empty: bare paper carries the entry panel, no canvases, no trace */
+.tape-tool[data-mode="empty"] .tape-paper,
+.tape-tool[data-mode="empty"] .tape-trace {
+  display: none;
+}
+
+/* recording: the paper hides — the tape is only ever written by the
+   real transcription — and the live trace IS the screen, full height,
+   even when the View setting keeps the pane hidden on finished takes */
+.tape-tool[data-mode="recording"] .tape-paper {
+  display: none;
+}
+.tape-tool[data-mode="recording"] .tape-trace {
+  display: block;
+  border-top: 0;
 }
 
 /* the bottom row: transient status on the left, print actions right */
@@ -646,10 +698,19 @@
   border-color: #fff;
 }
 
-/* the transport readout as a deck counter — score-numeral weight */
-.tape-transport .tape-val {
-  font-size: 17px;
-  font-weight: 700;
+/* the transport readout: one quiet unit, never wrapping — the duration
+   half sits a shade fainter than the elapsed half */
+.tape-time {
+  white-space: nowrap;
+}
+.tape-time .tape-dur {
+  color: var(--ink-faint);
+}
+
+/* the recording screen's Stop earns weight — the one big control */
+.tape-tool .btn.big {
+  padding: 12px 28px;
+  font-size: 15px;
 }
 
 /* fader-style sliders: hairline track, square ink thumb */
@@ -691,11 +752,73 @@
   border-radius: 0;
 }
 
+/* ---- touch & small screens ---- */
+
+/* the transport hint speaks the input language of the device */
+.tape-hint-touch {
+  display: none;
+}
+
+/* finger-sized targets on touch devices: taller buttons and rows, a
+   grabbable fader thumb. Same layout, more air. */
+@media (pointer: coarse) {
+  .tape-tool .btn {
+    padding: 12px 16px;
+  }
+  .tape-tool .btn.small {
+    padding: 11px 14px;
+  }
+  .tape-tool .tape-select,
+  .tape-tool .tape-name {
+    padding: 11px 12px;
+  }
+  .tape-tool input[type="range"] {
+    height: 34px;
+  }
+  .tape-tool input[type="range"]::-webkit-slider-thumb {
+    width: 13px;
+    height: 29px;
+    margin-top: -14px;
+  }
+  .tape-tool input[type="range"]::-moz-range-thumb {
+    width: 13px;
+    height: 29px;
+  }
+  .tape-chip-x {
+    padding: 8px 12px;
+  }
+  .tape-take-open,
+  .tape-phrase-item {
+    padding: 8px 0;
+  }
+  .tape-hint-kbd {
+    display: none;
+  }
+  .tape-hint-touch {
+    display: inline;
+  }
+}
+
+/* narrow screens: the tape leads, the project column follows; the
+   transport wraps instead of overflowing */
 @media (max-width: 900px) {
   .tape-tool {
     flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tape-stage {
+    order: -1;
+    width: 100%;
   }
   .tape-controls {
     width: 100%;
+  }
+  .tape-transport,
+  .tape-bottom {
+    flex-wrap: wrap;
+  }
+  .tape-transport .tape-hint {
+    margin-left: 0;
+    flex-basis: 100%;
   }
 }

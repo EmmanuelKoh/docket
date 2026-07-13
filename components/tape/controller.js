@@ -5,9 +5,11 @@
 // methods returned here — nothing in this file touches control DOM.
 //
 // Pipeline (all in the browser). LIVE: mic → audio-io.js (decimated,
-// high-passed PCM) → analyzer.js (pitch worker windows) → v1 note
-// tracker (components/tape-events.js) → a real-time SKETCH of the tape
-// and trace. FINAL: on Stop / Load clip, the recording is transcribed by
+// high-passed PCM) → analyzer.js (pitch worker windows) → the raw pitch
+// trace, drawn full-height in linear time (the recording screen). The
+// paper stays blank while recording: the tape is only ever written by
+// the real transcription, never sketched. FINAL: on Stop / Load clip,
+// the recording is transcribed by
 // Basic Pitch (decode.js) and interpreted into a take document
 // (doc.mjs — the same pass-1/2/3 modules the eval corpus scores), then
 // fed to the tape renderer (components/tape-renderer.js) → exact printer
@@ -51,10 +53,10 @@ import { createTapeView, rowsToPngBytes } from './tape-view.js';
 
 const WINDOW = 1024; // analysis window (samples at ~22 kHz ≈ 46 ms)
 const HOP = 256; // analysis hop (≈ 12 ms → ~86 frames/s)
-const RENDER_DELAY_MS = 300; // live look-behind, must exceed ornamentMaxMs
 
-// fixed live-tracker settings: they shape only the real-time sketch,
-// not the neural transcription (which estimates tuning on its own)
+// fixed live-tracker settings: the tracker only steadies the live
+// analysis now (holdF0, the sounding dot on the trace) — it never
+// writes tape; the neural transcription estimates tuning on its own
 function trackerValues() {
   return {
     clarityMin: 0.5,
@@ -111,7 +113,6 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   let traceFrames = []; // every analyzed frame, for redraw + ornament marks
   let cursor = 0; // next analysis window start (samples)
   let inFlight = false; // one live window in the pitch worker at a time
-  let lastT = 0; // timestamp of the newest analyzed frame (ms)
   let analysisGen = 0; // bumped per take: stale analyses and backfills quit
   let decoding = false;
   let deriveStale = false; // derivation inputs changed (floor / fine frames)
@@ -199,20 +200,17 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   }
 
   // ---- fresh take ----
-  let evQueue = []; // note events awaiting the render horizon
-  let frameQueue = []; // pitch frames awaiting the (delayed) trace
+  let evQueue = []; // note events awaiting the renderer (renderTimeline)
 
   function resetTake(clearRecording) {
     renderer = createTapeRenderer(layoutValues());
     tracker = createNoteTracker(trackerValues());
     view.attachRenderer(renderer);
     cursor = 0;
-    lastT = 0;
     traceFrames = [];
     analysisGen++; // stale backfills and live windows quit
     pendingRerender = false; // any queued re-render is now stale
     evQueue = [];
-    frameQueue = [];
     view.reset();
     if (clearRecording) recorder.reset();
     set({
@@ -304,13 +302,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     setActivePhraseState(activeIdx());
   }
 
-  // ---- look-behind rendering: the live tape draws ~300ms behind the
-  // analysis. Some interpretations are only knowable in retrospect — an
-  // ornament is recognized when the pitch RETURNS, and the tracker then
-  // emits it backdated to its true start with its true span. The delay
-  // queue lets those backdated events land before that stretch of tape
-  // is drawn. Live printing runs seconds behind the horn anyway; 300ms
-  // of hindsight is free accuracy. ----
+  // ---- rendering: drain queued note events into the renderer. Only
+  // renderTimeline fills the queue now (from the decoded document) —
+  // nothing is sketched onto the paper while recording. ----
   function feedRenderer(horizonMs) {
     while (evQueue.length && evQueue[0].tMs <= horizonMs) {
       const e = evQueue.shift();
@@ -330,45 +324,29 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       }
     }
     renderer.advance(horizonMs);
-    while (frameQueue.length && frameQueue[0].t <= horizonMs) {
-      const f = frameQueue.shift();
-      traceFrames.push(f);
-      view.paintTraceFrame(f, Math.max(0, renderer.rows.length - 1));
-    }
     if (renderer.rows.length && !get().canPrint) set({ canPrint: true });
   }
 
+  // one analyzed frame while recording: feed the tracker (it steadies
+  // the analysis via holdF0 and marks the held note on the trace) and
+  // draw the frame onto the live trace. Its note events are discarded —
+  // the tape waits for the real transcription.
   function applyFrame(m) {
-    lastT = m.t;
-    const events = tracker.push({
+    tracker.push({
       tMs: m.t,
       freq: m.freq,
       clarity: m.clarity,
       energy: m.energy,
     });
-    if (events.length) {
-      evQueue.push(...events);
-      evQueue.sort((a, b) => a.tMs - b.tMs);
-    }
-    frameQueue.push({
+    const frame = {
       t: m.t,
       freq: m.freq,
       clarity: m.clarity,
       energy: m.energy,
       sounding: tracker.sounding,
-    });
-    feedRenderer(m.t - RENDER_DELAY_MS);
-  }
-
-  // End-of-take: flush the still-sounding note and drain the look-behind
-  // queue so the tape catches up to the last analyzed frame.
-  function flushTracker() {
-    const events = tracker.finish(lastT);
-    if (events.length) {
-      evQueue.push(...events);
-      evQueue.sort((a, b) => a.tMs - b.tMs);
-    }
-    feedRenderer(Number.MAX_SAFE_INTEGER);
+    };
+    traceFrames.push(frame);
+    view.paintTraceFrame(frame);
   }
 
   // holdF0 tells the harmonic detector which comb is the melody being
@@ -407,15 +385,43 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       });
   }
 
-  // ---- mic session ----
+  // ---- mic session. The screen wake lock keeps a phone from killing
+  // the mic stream mid-take when its display sleeps; best-effort only
+  // (unsupported browsers just record with the usual screen timeout). ----
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    try {
+      wakeLock = (await navigator.wakeLock?.request('screen')) ?? null;
+    } catch {
+      wakeLock = null;
+    }
+  }
+  function releaseWakeLock() {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
+  }
+  // the lock is auto-released when the tab hides; re-acquire on return
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible' && recorder.micOn) {
+      acquireWakeLock();
+    }
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+
   async function startMic() {
     resetTake(true);
     set({ status: 'starting mic…' });
     try {
       await recorder.startMic({
         onBlock: pumpAnalysis,
-        onCap: () => stopMic('recording stopped — 10 minute limit'),
+        // a capped take still decodes — same as pressing Stop
+        onCap: () => {
+          stopMic('recording stopped — 10 minute limit');
+          if (recorder.length > recorder.sampleRate) neuralDecode();
+        },
       });
+      view.setLiveTrace(true);
+      acquireWakeLock();
       set({ micOn: true, status: 'recording…' });
     } catch (e) {
       set({ status: `mic failed: ${e.message}` });
@@ -424,7 +430,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
 
   function stopMic(reason) {
     recorder.stopMic();
-    if (tracker) flushTracker();
+    releaseWakeLock();
+    // back to the strip-height trace; the decode's backfill redraws it
+    view.setLiveTrace(false);
+    view.rebuildTrace([]);
     set({
       micOn: false,
       status:
@@ -984,7 +993,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         startMic();
       }
     },
-    newTake() {
+    // the false-start escape: stop the mic WITHOUT transcribing and
+    // clear the deck (also clears a loaded take, though the UI only
+    // offers it while recording)
+    discard() {
       if (decoding) return; // don't yank the tape from under a decode
       if (recorder.micOn) stopMic();
       resetTake(true);
@@ -998,11 +1010,13 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       syncAudioState();
       neuralDecode();
     },
-    saveClip() {
+    // download the take's audio as a WAV to this device (nothing is
+    // saved server-side here — Save take does that)
+    downloadTake() {
       if (!recorder.length) return;
       const a = document.createElement('a');
       a.href = URL.createObjectURL(recorder.toWavBlob());
-      a.download = 'tape-clip.wav';
+      a.download = `${takeName().replace(/[/\\:*?"<>|]/g, '-')}.wav`;
       a.click();
       URL.revokeObjectURL(a.href);
     },
@@ -1281,6 +1295,8 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     dispose() {
       disposed = true;
       clearTimeout(rerenderTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      releaseWakeLock();
       if (recorder.micOn) recorder.stopMic();
       player.dispose();
       analyzer.dispose();
