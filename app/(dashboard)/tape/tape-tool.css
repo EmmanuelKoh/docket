@@ -417,19 +417,6 @@
   color: #d9d9d9;
 }
 
-/* the selected note: an ink-wash band over the tape pane only — a DOM
-   overlay like the playhead, never drawn into the canvas (exact print
-   bytes). Height is set inline to the tape pane's height so the band
-   stops above the pitch trace. */
-.tape-selection {
-  position: absolute;
-  top: 0;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  border-left: 1px solid var(--ink-muted);
-  border-right: 1px solid var(--ink-muted);
-  pointer-events: none;
-}
-
 /* the editing strip under the transport: selected-note facts, the edit
    actions, and undo/redo pushed to the right */
 .tape-inspector {

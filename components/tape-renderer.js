@@ -400,12 +400,21 @@ export function createTapeRenderer(config) {
   let deferredArcs = []; // time-anchored ornament arcs awaiting rows
   let started = false;
 
-  // Per-note geometry for the editing UI's hit-testing: which rows each
-  // note's bar occupies (its accidental/gap rows excluded) and where it
-  // sits on the staff. Purely a record — rows are not affected. The id
-  // comes from the take document when a decode is being rendered (marks
-  // .id); live-sketch notes carry null.
-  const noteGeom = []; // { id, midi, step, grace, r0, r1, t0, t1 }
+  // Per-note geometry for the editing UI's hit-testing and selection
+  // box: which rows each note's bar occupies (its accidental/gap rows
+  // excluded), where it sits on the staff, and the bar's dot band
+  // (x0..x1) so the selection can hug the glyph. Purely a record — rows
+  // are not affected. The id comes from the take document when a decode
+  // is being rendered (marks.id); live-sketch notes carry null.
+  const noteGeom = []; // { id, midi, step, grace, r0, r1, x0, x1, t0, t1 }
+
+  // Geometry of ornament arcs, so the editing UI can select and delete
+  // them like notes — BOTH kinds: standalone time-anchored marks (their
+  // own timeline id) and a note's ornament-flag arc (id `<noteId>@arc`,
+  // resolved by the controller to a toggleOrnament on the owner). Row
+  // range AND dot range: an arc floats above a note's band, so
+  // hit-testing needs both axes to tell the two apart.
+  const markGeom = []; // { id, r0, r1, x0, x1 }
 
   // Audio-time ↔ tape-row map for the player's playhead and scrubbing.
   // The tape is NOT linear in time (silence compresses to a breath mark,
@@ -551,6 +560,16 @@ export function createTapeRenderer(config) {
       Math.round(cfg.staffGap * 0.35 * (cfg.glyphScale / 2)),
     );
     const cx = xOfStep(step);
+    const geom = {
+      r0: Math.max(0, centerRow - r),
+      r1: centerRow + r,
+      x0: Math.round(cx - r),
+      x1: Math.round(cx + r),
+      // the drawn circle, for the selection halo to trace the crescent
+      cr: centerRow,
+      cx,
+      rad: r,
+    };
     const openCos = Math.cos((125 * Math.PI) / 180); // opening half-angle
     for (let gx = 0; gx <= 2 * r; gx++) {
       const row = rows[centerRow - r + gx];
@@ -564,6 +583,7 @@ export function createTapeRenderer(config) {
         setDots(row, Math.round(cx + dy) - (t >> 1), t);
       }
     }
+    return geom;
   }
 
   // Caesura (phrase cut): two short parallel strokes slanting up-time
@@ -718,6 +738,10 @@ export function createTapeRenderer(config) {
       cur.rowsEmitted++;
     }
     pushSpan(cur.rStart, cur.onMs, tMs);
+    const barDots = cur.grace
+      ? Math.max(4, Math.round(cfg.noteDots * 0.6))
+      : cfg.noteDots;
+    const barX = xOfStep(cur.step) - Math.floor(barDots / 2);
     noteGeom.push({
       id: cur.id,
       midi: cur.midi,
@@ -725,14 +749,22 @@ export function createTapeRenderer(config) {
       grace: cur.grace,
       r0: cur.rStart,
       r1: rows.length,
+      x0: barX,
+      x1: barX + barDots - 1,
       t0: cur.onMs,
       t1: tMs,
     });
     const led = ledgerSteps(cur.step);
     if (led.length) emitPad(led, cfg.ledgerPadRows);
-    if (cur.arc) paintOrnamentArc(cur.arc.center, cur.arc.step);
+    if (cur.arc) {
+      const g = paintOrnamentArc(cur.arc.center, cur.arc.step);
+      if (cur.id) markGeom.push({ id: `${cur.id}@arc`, ...g });
+    }
     // time-anchored marks queued mid-note: their rows exist now
-    for (const a of deferredArcs) paintOrnamentArc(a.center, a.step);
+    for (const a of deferredArcs) {
+      const g = paintOrnamentArc(a.center, a.step);
+      if (a.id) markGeom.push({ id: a.id, ...g });
+    }
     deferredArcs = [];
     if (!cur.grace) lastStep = cur.step; // slides connect main notes
     cur = null;
@@ -743,9 +775,9 @@ export function createTapeRenderer(config) {
   // where the ornament HAPPENED — a flick in the middle of a long hold
   // marks that spot, not the note's attack. Painting is deferred until
   // the surrounding rows exist (the enclosing note's noteOff).
-  function markNow() {
+  function markNow(id = null) {
     const step = (cur ? cur.step : (lastStep ?? 8)) + 2.5;
-    deferredArcs.push({ center: Math.max(0, rows.length - 1), step });
+    deferredArcs.push({ center: Math.max(0, rows.length - 1), step, id });
   }
 
   // Full print job: same shape as the render core's text path (ESC @,
@@ -794,6 +826,7 @@ export function createTapeRenderer(config) {
     rows,
     timeline,
     notes: noteGeom,
+    marks: markGeom,
     width: WIDTH,
     // an empty take still shows (and prints) a staff with its clef and
     // key signature — bare paper with no explanation reads as a bug

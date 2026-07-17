@@ -66,6 +66,10 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     getComputedStyle(document.documentElement)
       .getPropertyValue('--ink-faint')
       .trim() || '#999';
+  const red =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--red')
+      .trim() || '#b3261e';
 
   let renderer = null;
   let traceMode = 'aligned'; // 'aligned' (tape rows) | 'linear' (time)
@@ -137,9 +141,105 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     ctx.setTransform(0, -SCALE, SCALE, 0, 0, 576 * SCALE);
     ctx.drawImage(off, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawSelectionHalo(ctx);
+  }
+
+  // ---- selection halo: a register-red contour TRACING the selected
+  // glyph — the exact rectangle of a note's bar, the exact crescent of
+  // an ornament arc — drawn over the repaint, never into the offscreen
+  // (the print bytes and PNG exports stay pristine). The stroke sits
+  // FLUSH against the ink: inner edge touching, no air, no rounding
+  // the shape doesn't have. Printer (row, dot) maps to visible
+  // (row*SCALE, (576-dot)*SCALE). ----
+  let selectedId = null;
+  const NOTE_HALO_W = 2.25; // note outline stroke, css px (a hair thicker)
+  const HALO_W = 1.5; // arc outline width, css px
+  let haloInk = null; // scratch: the arc's reconstructed ink
+  let haloRing = null; // scratch: dilated ink minus ink = the outline
+
+  function drawSelectionHalo(ctx) {
+    if (!selectedId || !renderer) return;
+    const note = renderer.notes.find((n) => n.id === selectedId);
+    if (note) {
+      // the bar is a sharp rectangle — outline it exactly, grown by
+      // half the stroke so the stroke's inner edge kisses the ink
+      ctx.strokeStyle = red;
+      ctx.lineWidth = NOTE_HALO_W;
+      ctx.strokeRect(
+        note.r0 * SCALE - NOTE_HALO_W / 2,
+        (576 - note.x1 - 1) * SCALE - NOTE_HALO_W / 2,
+        (note.r1 - note.r0) * SCALE + NOTE_HALO_W,
+        (note.x1 - note.x0 + 1) * SCALE + NOTE_HALO_W,
+      );
+      return;
+    }
+    const mark = (renderer.marks ?? []).find((m) => m.id === selectedId);
+    if (!mark) return;
+    // The arc's ink is NOT a uniform circular stroke (two half-curves
+    // thickened along the dot axis, swelling 2→6 dots through the
+    // belly), so no analytic ring hugs it. Reconstruct the exact ink
+    // with the same math paintOrnamentArc prints with, then outline it
+    // by dilation: the ink stamped at offsets around a small circle,
+    // minus the ink itself — a flush contour of the true shape.
+    const OPEN_COS = Math.cos((125 * Math.PI) / 180);
+    const r = mark.rad;
+    const pad = Math.ceil(HALO_W) + 2;
+    const w = Math.ceil((2 * r + 1) * SCALE) + 2 * pad;
+    const h = Math.ceil((2 * r + 7) * SCALE) + 2 * pad;
+    if (!haloInk) {
+      haloInk = document.createElement('canvas');
+      haloRing = document.createElement('canvas');
+    }
+    if (haloInk.width < w || haloInk.height < h) {
+      haloInk.width = haloRing.width = w;
+      haloInk.height = haloRing.height = h;
+    }
+    const ink = haloInk.getContext('2d');
+    ink.clearRect(0, 0, haloInk.width, haloInk.height);
+    ink.fillStyle = red;
+    // local frame: gx along rows, dots relative to the circle center
+    // cx (top of frame = cx + r + 3, half the widest stroke past the
+    // circle); y flips like the tape does
+    const topDot = r + 3;
+    for (let gx = 0; gx <= 2 * r; gx++) {
+      const dx = gx - r;
+      if (dx / r < OPEN_COS) continue;
+      const span = Math.sqrt(Math.max(0, r * r - dx * dx));
+      const t = Math.round(2 + 4 * Math.max(0, dx / r));
+      for (const dy of [span, -span]) {
+        const d0 = Math.round(dy) - (t >> 1); // ink dots d0..d0+t-1
+        // a dot D's pixel spans y [(top-D-1)·S, (top-D)·S) after the flip
+        ink.fillRect(
+          gx * SCALE + pad,
+          (topDot - d0 - t) * SCALE + pad,
+          SCALE,
+          t * SCALE,
+        );
+      }
+    }
+    const ring = haloRing.getContext('2d');
+    ring.clearRect(0, 0, haloRing.width, haloRing.height);
+    ring.globalCompositeOperation = 'source-over';
+    for (let k = 0; k < 12; k++) {
+      const a = (k * Math.PI) / 6;
+      ring.drawImage(haloInk, HALO_W * Math.cos(a), HALO_W * Math.sin(a));
+    }
+    ring.globalCompositeOperation = 'destination-out';
+    ring.drawImage(haloInk, 0, 0);
+    ctx.drawImage(
+      haloRing,
+      (mark.cr - r) * SCALE - pad,
+      (576 - (mark.cx + topDot)) * SCALE - pad,
+    );
   }
 
   let follow = true;
+  // a re-render of a finished take must not feel like fresh paper: the
+  // controller captures the scroll before resetting and restores it here.
+  // Applied on the frame the new rows paint (the reset shrinks the canvas
+  // and re-arms `follow` via the clamped scroll event, so an immediate
+  // scrollLeft write would lose the race).
+  let pendingScroll = null;
   wrap.addEventListener(
     'scroll',
     () => {
@@ -291,7 +391,12 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     if (grew) paintVisible();
     const traceGrew = traceDirty;
     if (grew || traceDirty) paintTrace();
-    if (follow) {
+    if (pendingScroll !== null) {
+      if (grew) {
+        wrap.scrollLeft = pendingScroll;
+        pendingScroll = null;
+      }
+    } else if (follow) {
       if (grew) wrap.scrollLeft = canvas.width;
       else if (liveTrace && traceGrew) wrap.scrollLeft = traceCanvas.width;
     }
@@ -321,14 +426,27 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     }
   }
 
-  // the note under the pointer, on the tape canvas only (the trace pane
-  // just seeks). Notes are monophonic so a row range is unambiguous;
+  // the note or ornament mark under the pointer, on the tape canvas only
+  // (the trace pane just seeks). Notes are monophonic so a row range is
+  // unambiguous; marks float above the note band, so they hit-test on
+  // both axes and win when the pointer is inside their little box.
   // slackPx forgives a near-miss (fat fingers, 2px-wide grace notes).
   // undefined = not a selection surface; null = paper (clear selection)
   function noteIdAt(e, slackPx) {
     if (e.target !== canvas || !renderer) return undefined;
     const rect = canvas.getBoundingClientRect();
     const row = (e.clientX - rect.left) / SCALE;
+    // visible y maps back to the printer dot axis (see paintVisible)
+    const dot = 576 - (e.clientY - rect.top) / SCALE;
+    const slack = (slackPx || 0) / SCALE;
+    const mark = (renderer.marks ?? []).find(
+      (m) =>
+        row >= m.r0 - slack &&
+        row <= m.r1 + slack &&
+        dot >= m.x0 - slack &&
+        dot <= m.x1 + slack,
+    );
+    if (mark) return mark.id;
     const hit = renderer.notes.find((g) => row >= g.r0 && row <= g.r1);
     if (hit) return hit.id;
     if (slackPx) {
@@ -430,6 +548,8 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
   }
 
   function reset() {
+    pendingScroll = null; // re-armed by restoreScroll after the re-feed
+    selectedId = null; // re-armed by setSelected after the re-feed
     drawnRows = 0;
     offCtx.fillStyle = '#fff';
     offCtx.fillRect(0, 0, off.width, off.height);
@@ -439,17 +559,27 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     paintTrace();
   }
 
-  // css-px band over a note's rows — the React selection overlay
-  // (drawn as DOM over the preview; the canvas holds exact print bytes
-  // and is never marked)
+  // css-px box hugging a note's bar (or an ornament arc) — the React
+  // selection overlay (drawn as DOM over the preview; the canvas holds
+  // exact print bytes and is never marked). Rows map to x, dots map to
+  // y flipped (see paintVisible); a few dots of breathing room all
+  // around, clamped to the paper.
   function rectForNote(id) {
     if (!renderer || id === null || id === undefined) return null;
-    const g = renderer.notes.find((n) => n.id === id);
+    const g =
+      renderer.notes.find((n) => n.id === id) ??
+      (renderer.marks ?? []).find((m) => m.id === id);
     if (!g) return null;
+    const PAD = 6; // dots/rows of air between the glyph and the border
+    const r0 = Math.max(0, g.r0 - PAD);
+    const r1 = g.r1 + PAD;
+    const dotTop = Math.min(576, g.x1 + PAD);
+    const dotBot = Math.max(0, g.x0 - PAD);
     return {
-      left: Math.round(g.r0 * SCALE),
-      width: Math.max(2, Math.round((g.r1 - g.r0) * SCALE)),
-      height: Math.round(576 * SCALE),
+      left: Math.round(r0 * SCALE),
+      width: Math.max(2, Math.round((r1 - r0) * SCALE)),
+      top: Math.round((576 - dotTop) * SCALE),
+      height: Math.max(2, Math.round((dotTop - dotBot) * SCALE)),
     };
   }
 
@@ -474,6 +604,17 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
     rectForNote,
     reveal,
     reset,
+    // the halo tracks the selection; null clears it
+    setSelected(id) {
+      if (selectedId === (id ?? null)) return;
+      selectedId = id ?? null;
+      paintVisible();
+    },
+    getScroll: () => wrap.scrollLeft,
+    restoreScroll(x) {
+      pendingScroll = x;
+      follow = false;
+    },
     paintTraceFrame,
     rebuildTrace,
     setTraceMode(m) {
@@ -495,6 +636,7 @@ export function createTapeView({ canvas, traceCanvas, wrap, playhead, hooks }) {
       traceOffCtx = traceOff.getContext('2d');
       traceCols = 1;
       follow = true;
+      pendingScroll = null;
       traceDirty = true;
     },
     exportPng,

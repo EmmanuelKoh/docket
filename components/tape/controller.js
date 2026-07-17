@@ -26,7 +26,14 @@ import {
 import { createAnalyzer } from './analyzer.js';
 import { createRecorder, synthDemoPcm } from './audio-io.js';
 import { transcribe } from './decode.js';
-import { applyEdit, reDerive, redo, skeletonOf, undo } from './doc.mjs';
+import {
+  applyEdit,
+  isFrozen,
+  reDerive,
+  redo,
+  skeletonOf,
+  undo,
+} from './doc.mjs';
 import {
   deleteTake as apiDeleteTake,
   loadTake as apiLoadTake,
@@ -93,6 +100,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     selectionRect: null,
     editCount: 0,
     redoCount: 0,
+    frozen: false,
     persistBusy: false,
     currentTake: null,
     lastDeleted: null,
@@ -240,19 +248,48 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   // re-derived, skeleton view) simply clears the selection. ----
   function selectNote(id) {
     if (!song || !id) {
+      view.setSelected(null);
       set({ selection: null, selectionRect: null });
       return;
     }
-    const k = phraseOfId(song, id);
+    // `<noteId>@arc` selects a note's ornament-FLAG arc (minted by the
+    // renderer so both arc kinds click the same); resolve to the owner
+    const arcOwner = id.endsWith('@arc') ? id.slice(0, -4) : null;
+    const lookupId = arcOwner ?? id;
+    const k = phraseOfId(song, lookupId);
     const timeline = k >= 0 ? song.phrases[k].timeline : [];
-    const entry = timeline.find((e) => e.id === id && !e.mark);
+    const entry = timeline.find((e) => e.id === lookupId);
     const rect = view.rectForNote(id);
     if (!entry || !rect) {
+      view.setSelected(null);
       set({ selection: null, selectionRect: null });
       return;
     }
+    view.setSelected(id); // the red contour on the tape
     if (k !== get().activePhrase) setActivePhraseState(k); // selection
     // activates its phrase — the slider/undo/freeze follow the click
+    if (entry.mark || arcOwner) {
+      // an ornament arc — standalone mark or a note's flag arc: both
+      // select the same way and offer only Remove (the flag arc's
+      // removal is a toggleOrnament on its owner, see removeNote)
+      set({
+        selection: {
+          id,
+          mark: true,
+          flagArc: arcOwner ?? undefined,
+          label: 'ornament',
+          midi: 0,
+          t0: entry.t0,
+          t1: entry.mark ? entry.t0 : entry.t1,
+          grace: false,
+          ornament: false,
+          slide: false,
+          canJoin: false,
+        },
+        selectionRect: rect,
+      });
+      return;
+    }
     const after = timeline.slice(timeline.indexOf(entry) + 1);
     set({
       selection: {
@@ -278,6 +315,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       activePhrase: k,
       editCount: p.edits.length,
       redoCount: p.redoStack.length,
+      frozen: isFrozen(p),
       settings: { ...s.settings, melodyFloor: p.decode.melodyFloorHz },
     }));
   }
@@ -295,6 +333,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         t1: b,
         noteCount: p.timeline.filter((e) => !e.mark).length,
         editCount: p.edits.length,
+        frozen: isFrozen(p),
         floor: p.decode.melodyFloorHz,
       };
     });
@@ -310,7 +349,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       const e = evQueue.shift();
       renderer.advance(e.tMs);
       if (e.type === 'mark') {
-        renderer.markNow(); // time-anchored ornament arc
+        renderer.markNow(e.id); // time-anchored ornament arc
       } else if (e.type === 'caesura') {
         renderer.caesura(); // phrase cut — printed railroad tracks
       } else if (e.type === 'on') {
@@ -505,8 +544,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         : scope.flatMap((p) => p.timeline);
     for (const n of timeline) {
       if (n.mark) {
-        // a time-anchored ornament arc, not a note
-        evQueue.push({ type: 'mark', tMs: n.t0 * 1000 });
+        // a time-anchored ornament arc, not a note; the id makes it
+        // selectable (and deletable) on the tape
+        evQueue.push({ type: 'mark', tMs: n.t0 * 1000, id: n.id });
         continue;
       }
       evQueue.push({
@@ -551,6 +591,10 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     if (!song || recorder.micOn || decoding) return;
     const selId = get().selection ? get().selection.id : null;
     const frames = traceFrames; // survive the reset
+    // an edit or layout change must not move the user's viewport — the
+    // reset re-arms the view's follow mode, which would yank the roll
+    // to its far end (restored below, after the re-feed)
+    const scroll = view.getScroll();
     resetTake(false);
     traceFrames = frames;
     // the reset (analysisGen bump) just aborted any running backfill —
@@ -563,7 +607,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       const { k, hz } = pendingFloor;
       pendingFloor = null;
       const p = song.phrases[k];
-      if (p && !p.edits.length) {
+      if (p && !isFrozen(p)) {
         song = withPhrase(
           song,
           k,
@@ -577,13 +621,14 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     }
     if (deriveStale) {
       deriveStale = false;
-      // fresh fine frames: re-derive every phrase, EXCEPT edited ones —
-      // an edited timeline is never replaced behind the user's back
-      // (the explicit "Start over" path re-derives and snapshots first)
+      // fresh fine frames: re-derive every phrase, EXCEPT frozen ones —
+      // an edited (or edit-baked) timeline is never replaced behind the
+      // user's back (the explicit "Start over" path re-derives and
+      // snapshots first)
       song = {
         ...song,
         phrases: song.phrases.map((p, k) =>
-          p.edits.length
+          isFrozen(p)
             ? p
             : reDerive(p, {
                 melodyFloorHz: p.decode.melodyFloorHz,
@@ -603,6 +648,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       });
     }
     view.rebuildTrace(visibleFrames()); // trace follows the visible scope
+    view.restoreScroll(scroll);
     player.setWindow(
       get().phraseView === 'focus' ? windowSecs(activeIdx()) : null,
     );
@@ -1091,7 +1137,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       // is disabled in the UI; this is the belt to that suspender)
       if (key === 'melodyFloor') {
         const p = activePhraseDoc();
-        if (p?.edits.length) return;
+        if (p && isFrozen(p)) return;
         set((s) => ({ settings: { ...s.settings, [key]: value } }));
         pendingFloor = { k: activeIdx(), hz: value };
         // the register split changes the decode AND the trace analysis
@@ -1128,33 +1174,44 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     select: (id) => selectNote(id),
     nudgePitch(delta) {
       const sel = get().selection;
-      if (!sel) return;
+      if (!sel || sel.mark) return;
       const midi = Math.max(48, Math.min(91, sel.midi + delta));
       if (midi === sel.midi) return;
       applyDocOp({ op: 'setPitch', id: sel.id, midi }, sel.id);
     },
     toggleOrnament() {
       const sel = get().selection;
-      if (sel) applyDocOp({ op: 'toggleOrnament', id: sel.id }, sel.id);
+      if (sel && !sel.mark) {
+        applyDocOp({ op: 'toggleOrnament', id: sel.id }, sel.id);
+      }
     },
     toggleSlide() {
       const sel = get().selection;
-      if (sel) applyDocOp({ op: 'toggleSlide', id: sel.id }, sel.id);
+      if (sel && !sel.mark) {
+        applyDocOp({ op: 'toggleSlide', id: sel.id }, sel.id);
+      }
     },
     splitAtPlayhead() {
       const sel = get().selection;
-      if (!sel) return;
+      if (!sel || sel.mark) return;
       const t = player.pos();
       if (!(t > sel.t0 + 0.02 && t < sel.t1 - 0.02)) return;
       applyDocOp({ op: 'split', id: sel.id, t }, `${sel.id}a`);
     },
     joinNext() {
       const sel = get().selection;
-      if (sel) applyDocOp({ op: 'join', id: sel.id }, sel.id);
+      if (sel && !sel.mark) applyDocOp({ op: 'join', id: sel.id }, sel.id);
     },
     removeNote() {
       const sel = get().selection;
-      if (sel) applyDocOp({ op: 'remove', id: sel.id }, null);
+      if (!sel) return;
+      // removing a flag arc means clearing the owner note's ornament;
+      // everything else (notes, standalone marks) is a timeline remove
+      if (sel.flagArc) {
+        applyDocOp({ op: 'toggleOrnament', id: sel.flagArc }, null);
+      } else {
+        applyDocOp({ op: 'remove', id: sel.id }, null);
+      }
     },
     // undo/redo act on the ACTIVE phrase's history
     undoEdit() {
@@ -1218,9 +1275,9 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     // toggle a cut at the selected note's attack
     cutBefore() {
       const sel = get().selection;
-      if (!sel || !song || recorder.micOn || decoding) return;
+      if (!sel || sel.mark || !song || recorder.micOn || decoding) return;
       const t = sel.t0;
-      const opts = { fineFrames: traceFrames, savedAt: Date.now() };
+      const opts = { savedAt: Date.now() };
       const i = song.cuts.indexOf(t);
       let next;
       if (i >= 0) {
@@ -1247,7 +1304,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
       const mains = assembled(song).filter((e) => !e.mark);
       let next = song;
       let added = 0;
-      const opts = { fineFrames: traceFrames, savedAt: Date.now() };
+      const opts = { savedAt: Date.now() };
       for (let i = 1; i < mains.length; i++) {
         const t = mains[i].t0;
         if (t - mains[i - 1].t1 >= thr && !next.cuts.includes(t)) {
@@ -1274,10 +1331,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     // merge phrase i+1 back into phrase i (a chip's ✕)
     removeCutAt(i) {
       if (!song || recorder.micOn || decoding) return;
-      const next = removeCut(song, i, {
-        fineFrames: traceFrames,
-        savedAt: Date.now(),
-      });
+      const next = removeCut(song, i, { savedAt: Date.now() });
       if (next === song) return;
       selectNote(null);
       song = next;
