@@ -13,6 +13,11 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Dev only: Next 16 rejects dev-runtime requests (HMR socket, Turbopack
+  // internals) from any origin but localhost, which breaks phone testing
+  // over the LAN IP or a cloudflared/ngrok tunnel — the page loads but
+  // never hydrates. Allowlist those origins so it comes alive off-device.
+  allowedDevOrigins: ['192.168.1.157', '*.trycloudflare.com', '*.ngrok-free.app'],
   serverExternalPackages: [
     '@electric-sql/pglite',
     '@neondatabase/serverless',
