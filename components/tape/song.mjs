@@ -65,8 +65,17 @@ export function createSong({
   melodyFloorHz,
   fineFrames = [],
   createdAt = 0,
+  tuningCents = 0, // offset the decode corrected; fine frames handed to
+  // any later derivation must shift onto the same grid (retuneFrames)
 }) {
-  const song = { notes, cuts: [], phrases: [], nextUid: 2, createdAt };
+  const song = {
+    notes,
+    cuts: [],
+    phrases: [],
+    nextUid: 2,
+    createdAt,
+    tuningCents,
+  };
   song.phrases = [
     mintPhrase(song, [-Infinity, Infinity], {
       melodyFloorHz,
@@ -86,6 +95,7 @@ export function songFromDoc(doc) {
     phrases: [doc],
     nextUid: 2,
     createdAt: doc.createdAt ?? 0,
+    tuningCents: 0,
   };
 }
 

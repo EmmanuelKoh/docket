@@ -23,6 +23,8 @@ import {
   noteLabel,
 } from '@/components/tape-renderer.js';
 
+import { retuneFrames } from '@/scripts/tape-eval/tuning.mjs';
+
 import { createAnalyzer } from './analyzer.js';
 import { createRecorder, synthDemoPcm } from './audio-io.js';
 import { transcribe } from './decode.js';
@@ -132,6 +134,14 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
   const activeIdx = () =>
     song ? Math.min(get().activePhrase, song.phrases.length - 1) : 0;
   const activePhraseDoc = () => (song ? song.phrases[activeIdx()] : null);
+
+  // fine frames handed to a derivation, moved onto the take's tuning
+  // grid: the trace analyzes the ORIGINAL audio (playback and the
+  // visible trace stay honest), but a retuned decode's notes live on
+  // the corrected grid and pass 3 compares them within fractions of a
+  // semitone (see scripts/tape-eval/tuning.mjs)
+  const docFrames = (win) =>
+    retuneFrames(sliceFrames(traceFrames, win), song?.tuningCents ?? 0);
 
   // a phrase's playback window in clip seconds
   function windowSecs(k) {
@@ -494,7 +504,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
     set({ decoding: true });
     resetTake(false);
     try {
-      const notes = await transcribe({
+      const { notes, tuningCents } = await transcribe({
         samples: recorder.samples(),
         sampleRate: recorder.sampleRate,
         onStatus: (msg) => set({ status: msg }),
@@ -504,6 +514,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         melodyFloorHz: settings().melodyFloor,
         fineFrames: [],
         createdAt: Date.now(),
+        tuningCents,
       });
       deriveStale = false;
       pendingFloor = null;
@@ -613,7 +624,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
           k,
           reDerive(p, {
             melodyFloorHz: hz,
-            fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+            fineFrames: docFrames(phraseWindow(song, k)),
             savedAt: Date.now(),
           }),
         );
@@ -632,7 +643,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
             ? p
             : reDerive(p, {
                 melodyFloorHz: p.decode.melodyFloorHz,
-                fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+                fineFrames: docFrames(phraseWindow(song, k)),
                 savedAt: Date.now(),
               }),
         ),
@@ -1243,7 +1254,7 @@ export function createTapeController({ canvas, traceCanvas, wrap, playhead }) {
         k,
         reDerive(p, {
           melodyFloorHz: settings().melodyFloor,
-          fineFrames: sliceFrames(traceFrames, phraseWindow(song, k)),
+          fineFrames: docFrames(phraseWindow(song, k)),
           savedAt: Date.now(),
         }),
       );

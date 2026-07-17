@@ -19,6 +19,12 @@
 
 import { normalizeLoudness } from '../../scripts/tape-eval/normalize.mjs';
 import { onsetAt } from '../../scripts/tape-eval/ornaments.mjs';
+import {
+  estimateTuningCents,
+  resampleSinc,
+  retuneRatio,
+  shouldRetune,
+} from '../../scripts/tape-eval/tuning.mjs';
 
 let neural = null; // cached { bp, ...bpModule } after first use
 let backendPromise = null; // resolves to the canary-approved backend name
@@ -153,11 +159,33 @@ export async function transcribe({ samples, sampleRate, onStatus }) {
     });
   }
   await backendPromise;
+  let audio = await resampleTo22050(samples, sampleRate);
+  // tuning-normalize: Basic Pitch's semitone grid is frozen at A440, so
+  // a take played off the grid (a quarter tone is the worst case) is
+  // moved ONTO the grid by a compensating resample before the model.
+  // Note times scale back afterwards (timeScale), so the tape, playback,
+  // and the raw-pitch trace stay aligned to the original audio. Shared
+  // math with the eval harness: scripts/tape-eval/tuning.mjs.
+  onStatus?.('checking the tuning…');
+  const tune = estimateTuningCents(audio, 22050);
+  let timeScale = 1;
+  let tuningCents = 0;
+  const acting = shouldRetune(tune);
+  console.log(
+    `tape decode tuning: ${tune.cents.toFixed(1)} cents (confidence ${tune.confidence.toFixed(2)}, ${tune.voiced} windows) — ${acting ? 'compensating' : 'holding off'}`,
+  );
+  if (acting) {
+    tuningCents = tune.cents;
+    const label = `${Math.round(Math.abs(tune.cents))} cents ${tune.cents < 0 ? 'flat' : 'sharp'}`;
+    onStatus?.(`played ${label} — compensating…`);
+    timeScale = retuneRatio(tune.cents);
+    audio = resampleSinc(audio, timeScale);
+  }
   // loudness-normalize to the corpus calibration level: the whole
   // evidence chain is amplitude-shaped, and this makes mic gain and
   // clip level irrelevant to the transcription. Playback and the
   // raw-pitch trace keep the original audio
-  const audio = normalizeLoudness(await resampleTo22050(samples, sampleRate));
+  audio = normalizeLoudness(audio);
   const frames = [];
   const onsets = [];
   const contours = [];
@@ -177,14 +205,17 @@ export async function transcribe({ samples, sampleRate, onStatus }) {
     neural.outputToNotesPoly(frames, onsets, 0.4, 0.3, 5),
   );
   const events = neural.noteFramesToTime(frameEvents);
-  return events
+  const notes = events
     .map((e, i) => ({
-      t0: e.startTimeSeconds,
-      t1: e.startTimeSeconds + e.durationSeconds,
+      t0: e.startTimeSeconds * timeScale,
+      t1: (e.startTimeSeconds + e.durationSeconds) * timeScale,
       midi: e.pitchMidi,
       amp: e.amplitude,
       bends: e.pitchBends ?? [],
       onset: onsetAt(onsets, frameEvents[i].startFrame, e.pitchMidi),
     }))
     .sort((a, b) => a.t0 - b.t0);
+  // tuningCents rides with the notes: every later derivation must shift
+  // its fine-cents frames onto the same grid (retuneFrames)
+  return { notes, tuningCents };
 }
