@@ -13,7 +13,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { transcribe } from './transcribe.mjs';
+import { transcribeWithMeta } from './transcribe.mjs';
+import { TUNING_VERSION, retuneFrames } from './tuning.mjs';
 import { skeletonize, skeletonSequence } from './skeleton.mjs';
 import { decorate } from './ornaments.mjs';
 import { annotate } from './marks.mjs';
@@ -71,10 +72,20 @@ async function scoreFixture(truthPath) {
   const wav = truthPath.replace(/\.truth\.json$/, '.wav');
   // A/B hooks: TAPE_GAIN=0.5 perturbs the input level BEFORE loudness
   // normalization (scores must not move — the brittleness regression
-  // check); TAPE_DEREVERB=1 (+ TAPE_RT60 / TAPE_DRSTRENGTH) A/Bs the
+  // check); TAPE_DETUNE=-50 shifts the input off the semitone grid in
+  // cents BEFORE tuning normalization (same rule: scores must not
+  // move); TAPE_RETUNE=0 disables the tuning stage for A/B;
+  // TAPE_DEREVERB=1 (+ TAPE_RT60 / TAPE_DRSTRENGTH) A/Bs the
   // corpus-vetoed dereverb stage
-  const notes = await transcribe(wav, {
+  const { notes, tuningCents } = await transcribeWithMeta(wav, {
     ...(process.env.TAPE_GAIN ? { gain: parseFloat(process.env.TAPE_GAIN) } : {}),
+    ...(process.env.TAPE_DETUNE
+      ? { detune: parseFloat(process.env.TAPE_DETUNE) }
+      : {}),
+    // always explicit: both are part of the transcription cache key
+    // (tuningV busts cached results when tuning.mjs behavior changes)
+    retune: process.env.TAPE_RETUNE !== '0',
+    tuningV: TUNING_VERSION,
     ...(process.env.TAPE_TARGET
       ? { targetRms: parseFloat(process.env.TAPE_TARGET) }
       : {}),
@@ -94,7 +105,16 @@ async function scoreFixture(truthPath) {
     melodyLoMidi: Math.round(69 + 12 * Math.log2(floorHz / 440)),
   };
   const decorated = decorate(notes, skeletonize(notes, opts), opts);
-  const fine = await fineFramesFor(wav, { floor: floorHz });
+  // the fine frames come from the original audio; the notes live on the
+  // retuned grid — shift the frames to match (see tuning.mjs). Under
+  // TAPE_DETUNE the simulated flat player's fine detector would read
+  // flat too, so the frames take the detune first.
+  let fine = await fineFramesFor(wav, { floor: floorHz });
+  const detuneCents = process.env.TAPE_DETUNE
+    ? parseFloat(process.env.TAPE_DETUNE)
+    : 0;
+  if (detuneCents) fine = retuneFrames(fine, -detuneCents);
+  fine = retuneFrames(fine, tuningCents);
   const timeline = annotate(notes, decorated, opts, fine);
   const pred = skeletonSequence(timeline.filter((e) => !e.mark)).map(label);
   const { matches, rows } = align(truth.sequence, pred);

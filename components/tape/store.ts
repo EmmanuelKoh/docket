@@ -48,7 +48,8 @@ export interface PhraseMeta {
   t0: number; // clip seconds
   t1: number;
   noteCount: number;
-  editCount: number; // nonzero = this phrase's detection is frozen
+  editCount: number; // ops in this phrase's replayable history
+  frozen: boolean; // detection locked: live edits, or edits baked by a cut
   floor: number; // the phrase's own melody floor (Hz)
 }
 
@@ -56,7 +57,9 @@ export interface PhraseMeta {
 // controller rebuilds from the take document after every change.
 export interface TapeSelection {
   id: string;
-  label: string; // "F♯4" in the current key
+  mark?: boolean; // an ornament arc: deletable, nothing else
+  flagArc?: string; // arc of this note's ornament flag (removal = toggle)
+  label: string; // "F♯4" in the current key ("ornament" for a mark)
   midi: number;
   t0: number; // seconds
   t1: number;
@@ -80,9 +83,15 @@ export interface TapeState {
   truncated: boolean; // preview hit its width cap (the print is whole)
   hasTake: boolean; // a decoded take document exists (editing possible)
   selection: TapeSelection | null;
-  // the selection band over the preview, in css px on the tape roll
-  selectionRect: { left: number; width: number; height: number } | null;
-  editCount: number; // ops applied to the take (nonzero = frozen)
+  // the selection box hugging the glyph, in css px on the tape roll
+  selectionRect: {
+    left: number;
+    width: number;
+    top: number;
+    height: number;
+  } | null;
+  editCount: number; // ops applied to the active phrase (undo depth)
+  frozen: boolean; // active phrase's detection is locked (see PhraseMeta)
   redoCount: number;
   takes: TakeMeta[] | null; // saved takes; null until the first fetch
   persistBusy: boolean; // a save/load/delete is in flight
@@ -118,6 +127,7 @@ export const tapeStore = createStore<TapeState>(() => ({
   selection: null,
   selectionRect: null,
   editCount: 0,
+  frozen: false,
   redoCount: 0,
   takes: null,
   persistBusy: false,

@@ -66,9 +66,17 @@ export function createDoc({
     redoStack: [],
     timeline: base,
     versions: [],
+    frozen: false,
     createdAt,
   };
 }
+
+// A doc whose base was BAKED from an edited timeline (a phrase cut or
+// merge partitions the visible tape as-is, see song.mjs) has no replayable
+// edit log, but its detection must stay locked exactly like an edited
+// doc's — re-derivation would silently discard the baked edits. This is
+// the one predicate all freeze-on-edit gates share.
+export const isFrozen = (doc) => !!(doc.frozen || doc.edits.length);
 
 // the shape reDerive snapshots — exported so the song layer can preserve
 // an edited phrase's state when a cut reshapes it
@@ -191,7 +199,7 @@ export function reDerive(
     savedAt = 0,
   } = {},
 ) {
-  const versions = doc.edits.length
+  const versions = isFrozen(doc)
     ? [...doc.versions, snapshotOf(doc, savedAt)]
     : doc.versions;
   const base = deriveBase(
@@ -208,5 +216,6 @@ export function reDerive(
     redoStack: [],
     timeline: base,
     versions,
+    frozen: false,
   };
 }

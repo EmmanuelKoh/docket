@@ -162,7 +162,7 @@ function PhraseList({ ctl }: { ctl: Controller | null }) {
               onClick={() => ctl?.selectTab(k)}
             >
               Phrase {k + 1} · {fmtTime(p.t0)}–{fmtTime(p.t1)}
-              {p.editCount ? ' · edited' : ''}
+              {p.editCount || p.frozen ? ' · edited' : ''}
             </button>
             {k > 0 && (
               <button
@@ -400,7 +400,7 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
   const keySig = useTape((s) => s.settings.keySig);
   const viewMode = useTape((s) => s.viewMode);
   const traceMode = useTape((s) => s.traceMode);
-  const editCount = useTape((s) => s.editCount);
+  const frozen = useTape((s) => s.frozen);
   const activePhrase = useTape((s) => s.activePhrase);
   const phraseCount = useTape((s) => s.phrases.length);
 
@@ -461,9 +461,9 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
           min={120}
           max={500}
           fmt={(v) => `${v} Hz / ${noteLabel(floorToMidi(v), keySig)}`}
-          disabled={editCount > 0}
+          disabled={frozen}
         />
-        {editCount > 0 && (
+        {frozen && (
           <>
             <p className="tape-hint">
               {phraseCount > 1
@@ -567,19 +567,6 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
   );
 }
 
-// the selected note's band — DOM over the preview, never in the canvas
-// (the canvas holds exact print bytes)
-function SelectionBand() {
-  const rect = useTape((s) => s.selectionRect);
-  if (!rect) return null;
-  return (
-    <div
-      className="tape-selection"
-      style={{ left: rect.left, width: rect.width, height: rect.height }}
-    />
-  );
-}
-
 // the editing strip: what the selected note is, and what can be done to
 // it. Shown once a take is decoded; before a selection it teaches the
 // click affordance. Undo/redo live here and work without a selection.
@@ -616,7 +603,23 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
       >
         <ChevronRight size={16} />
       </button>
-      {selection ? (
+      {selection?.mark ? (
+        // an ornament arc — standalone mark or a note's flag arc: both
+        // select the same way and can only be removed (a flag arc's
+        // removal toggles the owner note's ornament off)
+        <>
+          <span className="tape-val">ornament · {fmtTime(selection.t0)}</span>
+          <button
+            type="button"
+            className="btn small icon"
+            aria-label="Remove ornament"
+            title="Remove ornament (⌫)"
+            onClick={() => ctl?.removeNote()}
+          >
+            <Trash2 size={15} />
+          </button>
+        </>
+      ) : selection ? (
         <>
           <span className="tape-val">
             {selection.label} · {fmtTime(selection.t0)}–{fmtTime(selection.t1)}
@@ -1082,7 +1085,6 @@ export function TapeTool() {
           <div className="tape-roll" ref={wrapRef}>
             <canvas ref={canvasRef} className="tape-paper" />
             <TraceCanvas elRef={traceRef} />
-            <SelectionBand />
             <Playhead elRef={playheadRef} />
             {mode === 'empty' && <EmptyNote ctl={ctl} />}
           </div>

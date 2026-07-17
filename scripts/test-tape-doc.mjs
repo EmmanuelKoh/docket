@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   applyEdit,
   createDoc,
+  isFrozen,
   reDerive,
   redo,
   undo,
@@ -163,5 +164,53 @@ assert.equal(
 const legacy = songFromDoc(createDoc({ notes: SONG_NOTES, melodyFloorHz: 230 }));
 assert.equal(legacy.phrases.length, 1);
 assert.equal(mainCount(legacy), 4);
+
+// ---- cuts PARTITION the tape: edits survive, ids survive, and the
+// halves of an edited phrase freeze (detection locked until Start over) ----
+let song2 = createSong({ notes: SONG_NOTES, melodyFloorHz: 230, createdAt: 1 });
+const firstId = song2.phrases[0].timeline[0].id;
+song2 = withPhrase(
+  song2,
+  0,
+  applyEdit(song2.phrases[0], { op: 'setPitch', id: firstId, midi: 70 }),
+);
+song2 = addCut(song2, 5.0, { savedAt: 3 });
+assert.equal(song2.phrases[0].timeline[0].midi, 70, 'edit survives the cut');
+assert.equal(song2.phrases[0].timeline[0].id, firstId, 'ids survive the cut');
+assert.equal(song2.phrases[0].edits.length, 0, 'the history baked into base');
+assert.ok(isFrozen(song2.phrases[0]), 'edited half freezes');
+assert.ok(isFrozen(song2.phrases[1]), 'both halves of an edited phrase freeze');
+assert.equal(song2.phrases[0].versions.length, 1, 'pre-cut state snapshotted');
+assert.equal(
+  song2.phrases[1].timeline.length,
+  2,
+  'second half owns its slice of the tape',
+);
+
+// merging keeps the baked edit and the frozen state
+song2 = removeCut(song2, 0, { savedAt: 4 });
+assert.equal(song2.phrases.length, 1);
+assert.equal(song2.phrases[0].timeline[0].midi, 70, 'edit survives the merge');
+assert.equal(song2.phrases[0].timeline.length, 4, 'merge concatenates');
+assert.ok(isFrozen(song2.phrases[0]), 'merge of frozen halves stays frozen');
+
+// Start over is the one unfreeze: snapshot the baked state, re-derive
+const rederived = reDerive(song2.phrases[0], {
+  melodyFloorHz: 230,
+  savedAt: 5,
+});
+assert.equal(rederived.frozen, false, 'reDerive unfreezes');
+assert.equal(rederived.timeline[0].midi, 64, 'fresh derivation from notes');
+assert.equal(
+  rederived.versions.length,
+  2,
+  'the frozen state snapshotted before re-derivation',
+);
+
+// an unedited phrase cuts without freezing
+let song3 = createSong({ notes: SONG_NOTES, melodyFloorHz: 230, createdAt: 1 });
+song3 = addCut(song3, 5.0);
+assert.ok(!isFrozen(song3.phrases[0]), 'pristine halves stay unfrozen');
+assert.ok(!isFrozen(song3.phrases[1]));
 
 console.log('tape-doc: all checks passed');

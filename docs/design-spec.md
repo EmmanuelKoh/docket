@@ -76,7 +76,9 @@ Red appears ONLY as: (1) active nav underline, (2) job status "printing" /
 inflight, (3) failures and error text, (4) queue count when nonzero,
 (5) live audio actually running (the Tape tool's mic button while
 listening, its Pause button and playhead while a clip plays: hardware or
-transport actively running, the same family as "printing").
+transport actively running, the same family as "printing"),
+(6) the Tape tool's selection halo — the one contour tracing the glyph
+being edited (attention, singular by construction: one selection).
 Everything else is gray. Enabled/on states are INK, not red (a working
 plugin is normal, not an alert). Success/"done" is --ink-muted text.
 Green is not used anywhere.
@@ -537,10 +539,14 @@ edit" on coarse ones.
 While playing the roll auto-scrolls to keep the bar in view.
 
 Editing: once a take is decoded, clicking a note on the tape selects
-it — the same click still seeks. The selection is an ink-wash band
-(8% ink, hairline --ink-muted edges) over the tape pane only, drawn as
-a DOM overlay like the playhead, never into the canvas (exact print
-bytes). An inspector strip under the transport shows the selected note
+it — the same click still seeks. The selection is a register-red
+contour TRACING the selected glyph's exact shape, its inner edge
+flush against the ink (no air, no rounding the shape doesn't have): a
+sharp rectangle on a note's bar (2.25px --red stroke), and on an
+ornament arc the true crescent outline (1.5px — the finer glyph takes
+the finer line), derived by dilating the arc's reconstructed ink; red
+rule 6. It is painted over the preview repaint only — never into the
+offscreen print bytes, so exports and prints stay pristine. An inspector strip under the transport shows the selected note
 in mono ("A♯4 · 0:00.07–0:02.23") with its actions: prev/next note
 chevrons at the left (the buttons for the ←/→ walk — the only edit
 verb that had no touch path), Pitch −/+,
@@ -550,7 +556,13 @@ playhead rests inside the note; edits keep the playback position),
 Join next, Remove, and Undo (n) / Redo pushed to the right. Before a
 selection the strip teaches the affordance ("pick a note on the tape
 to edit it"); the Main-notes-only view doesn't edit ("switch to Full
-notation to edit"). Keyboard (YouTube-spirited; skipped while a form control has focus):
+notation to edit"). Ornament arcs are selectable too — BOTH kinds
+identically, so no arc ever behaves differently: standalone
+time-anchored marks and the arc a note's own Ornament flag draws. An
+arc's little box hit-tests on both axes and wins over the note band
+under it; selecting one shows a reduced strip ("ornament · 0:01.42")
+with only Remove — a normal undoable edit (removing a flag arc
+toggles the owner note's ornament off). Keyboard (YouTube-spirited; skipped while a form control has focus):
 space play/pause, ⇧< / ⇧> seek ±5s (also on the transport as deck
 ◀◀/▶▶ buttons), ←/→ walk the notes (auto-scrolling the selection into
 view), ↑/↓ nudge the selected note's pitch, 1–9 open a phrase and 0
@@ -560,7 +572,9 @@ Cmd/Ctrl-Z and Shift-Cmd-Z undo/redo, Backspace/Delete removes the
 selected note; button tooltips carry their keys, and the transport
 hint line lists the core set.
 Every edit re-renders the whole tape from the edited timeline, so the
-preview and the print bytes remain the same rows. Freeze-on-edit:
+preview and the print bytes remain the same rows — and the roll keeps
+its scroll position (re-renders never yank the viewport; only live
+recording follows the paper). Freeze-on-edit:
 while a take has edits, the Melody floor slider disables with a hint
 and a Start over button appears — it re-reads the recording, keeping
 the edited tape as a snapshot; undoing every edit unlocks the slider
@@ -571,11 +585,17 @@ Phrases: a song splits into phrases at CUTS — timestamps snapped to
 note attacks, seeded by "cut into phrases at breaths" (rests ≥ 2× the
 Breath gap) in the phrase list, or toggled per note with the
 inspector's "Cut before"; a phrase entry's ✕ merges it into its
-predecessor. Each phrase is a full take document of its own: its own
+predecessor. Cutting and merging PARTITION the tape as it stands:
+the visible timeline — edits included — is sliced (or concatenated)
+unchanged, a cut only adds the caesura. Halves of an edited phrase
+keep those edits baked in and stay frozen (slider locked, "· edited"
+chip) until an explicit Start over; the undo history itself resets at
+the cut, with the pre-cut state kept as a snapshot. Each phrase is a
+full take document of its own: its own
 melody floor (the Detection group reads "Detection · phrase N" and
 edits only the ACTIVE phrase), its own edit log, undo/redo, versions,
-and freeze state. A phrase behaves like a standalone clip — detection
-never reaches across a cut. The song is the PROJECT and phrases are
+and freeze state. A phrase re-derives as a standalone clip — boundary
+rules stopping at the cut — only on Start over or a floor change. The song is the PROJECT and phrases are
 its pages, navigated from the PHRASE LIST under the open take in the
 left column: "Song — all phrases" plus one mono entry per phrase
 ("Phrase 2 · 0:05.38–0:09.02", "· edited" when frozen; the selected

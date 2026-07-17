@@ -1,9 +1,11 @@
 // components/tape/song.mjs — the song layer over the take document: one
 // recording and one neural decode, split by CUTS into PHRASES, each of
 // which is a full take document of its own (doc.mjs) — its own melody
-// floor, derived timeline, edit log, undo/redo, and versions. A phrase
-// behaves exactly like a standalone clip: detection rules never reach
-// across a cut, and each phrase prints as its own receipt.
+// floor, derived timeline, edit log, undo/redo, and versions. Cutting
+// and merging PARTITION the tape as it stands (edits survive; see
+// bakePhrase); a phrase re-derives as a standalone clip — boundary
+// rules stopping at the cut — only on an explicit Start over or floor
+// change. Each phrase prints as its own receipt.
 //
 // Cuts are timestamps (seconds), snapped to note attacks by the caller.
 // They live here — not in any phrase's edit log — because they anchor to
@@ -22,7 +24,7 @@
 //     createdAt
 //   }
 
-import { createDoc, snapshotOf } from './doc.mjs';
+import { createDoc, isFrozen, snapshotOf } from './doc.mjs';
 
 const windowOf = (song, k) => [
   k === 0 ? -Infinity : song.cuts[k - 1],
@@ -63,8 +65,17 @@ export function createSong({
   melodyFloorHz,
   fineFrames = [],
   createdAt = 0,
+  tuningCents = 0, // offset the decode corrected; fine frames handed to
+  // any later derivation must shift onto the same grid (retuneFrames)
 }) {
-  const song = { notes, cuts: [], phrases: [], nextUid: 2, createdAt };
+  const song = {
+    notes,
+    cuts: [],
+    phrases: [],
+    nextUid: 2,
+    createdAt,
+    tuningCents,
+  };
   song.phrases = [
     mintPhrase(song, [-Infinity, Infinity], {
       melodyFloorHz,
@@ -84,23 +95,49 @@ export function songFromDoc(doc) {
     phrases: [doc],
     nextUid: 2,
     createdAt: doc.createdAt ?? 0,
+    tuningCents: 0,
   };
 }
 
-// Split the phrase containing t at t. The two halves re-derive from
-// their note slices (each phrase is a standalone clip, so boundary rules
-// stop at the cut); an edited phrase is never silently discarded — its
-// state snapshots into the first half's versions.
-export function addCut(song, t, { fineFrames = [], savedAt = 0 } = {}) {
+// A cut/merge is a pure PARTITION of the tape as it stands: the current
+// (possibly edited) timeline is baked into the new phrase's base, so the
+// visible tape never changes — a cut only adds the caesura. The cost of
+// baking is that the edit log can't replay onto the new base, so the
+// halves start with an empty history; a phrase that carried edits marks
+// its descendants `frozen`, which locks detection exactly like live
+// edits do (see isFrozen in doc.mjs) until an explicit Start over.
+function bakePhrase(song, old, win, uid) {
+  const timeline = old.timeline.filter((e) => e.t0 >= win[0] && e.t0 < win[1]);
+  return {
+    decode: {
+      notes: sliceNotes(song.notes, win),
+      melodyFloorHz: old.decode.melodyFloorHz,
+    },
+    // baked entries keep their old ids (still unique — they partition
+    // one doc); the fresh prefix only matters on a future re-derivation
+    idPrefix: `q${uid}.`,
+    base: timeline,
+    edits: [],
+    redoStack: [],
+    timeline,
+    versions: [],
+    frozen: isFrozen(old),
+    createdAt: old.createdAt,
+  };
+}
+
+// Split the phrase containing t at t. The tape is unchanged — both
+// halves keep their slice of the current timeline, edits included. The
+// pre-cut phrase state also snapshots into the first half's versions
+// when it carried edits (the baked halves can't replay that history).
+export function addCut(song, t, { savedAt = 0 } = {}) {
   if (!Number.isFinite(t) || song.cuts.includes(t)) return song;
   const k = phraseAt(song, t);
   const [a, b] = windowOf(song, k);
   if (!(t > a && t < b)) return song;
   const old = song.phrases[k];
-  const floor = old.decode.melodyFloorHz;
-  const opts = { melodyFloorHz: floor, fineFrames, createdAt: old.createdAt };
-  let first = mintPhrase(song, [a, t], { ...opts, uid: song.nextUid });
-  const second = mintPhrase(song, [t, b], { ...opts, uid: song.nextUid + 1 });
+  let first = bakePhrase(song, old, [a, t], song.nextUid);
+  const second = bakePhrase(song, old, [t, b], song.nextUid + 1);
   const carried = old.edits.length
     ? [...old.versions, snapshotOf(old, savedAt)]
     : old.versions;
@@ -118,27 +155,36 @@ export function addCut(song, t, { fineFrames = [], savedAt = 0 } = {}) {
   };
 }
 
-// Remove cut i, merging phrases i and i+1 into one re-derived phrase
-// (the earlier phrase's floor wins). Edited halves snapshot first.
-export function removeCut(song, i, { fineFrames = [], savedAt = 0 } = {}) {
+// Remove cut i, merging phrases i and i+1 by concatenating their
+// timelines as they stand (the earlier phrase's floor wins). Halves
+// with edit history snapshot into the merged phrase's versions.
+export function removeCut(song, i, { savedAt = 0 } = {}) {
   if (i < 0 || i >= song.cuts.length) return song;
   const left = song.phrases[i];
   const right = song.phrases[i + 1];
   const [a] = windowOf(song, i);
   const [, b] = windowOf(song, i + 1);
-  let merged = mintPhrase(song, [a, b], {
-    melodyFloorHz: left.decode.melodyFloorHz,
-    fineFrames,
-    createdAt: left.createdAt,
-    uid: song.nextUid,
-  });
+  const timeline = [...left.timeline, ...right.timeline];
   const carried = [
     ...left.versions,
     ...(left.edits.length ? [snapshotOf(left, savedAt)] : []),
     ...right.versions,
     ...(right.edits.length ? [snapshotOf(right, savedAt)] : []),
   ];
-  if (carried.length) merged = { ...merged, versions: carried };
+  const merged = {
+    decode: {
+      notes: sliceNotes(song.notes, [a, b]),
+      melodyFloorHz: left.decode.melodyFloorHz,
+    },
+    idPrefix: `q${song.nextUid}.`,
+    base: timeline,
+    edits: [],
+    redoStack: [],
+    timeline,
+    versions: carried,
+    frozen: isFrozen(left) || isFrozen(right),
+    createdAt: left.createdAt,
+  };
   return {
     ...song,
     cuts: song.cuts.filter((_, j) => j !== i),
