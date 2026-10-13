@@ -22,6 +22,12 @@ import { PRINT_WIDTH, FONT_DIR } from '../config.js';
 const WIDTH = PRINT_WIDTH;
 const WIDTH_BYTES = WIDTH / 8;
 
+// ENCODER names the framing (mode, rotate, flushCut, chunking), not the
+// pixels. Bump it only when parseEscpos (tests/golden-escpos.test.ts) has
+// to learn a new framing. Template edits, dither tuning and golden
+// regeneration do not bump it. Stored on each job as encoding.encoder.
+const ENCODER = 'render-core/1';
+
 const liquid = new Liquid();
 const fonts = [
   { name: 'Sans', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSans.ttf')), weight: 400, style: 'normal' },
@@ -230,7 +236,9 @@ function transitionsPerPixel({ bits, width, height }) {
   return total ? t / total : 0;
 }
 
-// Orchestrate: template + data -> { bytes, preview(png), height }
+// Orchestrate: template + data -> { bytes, preview(png), width, height,
+// encoding }. encoding reports which framing the bytes use; it never
+// changes them.
 async function renderToEscpos(template, data) {
   const markup = await fill(template, data);
   const pixels = await toPixels(markup);
@@ -245,9 +253,12 @@ async function renderToEscpos(template, data) {
   const bytes = dithered
     ? toEscposChunked(rotate180(bw), { flushCut: true })
     : toEscpos(bw);
+  const encoding = dithered
+    ? { mode: 'chunked', rotate: 180, flushCut: true, encoder: ENCODER }
+    : { mode: 'raster', rotate: 0, flushCut: false, encoder: ENCODER };
   // also emit a preview PNG of exactly what will print (the 1-bit result)
   const preview = previewPng(bw);
-  return { bytes, preview, width: WIDTH, height: bw.height };
+  return { bytes, preview, width: WIDTH, height: bw.height, encoding };
 }
 
 // Same pipeline as renderToEscpos but skip the ESC/POS byte packing.
@@ -271,4 +282,4 @@ function previewPng({ bits, width, height }) {
   return PNG.sync.write(png);
 }
 
-export { renderToEscpos, renderToPreview, fill, toPixels, dither, toEscpos, WIDTH };
+export { renderToEscpos, renderToPreview, fill, toPixels, dither, toEscpos, WIDTH, ENCODER };

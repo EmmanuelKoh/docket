@@ -5,11 +5,15 @@
 // Template/Data editors with syntax highlighting (transparent textarea
 // over a colored <pre> — see studio.css), a 400ms-debounced abortable
 // /preview render onto the 624px paper roll, a recent-jobs strip that
-// polls every 3s ONLY while the tab is visible, Ctrl/Cmd+S and +P, and
-// the /studio?template=Name / ?new=1 URL contract the slip pages use.
+// polls on the Queue's eased cadence (3s while active, 30s after two idle
+// minutes, paused after thirty, never while the tab is hidden; any
+// interaction resumes it), Ctrl/Cmd+S and +P, and the
+// /studio?template=Name / ?new=1 URL contract the slip pages use.
 
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { jobImageSrc } from '@/app/_lib/format';
+import { useEasedPoll } from '@/components/hooks/use-eased-poll';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -21,6 +25,7 @@ type Job = {
   width?: number;
   height?: number;
   createdAt: string;
+  imageUrl?: string | null; // hosted: the PNG straight from the store
 };
 
 // ---- syntax highlighting (ported verbatim) ----
@@ -91,7 +96,9 @@ function timeAgo(iso: string): string {
 // a failed fetch throws a browser TypeError ("Failed to fetch", "Load
 // failed"…) that varies by browser — show one stable phrase instead
 function fetchErrText(err: unknown): string {
-  return err instanceof TypeError ? 'connection failed' : (err as Error).message;
+  return err instanceof TypeError
+    ? 'connection failed'
+    : (err as Error).message;
 }
 
 const DEFAULT_TPL =
@@ -319,8 +326,8 @@ export function StudioEditor() {
     return () => clearTimeout(timer);
   }, [tplSrc, dataSrc]);
 
-  // ---- recent jobs: poll every 3s while the tab is visible ----
-  const refreshJobs = useCallback(async () => {
+  // ---- recent jobs: the eased poll (components/hooks/use-eased-poll.ts) ----
+  const loadJobs = useCallback(async () => {
     try {
       const resp = await fetch('/jobs?limit=10');
       if (!resp.ok) return;
@@ -341,13 +348,7 @@ export function StudioEditor() {
     }
   }, []);
 
-  useEffect(() => {
-    refreshJobs();
-    const t = setInterval(() => {
-      if (document.visibilityState === 'visible') refreshJobs();
-    }, 3000);
-    return () => clearInterval(t);
-  }, [refreshJobs]);
+  const { refresh: refreshJobs } = useEasedPoll(loadJobs, { immediate: true });
 
   // ---- actions ----
 
@@ -601,7 +602,7 @@ export function StudioEditor() {
                   className="flex items-center gap-2.5 border-b-[0.5px] border-b-hairline px-4 py-1.5 font-mono text-xs last:border-b-0"
                 >
                   <img
-                    src={`/jobs?png=${j.id}`}
+                    src={jobImageSrc(j)}
                     loading="lazy"
                     alt=""
                     className="w-8 shrink-0 rounded-[2px] border-[0.5px] border-border bg-white [image-rendering:pixelated]"

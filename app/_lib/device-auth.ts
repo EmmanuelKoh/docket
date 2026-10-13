@@ -2,55 +2,34 @@
 // Device-facing endpoints accept Authorization: Bearer <token> and nothing
 // else — never the dashboard cookie, because the ESP32 can't log in.
 //
-// Two token kinds:
-//   - a per-device token minted at pairing (lib/devices.js) — resolves to
-//     that device's owner; verification is memory-cache/Redis-mirror fast
-//   - the local-dev DEVICE_TOKEN env for the laptop agents — resolves to
-//     the OWNER_ID owner (compared constant-time; has no default hosted,
-//     so the door does not exist in production unless the env is set)
+// The token becomes a device Caller in lib/ops/identity.js: a per-device
+// token minted at pairing (lib/devices.js), or the local-dev DEVICE_TOKEN
+// for the laptop agents (no default in production builds or on Vercel).
 
-import crypto from 'node:crypto';
-import { DEVICE_TOKEN, OWNER_ID } from '@/config.js';
-import { resolveDeviceToken } from '@/lib/devices.js';
+import { callerForDeviceToken } from '@/lib/ops/identity.js';
 
-// owners = every account this device prints and ticks for:
-// [primary owner, ...members]. Single-owner devices have one entry.
-export type DeviceIdentity = {
-  ownerId: string;
-  deviceId: string;
-  owners: string[];
-};
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
-}
-
-export async function deviceAuth(req: Request): Promise<DeviceIdentity | null> {
+// null = missing or unknown token (401). A store failure throws: the route
+// answers 500, never 401.
+export async function deviceCaller(req: Request) {
   const header = req.headers.get('authorization') || '';
   if (!header.startsWith('Bearer ')) return null;
   const token = header.slice('Bearer '.length);
-  if (!token) return null;
-
-  if (DEVICE_TOKEN && constantTimeEqual(token, DEVICE_TOKEN)) {
-    return { ownerId: OWNER_ID, deviceId: 'legacy', owners: [OWNER_ID] };
-  }
-  return resolveDeviceToken(token);
+  return token ? callerForDeviceToken(token) : null;
 }
 
-// Parse a job reference off the wire. Qualified form "owner~job-N" (what
-// /next hands out); the owner must be one the device serves. A bare id is
-// the pre-sharing form and maps to the primary owner.
-export function parseJobRef(
-  dev: DeviceIdentity,
-  raw: string,
-): { owner: string; id: string } | null {
-  const sep = raw.indexOf('~');
-  if (sep < 0) return { owner: dev.owners[0], id: raw };
-  const owner = raw.slice(0, sep);
-  if (!dev.owners.includes(owner)) return null;
-  return { owner, id: raw.slice(sep + 1) };
+// Device routes only. Never 401 here: ten 401s in a row wipe the printer's
+// token (firmware/docket-agent/docket-agent.ino:210-217) and force a
+// physical re-pair.
+const DEVICE_STATUS: Record<string, number> = { invalid: 400, forbidden: 403 };
+export function deviceErrorResponse(err: unknown): Response {
+  const e = err as { name?: string; code?: string; message?: string };
+  const status =
+    (e?.name === 'OpError' && e.code && DEVICE_STATUS[e.code]) || 500;
+  if (status === 500) console.error(err);
+  return Response.json(
+    { error: status === 500 ? 'server error' : e.message },
+    { status },
+  );
 }
 
 export function unauthorized(): Response {

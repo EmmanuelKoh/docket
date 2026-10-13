@@ -1,53 +1,49 @@
 // /jobs — POST creates a print job, GET lists recent jobs, GET ?png=ID
-// serves the stored preview PNG. Ported from api/jobs.js at the same path
-// for the studio. Cookie-protected: never used by devices.
+// serves the stored preview PNG (lib/ops/jobs.js). Used by the Studio and
+// Photo pages. Cookie-protected: never used by devices.
+// The PNG is one owner's receipt behind their session, so only their
+// browser may cache it (private), never a shared cache.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { createJob, getJobPng, listJobs } from '@/lib/job-store.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { errorResponse, json } from '@/app/_lib/http';
+import { jobsCreate, jobsImage, jobsList } from '@/lib/ops/jobs.js';
 
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
+  const caller = await requestCaller(req);
   const params = new URL(req.url).searchParams;
   const png = params.get('png');
   if (png) {
-    const bytes = await getJobPng(owner, png);
-    if (!bytes)
-      return Response.json({ error: 'job not found' }, { status: 404 });
-    return new Response(new Uint8Array(bytes), {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Content-Length': String(bytes.length),
-        'Cache-Control': 'public, max-age=86400',
-      },
-    });
+    try {
+      const image = await jobsImage(caller, { id: png });
+      return new Response(new Uint8Array(image.body), {
+        status: 200,
+        headers: {
+          'Content-Type': image.contentType,
+          'Content-Length': String(image.body.length),
+          'Cache-Control': 'private, max-age=86400',
+        },
+      });
+    } catch (err) {
+      return errorResponse(err);
+    }
   }
-  const limit = parseInt(params.get('limit') || '', 10) || 20;
-  return Response.json(await listJobs(owner, limit));
+  const limit = parseInt(params.get('limit') || '', 10) || undefined;
+  return json(() => jobsList(caller, { limit }));
 }
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const { template, data, name, source } =
-    (await req.json().catch(() => ({}))) || {};
-  if (!template) {
-    return Response.json({ error: 'template is required' }, { status: 400 });
-  }
-  try {
-    const result = await createJob(owner, {
-      template,
-      data,
-      name,
-      source: source || 'studio',
-    });
-    return Response.json(result, { status: 201 });
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const caller = await requestCaller(req);
+  const body = (await req.json().catch(() => null)) || {};
+  return json(
+    () =>
+      jobsCreate(caller, {
+        template: body.template,
+        data: body.data,
+        name: body.name,
+        source: body.source,
+      }),
+    201,
+  );
 }

@@ -4,13 +4,15 @@
 // First entry of the plugin registry. One run() call = one poll cycle; the
 // /tick endpoint decides when it is due. The detection logic (parseEvent,
 // extractGoals, kickoff/goal/full-time triggers, count-based goal dedup,
-// VAR handling) is ported as-is from the retired agent/espn-poller.js — it
+// VAR handling) is ported as-is from a retired standalone poller. It
 // is live-tested; do not rewrite it.
 //
 // Contract: export id, defaults { schedule, config }, and
 // async run({ config, state, ctx }) -> { state }. The world is reached only
 // through ctx: createJob (job store, renders via render-core), getTemplate
 // (template store, by name), and log.
+
+import { WATCH_TEAMS } from '../config.js';
 
 export const id = 'espn-worldcup';
 
@@ -22,8 +24,13 @@ export const meta = {
 };
 
 export const defaults = {
+  // Off for a new account: enabled, it checks ESPN every minute (store
+  // commands, docs/store-costs.md) all year. Existing records keep theirs.
+  enabled: false,
   schedule: { every: 60 }, // watcher: checks ESPN on each due run
-  config: { watchTeams: [] }, // team abbreviations to filter; empty = all
+  // Team abbreviations to filter; empty = all. The WATCH_TEAMS env seeds it
+  // when the owner's record is first registered.
+  config: { watchTeams: WATCH_TEAMS },
 };
 
 // Template-store templates this plugin prints with (shown in the dashboard).

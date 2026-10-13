@@ -1,18 +1,22 @@
 # docket
 
-A thermal-receipt platform for an 80mm (576px) ESC/POS printer: a hosted
-server renders Liquid+HTML templates into printer bytes; an ESP32 appliance
-polls for jobs and prints them. Plugins print autonomously on schedules
-(live sports goals, a daily morning brief) or on push (SMS/RCS messages
-classified into task receipts by Gemini); a multi-user dashboard
-(invite-only accounts, each with their own templates, plugins, history,
-and paired printer) manages it all. Templates are
-authored as Liquid + flexbox HTML, rendered to a 1-bit dithered image entirely
-in Node (no headless browser), and sent to the printer as raw ESC/POS raster
-bytes over TCP.
+A thermal-receipt platform for an 80mm (576-dot) ESC/POS printer. A hosted
+server renders Liquid + HTML templates into printer bytes. An ESP32
+appliance polls for jobs and prints them over serial. Plugins print on
+their own: on a schedule (live World Cup goals, a daily morning brief) or
+when a message arrives (texts forwarded from a phone, turned into task
+slips by Gemini). A multi-user dashboard manages it all. Accounts are
+invite-only, and each account has its own templates, plugins, history and
+printers.
 
-Pipeline: **Liquid template + data -> HTML -> Satori (flexbox layout) -> SVG ->
-resvg (PNG) -> Floyd-Steinberg dither -> hand-built ESC/POS GS v 0 bytes**
+Templates render entirely in Node, with no headless browser:
+
+**Liquid template + data -> HTML -> Satori (flexbox layout) -> SVG -> resvg
+(PNG) -> Floyd-Steinberg dither -> ESC/POS raster bytes**
+
+Text receipts print as one `GS v 0` raster. Dithered images print as
+memorize-then-print chunks (`GS *` / `GS /`), rotated 180° with a flush cut
+(`render/render-core.js`, `docs/rp850-field-notes.md`).
 
 ## Install
 
@@ -20,136 +24,316 @@ resvg (PNG) -> Floyd-Steinberg dither -> hand-built ESC/POS GS v 0 bytes**
 npm install
 ```
 
-Requires DejaVu TTF fonts on the system. On Debian/Ubuntu:
-```
-sudo apt install fonts-dejavu
-```
-On macOS (via Homebrew):
-```
-brew install font-dejavu
-```
+The DejaVu fonts the renderer uses are vendored in `render/fonts/`, so no
+system font install is needed. `FONT_DIR` points the renderer elsewhere.
+
+`CONTRIBUTING.md` has the local setup: an account, the dev server, and the
+checks.
 
 ## Configuration
 
-Copy the example env file and fill in your values:
+Copy the example env file and fill in what you need:
 
 ```
 cp .env.example .env
 ```
 
+`.env.example` lists every variable the code reads. The main ones:
+
 | Variable | Default | Description |
 |---|---|---|
-| `PRINTER_IP` | `192.168.1.87` | Printer's IP address on your network |
-| `PRINTER_PORT` | `9100` | Raw TCP port (9100 is standard) |
-| `PRINT_WIDTH` | `576` | Pixel width (576 for 80mm, 384 for 58mm) |
-| `FONT_DIR` | `/usr/share/fonts/truetype/dejavu` | Path to directory with DejaVu TTFs |
-| `JOB_CAP` | `50` | Max stored jobs before oldest done jobs are trimmed |
-| `STORE_DRIVER` | `json` | Storage backend: `json` (local files) or `redis` (Upstash + Blob) |
-| `DATABASE_URL` | *(unset = PGlite)* | Postgres connection (Neon hosted; unset = embedded PGlite in `data/pg`) |
-| `BETTER_AUTH_SECRET` | *(required hosted)* | Signs account session cookies |
-| `BETTER_AUTH_URL` | *(unset = inferred)* | Canonical origin in production |
-| `OWNER_ID` | `default` | Which owner the local-dev `DEVICE_TOKEN` resolves to |
-| `DEVICE_TOKEN` | `dev-token` (local only) | Lets the laptop agents into the device endpoints; no default hosted |
-| `LEASE_SECONDS` | `120` | Redis driver: seconds before an unacked inflight job is requeued |
+| `STORE_DRIVER` | `json` | Hot-path stores: `json` (local files, the queue in PGlite) or `redis` (Upstash Redis + Vercel Blob) |
+| `DATABASE_URL` | *(unset = PGlite)* | Postgres connection (Neon). Unset, local dev uses PGlite, an embedded Postgres |
+| `DATA_DIR` | `data/` | Local state: json-driver files, local artifacts, PGlite |
+| `PGLITE_DIR` | `DATA_DIR/pg` | Where PGlite keeps its files |
+| `BETTER_AUTH_SECRET` | *(falls back to `SESSION_SECRET`)* | Signs account session cookies. Set it in production |
+| `BETTER_AUTH_URL` | *(unset = inferred per request)* | Canonical origin in production |
+| `JOB_CAP` | `50` | Job records kept per owner. Past it, the oldest done and failed jobs are trimmed |
+| `LEASE_SECONDS` | `120` | Redis driver: seconds before an unacked job returns to the queue |
+| `DEVICE_TOKEN` | `dev-token` locally | Lets the laptop agents into the device endpoints. No default on Vercel or in a production build |
+| `OWNER_ID` | `default` | The account `DEVICE_TOKEN` resolves to. Set it to your local account id |
+| `PRINT_SERVER` | `http://localhost:$PORT` (agents), `http://localhost:3000` (calibration) | Server URL for the laptop agents and `scripts/print-calibration.js` (`PORT` defaults to 3000; the script's first argument overrides it) |
 | `HEARTBEAT_SECONDS` | `30` | Seconds between `/tick` POSTs from `agent/heartbeat.js` |
-| `POLL_INTERVAL` | `30` | Printer agent: ms between `/next` polls (legacy name) |
-| `WATCH_TEAMS` | *(empty = all)* | Seeds the espn-worldcup plugin's `watchTeams` config on first registration |
-| `GEMINI_API_KEY` | *(unset = ingest off)* | Google AI Studio key for task classification |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Gemini model for the classifier (also editable per-plugin) |
-| `INGEST_TIMEZONE` | `America/New_York` | "Received at" timezone on task receipts |
+| `POLL_INTERVAL` | `3000` | Laptop printer agent: milliseconds between `/next` polls |
+| `PRINTER_IP` / `PRINTER_PORT` | `192.168.1.87` / `9100` | The printer on your network, for the laptop printer agent only |
+| `PRINT_WIDTH` | `576` | Dots per line (576 for 80mm, 384 for 58mm) |
+| `FONT_DIR` | `render/fonts` | Directory with the DejaVu TTFs |
+| `GEMINI_API_KEY` | *(unset)* | Google AI Studio key for message classification. Without it a message fails, except one starting with `task:` |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Model used when the message-ingest plugin's own `gemini model` setting is blank |
+| `WATCH_TEAMS` | *(empty = all)* | Seeds the World Cup plugin's `watchTeams` config when an account first registers it |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | | Redis driver connection. The `KV_REST_API_*` names the Vercel Marketplace sets also work |
+| `BLOB_READ_WRITE_TOKEN` | | Redis driver: Vercel Blob for artifacts and flags. Set automatically on Vercel |
+| `DOCKET_EMAIL` / `DOCKET_PASSWORD` | | Sign-in for `scripts/print-calibration.js` |
 
-All settings live in `config.js` and fall back to the defaults above when the
-env var is unset. The redis driver additionally needs `UPSTASH_REDIS_REST_URL`,
-`UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` names the Vercel Marketplace
-integration sets), and `BLOB_READ_WRITE_TOKEN` (see `.env.example`).
+All settings fall back to the defaults above when unset (`config.js`).
+Only the laptop agents (`agent/*.js`) and scripts read `PRINT_SERVER`,
+`HEARTBEAT_SECONDS`, `POLL_INTERVAL`, `PRINTER_IP` / `PRINTER_PORT` and
+`DOCKET_EMAIL` / `DOCKET_PASSWORD`; the server ignores them.
+`.env` is loaded by every script that imports `config.js`. If your `.env`
+points `DATABASE_URL` at a production database, prefix local commands with
+`DATABASE_URL=` (an empty value wins over `.env`).
+
+## Deploy
+
+The hosted app runs on Vercel, and a push to `main` deploys it. Set these
+in the Vercel project's environment:
+
+- `STORE_DRIVER=redis`.
+- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` from Upstash (the
+  Vercel Marketplace integration's `KV_REST_API_URL` and
+  `KV_REST_API_TOKEN` also work).
+- `BLOB_READ_WRITE_TOKEN`, which Vercel sets when a Blob store is connected
+  to the project.
+- `DATABASE_URL`, the Neon connection string.
+- `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` set to the site's origin.
+- `GEMINI_API_KEY` if you use message ingestion.
+
+Before you deploy code that reads new columns, run `npm run db:migrate`
+with `DATABASE_URL` pointing at Neon. The stores select whole rows, so code
+ahead of the schema fails every query on that table.
+
+Vercel sets `VERCEL_GIT_COMMIT_SHA`. Its short hash is part of the slip
+preview images' cache key, so a deploy that changes rendering refreshes
+them.
 
 ## Storage
 
-Three stores, split by what each is good at. Nothing outside `lib/` and
-`db/` touches Postgres, Redis, Blob, or files directly, and every store
-call takes an explicit `ownerId` (derived from the session, or from the
-device's pairing token).
+Three stores, each holding what it is good at. Every stored record belongs
+to an owner (an account id), taken from the session or from the device's
+pairing token. Only `lib/` and `db/` touch Postgres, Redis, Blob or local
+files.
 
 - **Postgres** is the system of record: accounts, sessions, invites,
-  paired devices, templates, job records, tape-take metadata, and plugin
-  config. Neon when `DATABASE_URL` is set; without it, local dev runs
-  PGlite (an embedded Postgres in `data/pg`) with no cloud account,
-  auto-migrating on first use. Schema is Drizzle (`db/schema.js`,
-  migrations in `db/migrations/`).
-- **Redis** (`STORE_DRIVER=redis`, Upstash) keeps the hot path only: the
-  print queue and its lease, the plugin due-index and runtime state, and
-  the device-token mirror. `STORE_DRIVER=json` (default) swaps these for
-  local equivalents (no lease; artifacts inline).
-- **Vercel Blob** holds artifacts (job PNG/bytes under `jobs/{owner}/`,
-  tape documents and WAVs under `tape/{owner}/`) plus the tiny per-owner
-  queue/tick flags that let idle device polls skip Redis entirely.
+  devices, templates, job records, tape-take metadata and plugin config.
+  Neon when `DATABASE_URL` is set. Without it, local dev uses PGlite in
+  `data/pg` and migrates it on first use. The schema is Drizzle
+  (`db/schema.js`, migrations in `db/migrations/`).
+- **Redis** (`STORE_DRIVER=redis`, Upstash) holds the hot path only: the
+  print queue and its lease, failed-attempt counts, the plugin due-index
+  and runtime state, the device-token and ingest-token mirrors, and the
+  duplicate-message claims. Keys are `rp:{owner}:...`.
+- **Vercel Blob** holds artifacts by key (job PNG, ESC/POS bytes and large
+  inputs under `jobs/{owner}/`, tape documents and WAVs under
+  `tape/{owner}/`), plus a tiny per-owner queue flag and tick flag. Idle
+  device polls read only those flags.
 
-The device endpoints never touch Postgres on their polling cadence, so
-Neon scales to zero; `docs/store-costs.md` has the cost math and the
-quota rules for adding anything polled.
+With `STORE_DRIVER=json` (the default) the queue is the job rows in
+PGlite, Redis values live in `data/*.json`, job artifacts stay inline in
+the job row, and tape payloads are files under `data/tape/`.
 
-**Queue semantics (redis driver):** claiming a job (`GET /next`) is a single
-atomic Lua script, so two concurrent polls can never receive the same job. A
-claimed job holds a lease for `LEASE_SECONDS` (default 120); if the printer
-dies silently without acking, the lease expires and the job returns to the
-front of the queue on the next claim, so the job is not lost. `/nack` requeues
-immediately without waiting for the lease.
+Nothing on the device's polling cadence touches Postgres, so Neon can
+scale to zero. `docs/store-costs.md` has the cost of each path and the
+rules for adding anything polled.
 
-**Device auth:** `/next`, `/ack`, `/nack`, and `/tick` require a Bearer
-token and return 401 without one. Real printers get a per-device token
-from pairing: an unpaired device POSTs `/pair`, prints a short code on
-its own paper, and the owner claims the code on the dashboard's Printer
-page. Tokens are stored hashed; verification runs on a memory cache and
-a Redis mirror so polling never queries Postgres. A printer can be
-shared with other accounts: the owner mints a single-use share code in
-the dashboard and the other person enters it on their own Printer page;
-the device then serves every member's queue and scheduled plugins while
-each keeps a fully separate docket. Locally, the laptop agents use the
-shared `DEVICE_TOKEN` (default `dev-token`), which resolves to the
-`OWNER_ID` owner and has no default when hosted.
+**Queue (redis driver).** Claiming a job (`GET /next`) is one atomic Lua
+script, so two polls never receive the same job. A claimed job holds a
+lease for `LEASE_SECONDS`. If the printer dies without acking, the lease
+expires and the next claim puts the job back at the front. `/nack`
+requeues at once: at the front for the first two failed attempts, then at
+the back, so a job that keeps failing does not block the ones behind it.
+Nothing marks a job failed on its own (paper-out also nacks). The Queue and
+History pages show the failed attempts.
+
+**Device auth.** `/next`, `/ack`, `/nack` and `/tick` need a Bearer token
+and answer 401 without a valid one. A real printer gets its own token by
+pairing: the unpaired device POSTs `/pair`, prints a short code, and the
+owner enters the code on the Printer page. A printer paired to an account
+can be claimed again only by that account, until its owner revokes it.
+Tokens are stored as sha256 hashes. Verification runs on a per-instance
+memory cache and a Redis mirror, so polling never queries Postgres. An
+owner can share a printer: they mint a single-use share code, and the other
+account enters it on its own Printer page. The device then serves each
+member's queue and plugins, and each account keeps its own records.
+Locally, the laptop agents send `DEVICE_TOKEN`, which resolves to
+`OWNER_ID`.
 
 ## Dashboard
 
-The dashboard is a Next.js app (React, Tailwind, and a small shadcn-style
-component kit) styled per `docs/design-spec.md` (monochrome + register red,
-light "paper" and dark "darkroom" themes; the moon/sun toggle in the header
-persists via localStorage). A collapsible sidebar holds the pages below.
+The dashboard is a Next.js app (React, Tailwind, a small shadcn kit in
+`components/ui/`), styled per `docs/design-spec.md`: monochrome plus one
+register red, a light "paper" theme and a dark "darkroom" theme.
 
-**Authentication.** Accounts are email + password (Better Auth on
-Postgres) and signup is invite-only: admins mint invite links on the
-Users page, one link creates one account. Create the first admin with
-`node scripts/create-user.js "Name" email` (it prompts for the password).
-Session checks are served from a signed cookie cache, so a page view
-costs zero database reads. The dashboard pages, the Studio, and the JSON
-routes (`/api/*`, plus `/templates`, `/preview`, `/jobs`) all require the
-session, and every read and write is scoped to the signed-in owner. The
-device endpoints (`/next`, `/ack`, `/nack`, `/tick`) never use the
-cookie; they authenticate with per-device pairing tokens, because the
-ESP32 can't log in.
+**Accounts.** Email and password (Better Auth on Postgres). Signup is by
+invite: an admin mints invite links on the Users page, and each link
+creates one account. A new account gets the starter templates at
+sign-up. Create the first admin with
+`node scripts/create-user.js "Name" email` (it prompts for the
+password). Session checks read a signed cookie
+cache, so a page view costs no database read. Pages and JSON routes need
+the session, and every read and write is scoped to the signed-in owner.
 
-**Pages → stores:**
+| Page | What it does |
+|------|--------------|
+| Overview | The latest print, counts (templates, plugins, queue, last print), printer contact, the three newest jobs |
+| Slips | Every plugin and stored template as a card with its rendered preview. A slip's page has Print test, and for a plugin the enable toggle, schedule and config |
+| Studio (`/studio`) | Template editor with a live preview from the real renderer, Save, Delete and Print. Reached from a slip or "New template" |
+| Photo | Upload or shoot a picture, adjust it against a live dithered preview, print it with an optional caption |
+| Tape | Duduk transcription to printed tape. While you record, only the pitch trace draws; the take transcribes after Stop. Saved takes, editing, phrases and per-phrase printing |
+| Queue | Waiting and printing jobs in print order. Cancel a waiting job, or requeue one stuck printing |
+| History | Done, failed and canceled jobs. A row expands to its template and data. Reprint renders the stored template again |
+| Printer | Printer status, and the devices: pair, share, leave, revoke |
+| Users | Admins only: accounts and invite links |
 
-| Page | Backed by |
-|------|-----------|
-| Overview | counts from all three stores + device last-contact (state store) |
-| Slips | plugin registry + template store, unified: each slip shows a preview, its schedule and per-field config with an explicit Save, and a Print test. Templates are edited in the Studio |
-| Photo | print tool: upload or shoot a picture, live dithered preview via `/preview`, prints the seeded "Photo Print" template with an optional caption |
-| Queue | job store queued/inflight; Cancel a queued job, or Requeue an inflight one whose claim is stuck |
-| History | job store done/failed/canceled; expand shows the debug record; Reprint re-renders from stored template + data |
-| Tape | live instrument transcription (mic to printed tape); saved takes with editing, phrases, and per-phrase printing |
-| Printer | device status, configuration, pairing, and sharing (a printed code claims a device; a share code from its owner joins it; Share/Leave/Revoke per row) |
-| Users | admin only: accounts and invite links |
+**Polling.** The Queue page and the Studio's recent-jobs strip re-fetch
+every 3 seconds while you use the page. After two idle minutes they slow
+to every 30 seconds, and after thirty minutes they stop until you click or
+type. The Printer page refreshes every 3 seconds while a pairing is
+waiting for the printer. Hidden tabs do not poll.
 
-**Polling.** The Queue page re-fetches `/api/queue` every 3 seconds while
-the tab is visible, so status changes from the printer appear without
-websockets. Hidden tabs do not poll (see `docs/store-costs.md`).
+## Device contract
 
-The Studio (the template editor) lives at `/studio` and is reached from a
-slip's "Open in Studio" link. Old `/dashboard` URLs redirect to `/`.
+The ESP32 firmware (`firmware/docket-agent/`) and the laptop agents speak
+this. `tests/device-wire.test.ts` freezes it.
 
-## Usage
+| Method | Path | Answer |
+|--------|------|--------|
+| `POST` | `/pair` | `{hardwareId}`: a code to print. `{hardwareId, code}`: 204 until the owner claims the code, then `{token}` once. No auth |
+| `GET` | `/next` | 200 with the next job in print order (ESC/POS bytes, an explicit `Content-Length` and `X-Job-Id: owner~job-N`), or 204. A job goes to the back of the queue from its third failed attempt |
+| `POST` | `/ack?job=ID` | `{acked, found}`. `{gone: true}` if the job's owner no longer uses this printer |
+| `POST` | `/nack?job=ID` | `{requeued, found}`, or `{gone: true}`. Back of the queue from the third failed attempt |
+| `POST` | `/tick` | Runs the owners' due plugins: `{results: [{id, status}]}`, or `{results: [], idle: true}` |
 
-### Render a receipt
+The device endpoints never answer 401 for anything but a missing, unknown
+or revoked token: after ten 401s in a row the firmware wipes its stored
+token and pairs again. `X-Job-Id` is opaque to the firmware, and a bare
+`job-N` still works for the primary owner.
+
+The device POSTs `/tick` every 30 seconds. Apart from dashboard pages
+polling while they are open (see Polling above), nothing else in the
+system runs on its own timer. Locally, `node agent/heartbeat.js` and
+`node agent/printer-agent.js` stand in for the ESP32; the printer agent
+sends jobs over TCP (`transport/print-net.js`).
+
+## Plugins
+
+A plugin is a module in `plugins/`, listed in `plugins/index.js`:
+
+```js
+export const id = 'my-plugin';
+export const meta = { title: 'My plugin', description: '...', category: 'daily' };
+// schedule: { every: seconds }, or { at: 'HH:MM', timezone: 'America/New_York' }.
+// No schedule: the plugin never runs on the tick.
+export const defaults = { enabled: false, schedule: { every: 60 }, config: {} };
+export const templates = ['My Template'];      // seeded from reference/*-templates.json
+export const configLabels = { someKey: 'label' };
+
+// Scheduled: one unit of work per due tick.
+export async function run({ config, state, ctx }) {
+  return { state };
+}
+// Push: a message delivered to the module (see /ingest).
+export async function onMessage(envelope, { config, state, ctx }) {
+  return { state, reply: {} };
+}
+// Optional: config keys the runner mints as random credentials.
+export const hooks = { credentials: [{ key: 'ingestToken', kind: 'token' }] };
+```
+
+A plugin has `run`, `onMessage`, or both. Plugins reach the world only
+through `ctx`:
+
+- `ctx.createJob({ template, data, name, source })`: render and queue a job
+- `ctx.getTemplate(name)`: the owner's stored template, or null
+- `ctx.llm.generateObject({ schema, prompt })`: structured output from a
+  Zod schema (Gemini today, `lib/llm/`)
+- `ctx.log(msg)`: prefixed console log
+
+**Registration.** A new account's plugins are registered, and their
+templates seeded, on its first Slips page view. Ticks never register or
+seed. A plugin's config and schedule live in Postgres. Its runtime record
+(state, last run, next due time) lives in Redis, or `data/` locally.
+
+**Scheduling.** Each plugin's record carries its `schedule` and a derived
+`nextDueAt`, kept in a sorted due-index (`lib/plugin-registry.js`,
+`lib/schedule.js`). A tick claims everything due in one atomic command and
+leases it, so two ticks never run the same plugin, and a crashed run is
+due again after 90 seconds. A failed run records `lastError` (shown in red
+on the slip) and retries 90 seconds later. After a run the next due time is
+computed from now, so a printer that was off past a due time runs the
+plugin once, late, with no backlog. Toggle, schedule and config live on the
+plugin's Slips page; Save recomputes the next due time.
+
+### Morning brief (`morning-brief`)
+
+Prints the `Daily Brief` template once each morning: today's meetings from
+one or more calendar iCal feeds, the day's weather (Open-Meteo, no API
+key), and a focus line. It starts disabled. Configure it on its Slips page,
+then switch it on.
+
+| Config | Meaning |
+|--------|---------|
+| `icsUrls` | Secret iCal addresses, one per calendar (Google Calendar: Settings, the calendar, "Secret address in iCal format"). Treat them as secrets |
+| `latitude` / `longitude` | Coordinates for the forecast |
+| `timezone` | IANA zone that defines "today" for the calendar |
+| `temperatureUnit` | `fahrenheit` (default) or `celsius` |
+| `focus` | Focus-bar text. Empty hides the bar |
+
+It is scheduled `at 06:30` (edit the time and timezone on its slip) and
+prints once per local day. A printer that was offline at print time gets
+the brief late the same day, never twice and never the previous day's.
+Recurring events are expanded, all-day items are skipped, and the same
+event on two calendars prints once. If a calendar feed fails, the run
+fails visibly on the slip and retries rather than printing an incomplete
+brief. A weather failure prints a dash in place of that stat.
+
+### World Cup (`espn-worldcup`)
+
+Watches live FIFA World Cup matches through the ESPN API and prints three
+events. One `run()` is one poll of the scoreboard (default every 60s). It
+starts switched off for a new account.
+
+| Event | Template | Trigger |
+|-------|----------|---------|
+| Kickoff | `WC Kickoff` | Match state changes from `pre` to `in` |
+| Goal | `WC Goal` | A team's score goes up |
+| Full-time | `WC Full Time` | Match state changes from `in` to `post` |
+
+When a score goes up, the plugin fetches the ESPN summary for the scorer
+and minute. Goals come from `summary.rosters[].roster[].plays[]` where
+`scoringPlay` is true, with the scorer at `player.athlete.displayName`,
+the minute at `play.clock.displayValue`, and own goals flagged by
+`play.ownGoal`. If the summary call fails or has no new goal, the slip
+prints the scoreline without a scorer. The summary never blocks a print.
+
+Match state lives in the plugin's `state`: API state, scores, printed
+flags, and per-team printed goal counts. Nothing reprints across ticks or
+restarts. A score that goes down (a VAR reversal) updates state and prints
+nothing. `config.watchTeams` filters by team abbreviation (empty means
+all).
+
+### SMS/RCS task capture (`message-ingest`)
+
+Forward incoming texts to `POST /ingest`. Gemini extracts the tasks in each
+message and prints a "Task" slip for each. Related items share one slip
+as a list (a shopping list, or the steps of a routine, numbered when the
+order matters). Unrelated tasks get their own slips. "Get milk and eggs,
+and wish your dad happy birthday" prints a grocery list and a "Wish Dad
+happy birthday" task. Titles are worded for the recipient, and due dates
+are resolved from phrases like "by friday". A message starting with
+`task:` always prints. The plugin has no schedule. Its slip has the enable
+toggle and config for min confidence, timezone and Gemini model.
+
+The `/ingest` contract, for anything that can POST JSON:
+
+- Auth: the per-owner token shown on the message-ingest Slips page, as a
+  Bearer header or `?token=`. The token also picks the owner. A bad token
+  answers 401.
+- Body: `{ text, sender?, source?, receivedAt? }`. No `text` answers 400.
+- Blank text answers 200 `{ skipped: 'empty' }`. A disabled plugin answers
+  200 `{ skipped: 'disabled' }`.
+- The same text from the same sender and source within 15 minutes answers
+  200 `{ duplicate: true }` and prints nothing. While the first copy is
+  still being handled, a copy answers 409.
+- A handled message answers 200 with `{ task: false, confidence }` or
+  `{ task: true, printed, jobs }`. A failure answers 502 and shows on the
+  slip; the sender should retry.
+
+`android-forwarder/` is a small Android app that forwards SMS and RCS from
+the phone's telephony provider (including while the conversation is open
+on screen), resolves sender numbers to contact names, and retries failed
+sends. See `android-forwarder/README.md`.
+
+## Rendering from code
 
 ```js
 import { renderToEscpos } from './render/render-core.js';
@@ -160,356 +344,127 @@ const template = `
   <p>{{ body }}</p>
 </div>`;
 
-const { bytes, preview, width, height } = await renderToEscpos(template, {
+const { bytes, preview, width, height, encoding } = await renderToEscpos(template, {
   title: 'Hello',
   body: 'Printed from Node.',
 });
-
-// bytes   — Buffer of ESC/POS data, ready to send to the printer
-// preview — Buffer of a PNG showing exactly what will print (1-bit)
+// bytes:   ESC/POS data for the printer
+// preview: a PNG of exactly what will print (1-bit)
 ```
 
-### Send to the printer
+Send the bytes to a network printer:
 
 ```js
 import { printToNetwork } from './transport/print-net.js';
 
-await printToNetwork(bytes);           // uses PRINTER_IP and PRINTER_PORT from config
-await printToNetwork(bytes, '10.0.0.5', 9100);  // or pass explicit host/port
+await printToNetwork(bytes);                     // PRINTER_IP and PRINTER_PORT
+await printToNetwork(bytes, '<printer-ip>', 9100);
 ```
 
-### Design Studio
-
-The hosted design studio previews templates with the real render core: the
-same Liquid → Satori → resvg → Floyd-Steinberg pipeline that produces the
-print bytes, so the preview matches the printed output.
-
-```
-npm run dev
-```
-
-Opens at `http://localhost:3000`. Sign in and open `/studio` (or any
-slip's Open in Studio link on the Slips page). Select a starter
-template, edit the HTML/Liquid and the JSON data, and see the 1-bit
-dithered preview update live.
-
-- **Preview**: `POST /preview` runs the render core and returns the 1-bit PNG.
-- **Print**: hit the Print button (or `Cmd+P`) to queue a job. The printer
-  agent picks it up and sends it to the printer.
-- **Storage**: templates are saved through `lib/store.js` into Postgres,
-  one set per owner, seeded from `reference/starter-templates.json` on an
-  owner's first template read. `docs/template-authoring.md` is the
-  constraint sheet for writing them (hand it to an LLM and it should
-  produce working templates first try).
-- **Deploy to Vercel** (optional): `vercel` with `STORE_DRIVER=redis`, the
-  Upstash/Blob env vars, and the Neon integration for `DATABASE_URL`.
-- The old offline approximation tool is archived at
-  `reference/receipt-design-studio.html`.
-
-### Print Queue
-
-The studio uses a job queue to decouple "create a print job" from "send bytes to
-the printer." This is the same contract the ESP32 firmware will use.
-
-**Job lifecycle:**
-
-```
-Studio Print button
-  -> POST /jobs { template, data }
-  -> renderToEscpos (immediate, render-on-create)
-  -> job stored: { id, template, data, png, bytes, status: queued }
-  -> printer agent polls GET /next
-  -> 200 + ESC/POS bytes + X-Job-Id header
-  -> agent sends bytes to printer via printToNetwork
-  -> POST /ack?job=ID -> status: done
-     (or POST /nack?job=ID on failure -> status: queued, retry)
-```
-
-**Run the printer agent** (local "device", your Mac standing in for the ESP32):
-
-```
-node agent/printer-agent.js
-```
-
-The agent polls the server every 3 seconds. When it finds a queued job, it sends
-the bytes to the printer and acks. On send failure, it nacks and the job is
-requeued. The studio's recent-jobs panel shows live status updates.
-
-**Device-facing endpoints** (firmware-compatible contract):
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/next` | Oldest queued job as ESC/POS bytes + `X-Job-Id`, or 204 |
-| `POST` | `/ack?job=ID` | Mark job done |
-| `POST` | `/nack?job=ID` | Requeue job for retry |
-| `POST` | `/tick` | Run registered plugins that are enabled and due |
-
-All four require a Bearer token: a pairing token on real devices, or the
-local-dev `DEVICE_TOKEN` that the agents send automatically.
-
-**Storage**: jobs are full debug records (inputs + rendered outputs), capped
-at 50 by default (`JOB_CAP` env var), stored through `lib/job-store.js`;
-see the Storage section for the json/redis drivers and lease semantics. With
-the redis driver the hosted job queue works on Vercel.
-
-### Plugins & /tick
-
-Nothing in the system polls on its own timer. Plugins do one unit of work when
-asked; a heartbeat (your Mac now, an ESP32 later) POSTs `/tick`, and the
-server runs whichever registered plugins are enabled and due.
-
-**What a plugin is:** a module in `plugins/` exporting three things:
-
-```js
-export const id = 'my-plugin';
-// schedule: { every: seconds } for watchers, or
-// { at: 'HH:MM', timezone: 'America/New_York' } for once-a-day plugins.
-// Push-driven plugins export `passive: true` and no schedule.
-export const defaults = { schedule: { every: 60 }, config: {} };
-export async function run({ config, state, ctx }) {
-  // one unit of work; return the new state
-  return { state };
-}
-```
-
-Plugins never touch Redis, files, or HTTP routes directly; they go through
-`ctx`:
-
-- `ctx.createJob({ template, data })`: queue a print job (renders via the
-  job store / render-core)
-- `ctx.getTemplate(name)`: fetch a template record from the template store
-- `ctx.log(msg)`: prefixed console logging
-
-Installed plugins are listed explicitly in `plugins/index.js`.
-
-**How /tick decides what runs.** Each plugin's record carries its
-`schedule` and a derived `nextDueAt`, kept in a sorted due-index by the
-store layer (`lib/plugin-registry.js` and `lib/schedule.js`). A tick makes
-one atomic claim of everything due, so an idle tick is a single store
-command regardless of plugin count. The claim leases what it returns:
-concurrent ticks can't double-run a plugin, and a crashed run becomes due
-again after about 90 seconds. A failed run records `lastError` on the
-record (shown in red on its card) and retries at the lease cadence. On
-success the next due time is computed from now, so a printer that was off
-past a due time runs the plugin once, late, without a backlog.
-
-**Toggling and configuring.** The dashboard's Slips page has the
-enable/disable toggle, the schedule (`every Ns` or `at HH:MM` plus
-timezone), and per-field config, saved with a Save button. Registration, record
-migration, and plugin-template seeding happen on the Slips page view
-(never on ticks): a new owner's plugins activate on their first visit.
-
-### Morning brief plugin (`morning-brief`)
-
-Prints the `Daily Brief` template once each morning: today's meetings
-merged from one or more calendar iCal feeds, the day's weather
-(Open-Meteo, no API key), and a focus line. Registers **disabled**;
-configure it from its Slips page, then flip the toggle.
-
-| Config | Meaning |
-|--------|---------|
-| `icsUrls` | Array of secret iCal addresses (Google Calendar: Settings → [calendar] → "Secret address in iCal format"). One per calendar; treat them as secrets. |
-| `latitude` / `longitude` | Coordinates for the forecast |
-| `timezone` | IANA zone defining "today" for the calendar (usually matches the schedule's timezone) |
-| `temperatureUnit` | `fahrenheit` (default) or `celsius` |
-| `focus` | Focus-bar text; empty hides the bar |
-
-Behavior: scheduled `at 06:30` (edit the time/timezone on its card); prints
-once per local day (a printer offline at print time prints late the same
-day; it does not print twice or print the previous day's brief). Recurring events are expanded; all-day
-items are ignored; the same event on two calendars is deduped. If any
-calendar feed fails the run errors visibly on the plugin card and
-retries next interval rather than printing an incomplete brief; a
-weather failure just degrades that stat to "—".
-
-### World Cup plugin (`espn-worldcup`)
-
-The first registry entry. It watches live FIFA World Cup matches via the
-ESPN API and prints receipts for three events. One `run()` = one poll cycle
-(default every 60s). It replaces the retired `agent/espn-poller.js`; the
-detection logic was ported as-is.
-
-| Event | Template | Trigger |
-|-------|----------|---------|
-| **Kickoff** | `WC Kickoff` | Match state changes from `pre` to `in` |
-| **Goal** | `WC Goal` | A competitor's score increases |
-| **Full-time** | `WC Full Time` | Match state changes from `in` to `post` |
-
-**Run during a match** (three terminals; the heartbeat replaces the old
-poller process):
-
-```
-npm run dev                     # server
-node agent/printer-agent.js     # printer agent
-node agent/heartbeat.js         # heartbeat -> POST /tick
-```
-
-On the first Slips page view the plugin registers itself (importing any
-existing poller state so nothing reprints, and `WATCH_TEAMS` from the env
-as its `watchTeams` config) and the three WC templates are seeded into
-the template store if missing. After that, team filtering is controlled by `config.watchTeams` on
-the registry record.
-
-**How goal detail works:** when a score increase is detected, the poller fetches
-the ESPN summary endpoint to get the scorer and minute. Goals are extracted from
-`summary.rosters[].roster[].plays[]` where `scoringPlay === true`, with the
-scorer at `player.athlete.displayName` and minute at `play.clock.displayValue`.
-Own goals are identified via `play.ownGoal`. These paths are confirmed against
-live World Cup 2026 data (POR 5-0 UZB: 7 goals extracted correctly including
-an own goal). If the summary
-call fails or returns no new goal entries, the poller falls back to a score-diff
-goal (scoreline only, no scorer/minute). A print is never blocked on the
-summary enhancement.
-
-**Dedup:** match state lives on the plugin's registry record (`state` field).
-Each match tracks its API state, scores, printed flags, and per-team printed
-goal counts. Nothing is reprinted across ticks or restarts. Score going down
-(VAR reversal) updates stored state but prints nothing.
-
-**Templates:** the three WC templates are seeded into the template store
-from `reference/wc-templates.json` if missing. They're editable
-in the studio like any other template.
-
-**Why a local heartbeat:** live goals need sub-minute cadence. Vercel cron
-runs at most once per minute and is limited on the Hobby plan, so the pulse
-comes from a local process (later the ESP32 itself), but the decision of
-what to run lives server-side in `/tick`, so the heartbeat carries no
-scheduling logic.
-
-### SMS/RCS task capture (`message-ingest`)
-
-Forward incoming texts to `POST /ingest`. Gemini extracts the tasks in each
-message and prints a "Task" slip for each. Related actions or items are
-grouped onto one slip as a list (a shopping list, or the steps of a
-routine, numbered when they must be done in order); unrelated tasks each
-get their own slip. So "Get milk and eggs, and wish your dad happy
-birthday" prints two slips: a grocery checklist and a "Wish Dad happy
-birthday" task. Titles and items are worded from the recipient's
-perspective and due dates are resolved from phrases like "by friday". A
-message starting with `task:` always prints, regardless of the classifier.
-The plugin is *passive* (push-driven, never run on a timer) but appears on
-the Slips page with an enable toggle and config for min confidence,
-timezone, and Gemini model.
-
-The endpoint is authenticated by the per-owner token shown on the
-message-ingest Slips page (Bearer header or `?token=`), which also routes
-the message to that owner. It accepts
-`{ text, sender, source?, receivedAt? }`, so anything that can
-POST JSON can feed it. For phones, `android-forwarder/` in this repo is a
-small Android app that reads both SMS and RCS from the telephony provider
-(including while the conversation is open on screen, which
-notification-based forwarders miss), resolves sender numbers to contact
-names, and retries failed sends. See `android-forwarder/README.md` for
-build and setup.
-
-### Design templates (offline)
-
-`reference/receipt-design-studio.html` can be opened directly in a browser for
-quick offline sketching. It uses html2canvas + client-side dithering which only
-approximates the print output; use the hosted studio above for accurate
-previews.
+`docs/template-authoring.md` is the constraint sheet for writing templates
+(Satori's CSS dialect, thermal-paper rules). Every `<div>` needs an
+explicit `display:flex`.
 
 ## Project layout
 
 ```
 config.js                  Environment config (reads .env)
 next.config.mjs            Next.js config (externals, file tracing, redirects)
-middleware.ts              Optimistic login redirect for dashboard pages
+middleware.ts              Sends signed-out page visits to /login (cookie presence only)
 render/
   render-core.js           Liquid -> Satori -> resvg -> dither -> ESC/POS
+  fonts/                   Vendored DejaVu TTFs
 db/
   schema.js                Drizzle schema (every Postgres table)
   migrations/              Generated SQL (npm run db:generate / db:migrate)
-app/                       The Next.js app (dashboard pages + all endpoints)
-  (dashboard)/             Overview, Slips, Photo, Tape, Queue, History,
-                           Printer, Users pages
-  (dashboard)/studio/      Template editor (React, highlight-overlay editors)
-  login/ invite/ logout/   Account pages (sign in, invite acceptance)
-  api/auth/                Better Auth endpoints (catch-all)
-  next/ ack/ nack/ tick/   Device endpoints (Bearer pairing token)
-  pair/                    Unauthenticated pairing endpoint (printed code)
-  ingest/                  POST /ingest: classify forwarded messages, print tasks
-  templates/ preview/ jobs/  Studio-facing JSON APIs (session)
-  api/                     Dashboard JSON routes (queue poll, job actions,
-                           slips, devices, invites, tape takes)
-components/                React components (shadcn kit in ui/, tape/ island)
-plugins/
-  index.js                 Explicit list of installed plugin modules
-  espn-worldcup.js         World Cup plugin (kickoff/goal/full-time)
-  morning-brief.js         Daily brief at a scheduled time (calendar + weather)
-  message-ingest.js        Passive plugin: forwarded messages -> task receipts
+app/                       The Next.js app: pages and route adapters
+  (dashboard)/             Overview, Slips, Studio, Photo, Tape, Queue, History,
+                           Printer, Users
+  login/ invite/ logout/   Sign in, invite acceptance, sign out
+  api/auth/                Better Auth endpoints
+  pair/ next/ ack/ nack/ tick/   Device endpoints
+  ingest/                  POST /ingest (messages.deliver)
+  templates/ preview/ jobs/      Studio and Photo JSON routes
+  api/                     Dashboard JSON routes
+  _lib/                    Caller from the session, OpError to HTTP, view models
+components/                React components (shadcn kit in ui/, the Tape tool in tape/)
 lib/
-  db.js                    Postgres client (Neon, or embedded PGlite locally)
-  auth-server.js           Better Auth instance (accounts, invites gate)
-  auth-client.ts           Browser-side auth client
-  devices.js               Printer pairing + per-device token verification
-  store.js                 Templates (Postgres, seeded per owner)
-  job-store.js             Job records (Postgres) + queue (Redis or local)
-  tape-store.js            Tape takes (Postgres meta; Blob or local payloads)
-  plugin-registry.js       Plugin registry facade (+ Postgres config truth)
-  state-store.js           Small runtime state facade (json/redis driver)
-  schedule.js              Plugin schedule math (every/at, timezone-aware)
-  plugin-setup.js          Plugin registration, migration, template seeding
-  change-signal.js         Blob-backed queue + tick flags (idle polls skip Redis)
-  device-presence.js       Throttled "printer online" bookkeeping
-  task-classifier.js       Gemini call: does this message contain a task?
-  redis.js                 Upstash Redis client + owner-namespaced keys
-  blob.js                  Vercel Blob helpers
-  stores/
-    plugins-json.js        Plugin registry: data/plugins.json
-    plugins-redis.js       Plugin registry: Upstash Redis (+ sorted due-index)
-    state-json.js          State: data/ files
-    state-redis.js         State: Upstash Redis
+  ops/                     Operations: every product action as (caller, input) -> output
+    define.js caller.js    defineOperation, OpError, the Caller values
+    identity.js            Device tokens and module credentials to callers
+    device-service.js      The device wire's domain side (/pair, /next, /ack, /nack, /tick)
+    accounts.js jobs.js messages.js printers.js slips.js tape.js templates.js
+  queue/                   Print queue: redis.js (hosted, lease) or postgres.js (local rows)
+  artifacts/               Payloads by key: blob.js (Vercel Blob) or local.js (DATA_DIR files)
+  llm/                     generateObject from a Zod schema; gemini.js is the provider
+  job-store.js             Job records (Postgres) over the queue and artifacts
+  store.js                 Templates (Postgres)
+  tape-store.js            Tape takes (Postgres metadata, payloads as artifacts)
+  accounts.js              Account list and invite links
+  auth-server.js auth-client.ts  Better Auth server instance and browser client
+  devices.js               Pairing, sharing, device-token checks
+  device-presence.js       Throttled "printer seen" writes and the online rule
+  plugin-registry.js       Plugin records, due-index, tick flag, credential mirror
+  plugin-setup.js          Plugin registration, credentials, template seeding
+  plugin-context.js        ctx for plugin modules
+  schedule.js              Schedule math (every/at, timezone-aware)
+  change-signal.js         Blob queue and tick flags
+  kv.js                    Small expiring values (claims, mirrors): Redis or data/kv.json
+  state-store.js           Small runtime state: Redis or data/ files
+  db.js redis.js           Postgres (Neon or PGlite) and Upstash clients
+  stores/                  json and redis drivers for plugins, state and kv
+plugins/
+  index.js                 Installed plugin modules
+  espn-worldcup.js         World Cup kickoff, goal and full-time slips
+  morning-brief.js         Daily brief (calendar, weather, focus)
+  message-ingest.js        Forwarded messages to task slips
+reference/
+  *-templates.json         Starter and plugin template sets, seeded per owner
 agent/
-  printer-agent.js         Local printer agent (polls /next, prints, acks)
-  heartbeat.js             Local heartbeat (POSTs /tick, drives plugins)
-public/
-  dither-worker.js         Web Worker: live dither for the Photo viewfinder
-  pcm-worklet.js pitch-worker.js  Tape tool audio capture + pitch detection
+  printer-agent.js         Laptop printer agent (polls /next, prints over TCP, acks)
+  heartbeat.js             Laptop heartbeat (POSTs /tick)
 transport/
   print-net.js             TCP sender (printToNetwork)
+public/
+  dither-worker.js         Photo viewfinder dither (Web Worker)
+  pcm-worklet.js pitch-worker.js  Tape audio capture and pitch detection
+  basic-pitch/             Tape transcription model
 firmware/
-  docket-agent/            ESP32 sketch: pairing, polls /next, POSTs /tick
+  docket-agent/            ESP32 sketch: pairing, /next, /ack, /nack, /tick
 android-forwarder/         Android app: SMS/RCS -> POST /ingest
 scripts/
-  create-user.js           Bootstrap an account (hidden password prompt)
+  create-user.js           Create an account without an invite (hidden password prompt)
   print-calibration.js     Grayscale wedges through the real pipeline
-  show-plugin.js toggle-plugin.js  Terminal plugin helpers
-  tape-eval/               Tape transcription scorer (fixtures are the
-                           maintainer's recordings, gitignored; the harness
-                           and truth-file format are public, so bring your
-                           own clips to work on detection)
-  test-tape-doc.mjs        Tape document logic tests (npm run tape:doc)
+  show-plugin.js toggle-plugin.js  Inspect or switch a plugin record
+  sync-task-template.mjs   Re-apply reference/task-templates.json to one owner
+  seed-starters.js         One-off: starter templates for accounts that have none
+  tape-eval/               Tape transcription passes and corpus scorer (npm run tape:eval)
+  test-tape-doc.mjs        Take document checks (npm run tape:doc)
+tests/                     Vitest suite (npm test)
 docs/
+  architecture.md          Layers, contracts and where a change goes
   design-spec.md           Dashboard visual source of truth
   template-authoring.md    Constraint sheet for writing templates
   rp850-field-notes.md     Measured RP850 printer behavior
-  receipt-printer-build-guide.md   Hardware build guide
-  store-costs.md           Per-path store costs + quota-math rules
-  tape-transcription-v2.md Tape detection pipeline design
-  *.png                    Documentation images
-reference/
-  starter-templates.json   Starter templates (seeds the local store)
-  wc-templates.json        World Cup templates (kickoff, goal, full-time)
-  receipt-design-studio.html  Archived offline previewer (html2canvas-based)
-  espn-poller.js           Retired standalone poller (superseded by plugins/espn-worldcup.js + /tick)
-  server.py                Python job-queue server (reference, superseded by the Next.js app)
-  render.py                Python renderer (reference, superseded by render-core.js)
-  mock_board.py            Fake ESP32 (reference, superseded by printer-agent.js)
-  print_net.py             Python TCP sender (superseded by print-net.js)
-  print_usb.py             Python USB sender (unused)
-  html_to_png.py           Browser-based HTML renderer (superseded by Satori pipeline)
-data/                      Runtime store: templates + jobs (gitignored)
-jobs/                      Sample receipt PNGs for the print queue
+  receipt-printer-build-guide.md   Hardware bring-up guide
+  store-costs.md           Per-path costs and quota rules
+  tape-transcription-v2.md Tape transcription pipeline
+  local-phone-debugging.md Testing the dashboard from a phone
+data/                      Local runtime state (gitignored)
 ```
 
-## Notes
+The tape-eval fixtures are the maintainer's recordings and stay
+gitignored. The harness and the truth-file format are public, so you can
+bring your own clips.
 
-- **Flexbox**: every container with more than one child needs explicit
-  `display:flex` (Satori requirement).
-- **Borders**: `solid` and `dashed` only; `dotted` is not supported by Satori.
-- The Python files in `reference/` are the original server loop and renderer.
-  They work but are pending a full JS rewrite. Do not expand them.
+## Checks
+
+`npm run check` runs lint (Biome, including the import rules that keep
+routes and pages on `lib/ops/`), the typecheck, the Vitest suite and the
+take-document checks. CI runs the same command on every push and pull
+request (`.github/workflows/check.yml`). Tests use in-memory PGlite and
+fake Redis and Blob clients, so they need no secrets and reach no cloud
+service.
 
 ## License
 

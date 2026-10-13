@@ -5,15 +5,16 @@
 // dashboard clear a stuck claim directly — the job returns to queued, from
 // where it prints again or can be canceled.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
+import { requestCaller } from '@/app/_lib/caller';
+import { json } from '@/app/_lib/http';
 import { queueData } from '@/app/_lib/queue-data';
-import { nackJob } from '@/lib/job-store.js';
+import { jobsRequeue } from '@/lib/ops/jobs.js';
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const id = new URL(req.url).searchParams.get('job');
-  if (id) await nackJob(owner, id);
-  return Response.json(await queueData(owner));
+  const caller = await requestCaller(req);
+  const id = new URL(req.url).searchParams.get('job') ?? '';
+  return json(async () => {
+    await jobsRequeue(caller, { id });
+    return queueData(caller);
+  });
 }

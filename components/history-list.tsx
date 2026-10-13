@@ -3,22 +3,40 @@
 // History rows in one list container. Clicking a row expands an inset
 // panel (--page bg, indented past the thumbnail): PRINTED (the receipt
 // PNG at 200px), TEMPLATE (truncated source), DATA (the JSON), plus a
-// Reprint button. Detail loads on first expand from /api/jobs/detail.
+// Reprint button for reprintable rows (raw jobs such as Tape prints have
+// no template to re-render). Detail loads on first expand from
+// /api/jobs/detail.
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import type { Stamp } from '@/app/_lib/format';
 import { Button } from '@/components/ui/button';
 
 export type HistoryRow = {
   id: string;
+  image: string; // the receipt PNG's src (app/_lib/format.ts jobImageSrc)
   name: string;
   sub: string;
   statusText: string;
   statusColor: string;
+  stamp: Stamp; // how the job ended, pressed onto the expanded receipt
   railTime: string;
+  reprintable: boolean;
 };
 
 type Detail = { template: string; dataJson: string };
+
+// The rubber stamp pressed onto the expanded receipt: how the job ended
+// (app/_lib/format.ts historyStamp).
+export function HistoryStamp({ stamp }: { stamp: Stamp }) {
+  return (
+    <span
+      className={`stamp bite absolute top-2 right-2 ${stamp.red ? 'stamp-red' : ''}`}
+    >
+      {stamp.text}
+    </span>
+  );
+}
 
 export function HistoryList({ rows }: { rows: HistoryRow[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -89,7 +107,7 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
             >
               <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
                 <img
-                  src={`/api/jobs/png?job=${encodeURIComponent(row.id)}`}
+                  src={row.image}
                   alt=""
                   loading="lazy"
                   className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"
@@ -130,17 +148,11 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                         rotated, ink-starved; red only for failure */}
                     <div className="relative mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
                       <img
-                        src={`/api/jobs/png?job=${encodeURIComponent(row.id)}`}
+                        src={row.image}
                         alt={row.name}
                         className="w-[200px]"
                       />
-                      <span
-                        className={`stamp bite absolute top-2 right-2 ${
-                          row.statusColor.includes('red') ? 'stamp-red' : ''
-                        }`}
-                      >
-                        {row.statusColor.includes('red') ? 'FAILED' : 'PRINTED'}
-                      </span>
+                      <HistoryStamp stamp={row.stamp} />
                     </div>
                   </div>
                   <div className="min-w-0">
@@ -165,14 +177,16 @@ export function HistoryList({ rows }: { rows: HistoryRow[] }) {
                   </div>
                 </div>
                 <div className="mt-4 flex items-end gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto px-3 py-1.5 text-xs"
-                    onClick={() => reprint(row.id)}
-                  >
-                    Reprint
-                  </Button>
+                  {row.reprintable ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-auto px-3 py-1.5 text-xs"
+                      onClick={() => reprint(row.id)}
+                    >
+                      Reprint
+                    </Button>
+                  ) : null}
                   {status ? (
                     <span
                       className={`font-mono text-xs ${status.includes('failed') ? 'text-red' : 'text-ink-muted'}`}

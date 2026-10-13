@@ -11,8 +11,8 @@
 // invite is ours: signup is invite-only, and the before-hook in
 // lib/auth-server.js claims a row here atomically during sign-up.
 //
-// Phase 3 adds devices; phase 4 adds jobs/templates/tape_takes/
-// plugin_configs.
+// Below them: the device tables, then the record tables (templates,
+// jobs, tape takes, plugin configs), then the invite table.
 
 import {
   boolean,
@@ -91,7 +91,7 @@ export const verification = pgTable('verification', {
 // short code to print); claiming from the dashboard sets ownerId + name;
 // the device's next poll collects tokenPlain ONCE, after which only
 // tokenHash (sha256) remains. Steady-state auth never reads this table —
-// a Redis mirror + in-memory cache serve the 3-second polling path.
+// a Redis mirror + in-memory cache serve the 5-second polling path.
 // ownerId is plain text (a user id, or the legacy owner id) — no FK, same
 // transition reasoning as invite.
 export const device = pgTable('device', {
@@ -147,6 +147,7 @@ export const template = pgTable(
 // Job metadata + debug record. Ids are job-N per owner, so the key is
 // composite. status is informational for listing — the Redis queue and
 // inflight lease stay authoritative while a job is live.
+/** @typedef {{ mode: 'raster' | 'chunked', rotate: 0 | 180, flushCut: boolean, encoder: string }} JobEncoding */
 export const job = pgTable(
   'job',
   {
@@ -156,11 +157,20 @@ export const job = pgTable(
     status: text('status').notNull(),
     name: text('name').notNull().default(''),
     source: text('source').notNull().default(''),
+    // 'template' (re-renderable from template + data) | 'raw' (bytes
+    // rendered by the caller, e.g. Tape; nothing to reprint from)
+    kind: text('kind').notNull().default('template'),
+    // JobEncoding | null (rows before phase 2)
+    encoding: jsonb('encoding'),
     template: text('template'),
     data: jsonb('data'),
     dataUrl: text('data_url'),
     pngUrl: text('png_url'),
     bytesUrl: text('bytes_url'),
+    // Artifact store keys; readers take key, then URL, then inline.
+    dataKey: text('data_key'),
+    pngKey: text('png_key'),
+    bytesKey: text('bytes_key'),
     png: text('png'), // inline base64, json driver only
     bytes: text('bytes'), // inline base64, json driver only
     width: integer('width'),
@@ -185,6 +195,9 @@ export const tapeTake = pgTable('tape_take', {
   docUrl: text('doc_url'),
   audioUrl: text('audio_url'),
   deletedAt: timestamp('deleted_at'),
+  // Artifact store keys (legacy rows have only the *Url columns).
+  docKey: text('doc_key'),
+  audioKey: text('audio_key'),
 });
 
 // Plugin CONFIG truth (enabled/schedule/config). The full runtime record

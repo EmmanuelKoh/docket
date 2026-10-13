@@ -13,7 +13,7 @@
 //
 // LED language (onboard LED):
 //   fast blink   connecting to wifi
-//   short pulse every ~3s   idle, polling normally
+//   short pulse every ~5s   idle, polling normally
 //   solid on     printing a job
 //   double-blink loop   config/auth problem (check token or server URL)
 

@@ -1,18 +1,26 @@
-// app/_lib/slip-data.ts — the unified "slip" view over the EXISTING
-// stores. A slip is either a system plugin (plugins/*.js module + its
-// registry record) or a standalone template (a stored template no plugin
-// owns). This is deliberately an adapter, not a data migration: preview
-// deployments share production data with the live legacy app, so the
-// physical merge of the templates+plugins stores waits for cutover. All
-// store access goes through the lib/ facades, per the house rule.
+// app/_lib/slip-data.ts — the unified "slip" view. A slip is either a
+// system slip (an installed plugin module and the owner's record of it,
+// read as { module, record } pairs from slips.list / slips.get) or a
+// standalone template (a stored template no module prints with, from
+// templates.list). This file only assembles the display; the stores are
+// reached through the ops in lib/ops/slips.js and lib/ops/templates.js.
 //
-// configFields/parseConfigField/untilText are ported from api/dashboard.js
-// so both apps edit config identically (types come from the plugin's
-// defaults.config, canonical over stored values).
+// configFields/untilText format a slip's config and next run; the
+// matching config parsing lives in slips.saveConfig, typed by the
+// module's defaults.config.
+//
+// Reads only: registration and plugin-template seeding run on the Slips
+// pages (slips.register) before they list.
+//
+// A slip's preview image (thumb) is its primary template rendered with
+// that template's stored data, so the URL carries the template's
+// updatedAt and the deploy as v: the image is cached for good, and a save
+// or a deploy changes the URL.
 
-import { ensureRegistered } from '@/lib/plugin-setup.js';
-import { getTemplates } from '@/lib/store.js';
-import { PLUGINS } from '@/plugins/index.js';
+import { DEPLOY_VERSION } from '@/config.js';
+import type { Caller } from '@/lib/ops/caller.js';
+import { slipsGet, slipsList } from '@/lib/ops/slips.js';
+import { templatesList } from '@/lib/ops/templates.js';
 import { agoText } from './format';
 
 export type ConfigField = {
@@ -32,6 +40,7 @@ export type Slip = {
   category: string;
   templates: string[]; // template-store names this slip prints with
   primaryTemplate: string | null; // for the preview stage
+  thumb: string | null; // the preview image's URL (thumbSrc)
   // system slips only:
   enabled?: boolean;
   passive?: boolean;
@@ -46,13 +55,13 @@ export type Slip = {
   state?: Record<string, unknown>;
 };
 
-type PluginModule = {
+// The module part of a pair (slips.list): what the display needs of it.
+type SlipModule = {
   id: string;
-  passive?: boolean;
-  meta?: { title?: string; description?: string; category?: string };
-  templates?: string[];
-  configLabels?: Record<string, string>;
-  defaults?: { config?: Record<string, unknown> };
+  meta: { title?: string; description?: string; category?: string };
+  templates: string[];
+  configLabels: Record<string, string>;
+  scheduled: boolean;
 };
 
 type PluginRecord = {
@@ -67,7 +76,38 @@ type PluginRecord = {
   state?: Record<string, unknown>;
 };
 
-// ---- ported formatting/parsing helpers (api/dashboard.js) ----
+export type SlipPair = { module: SlipModule; record: PluginRecord | null };
+
+type TemplateRow = { name: string; updatedAt?: string | null };
+// template name -> updatedAt (epoch ms), the thumbnail's version
+type Versions = Map<string, number>;
+
+function versionsOf(templates: TemplateRow[]): Versions {
+  const versions: Versions = new Map();
+  for (const t of templates) {
+    const at = Date.parse(t.updatedAt || '');
+    if (Number.isFinite(at)) versions.set(t.name, at);
+  }
+  return versions;
+}
+
+// /api/templates/thumb for a template. With a version (its updatedAt) the
+// route lets the browser keep the image for good; without one (a
+// template not read here) it gets the short cache. The deploy (the short
+// commit hash, when set) joins the version, since a deploy can change how
+// the same template renders.
+export function thumbSrc(
+  name: string | null,
+  version?: number | null,
+  deploy: string = DEPLOY_VERSION,
+): string | null {
+  if (!name) return null;
+  const q = new URLSearchParams({ name });
+  if (version) q.set('v', deploy ? `${version}-${deploy}` : String(version));
+  return `/api/templates/thumb?${q}`;
+}
+
+// ---- formatting helpers ----
 
 // "in 42s" / "in 3m" / "in 5h" / "in 2d" for the next-run line.
 export function untilText(ms: number): string {
@@ -101,39 +141,25 @@ export function configFields(
   });
 }
 
-export function parseConfigField(
-  original: unknown,
-  raw: unknown,
-): { value?: unknown; error?: string } {
-  const s = String(raw ?? '').trim();
-  if (Array.isArray(original)) {
-    return {
-      value: s
-        .split(/[\n,]+/)
-        .map((x) => x.trim())
-        .filter(Boolean),
-    };
-  }
-  if (typeof original === 'number' || original === null) {
-    if (s === '') return { value: null };
-    const n = Number(s);
-    if (!Number.isFinite(n)) return { error: 'must be a number' };
-    return { value: n };
-  }
-  if (typeof original === 'boolean') {
-    if (s !== 'true' && s !== 'false')
-      return { error: 'must be true or false' };
-    return { value: s === 'true' };
-  }
-  return { value: s };
-}
-
 // ---- slip assembly ----
 
-function systemSlip(module: PluginModule, record: PluginRecord): Slip {
-  const passive = !!module.passive;
+// A registered module's slip. The toggle and config routes build their
+// reply from the pair their op returns (no versions: the panel they
+// refresh shows no thumbnail).
+export function systemSlip(
+  {
+    module,
+    record,
+  }: {
+    module: SlipModule;
+    record: PluginRecord;
+  },
+  versions: Versions = new Map(),
+): Slip {
+  const passive = !module.scheduled; // push-driven: runs on message
   const schedule = record.schedule || {};
-  const templates = module.templates || [];
+  const templates = module.templates;
+  const primary = templates[0] || null;
   return {
     slug: module.id,
     kind: 'system',
@@ -141,7 +167,8 @@ function systemSlip(module: PluginModule, record: PluginRecord): Slip {
     description: module.meta?.description || '',
     category: module.meta?.category || 'plugins',
     templates,
-    primaryTemplate: templates[0] || null,
+    primaryTemplate: primary,
+    thumb: thumbSrc(primary, primary ? versions.get(primary) : null),
     enabled: !!record.enabled,
     passive,
     scheduleType: passive ? null : schedule.at ? 'at' : 'every',
@@ -168,7 +195,7 @@ function systemSlip(module: PluginModule, record: PluginRecord): Slip {
   };
 }
 
-function templateSlip(name: string): Slip {
+function templateSlip(name: string, versions: Versions): Slip {
   return {
     slug: name,
     kind: 'template',
@@ -177,38 +204,53 @@ function templateSlip(name: string): Slip {
     category: 'templates',
     templates: [name],
     primaryTemplate: name,
+    thumb: thumbSrc(name, versions.get(name)),
   };
 }
 
-// All slips: system plugins first (registry order), then standalone
-// templates (every stored template no plugin claims).
-export async function listSlips(ownerId: string): Promise<Slip[]> {
-  const [records, templates] = await Promise.all([
-    ensureRegistered(ownerId) as Promise<PluginRecord[]>,
-    getTemplates(ownerId) as Promise<{ name: string }[]>,
+// All slips: system slips first (installed-module order, registered ones
+// only), then standalone templates (every stored template no module
+// prints with).
+export async function listSlips(caller: Caller): Promise<Slip[]> {
+  const [pairs, templates] = await Promise.all([
+    slipsList(caller) as Promise<SlipPair[]>,
+    templatesList(caller) as Promise<TemplateRow[]>,
   ]);
 
-  const owned = new Set(
-    (PLUGINS as PluginModule[]).flatMap((m) => m.templates || []),
-  );
+  const owned = new Set(pairs.flatMap((p) => p.module.templates));
+  const versions = versionsOf(templates);
   const slips: Slip[] = [];
 
-  for (const module of PLUGINS as PluginModule[]) {
-    const record = records.find((r) => r.id === module.id);
-    if (record) slips.push(systemSlip(module, record));
+  for (const { module, record } of pairs) {
+    if (record) slips.push(systemSlip({ module, record }, versions));
   }
   for (const t of templates) {
-    if (!owned.has(t.name)) slips.push(templateSlip(t.name));
+    if (!owned.has(t.name)) slips.push(templateSlip(t.name, versions));
   }
   return slips;
 }
 
+// A module id reads one record (slips.get) and the templates for its
+// thumbnail's version; any other slug is looked for among the standalone
+// templates.
 export async function getSlip(
-  ownerId: string,
+  caller: Caller,
   slug: string,
 ): Promise<Slip | null> {
-  const slips = await listSlips(ownerId);
-  return slips.find((r) => r.slug === slug) || null;
+  const pair = await (
+    slipsGet(caller, { id: slug }) as Promise<SlipPair>
+  ).catch((err: { code?: string }) => {
+    if (err?.code === 'not_found') return null;
+    throw err;
+  });
+  if (pair) {
+    const { module, record } = pair;
+    if (!record) return null;
+    const templates = (await templatesList(caller)) as TemplateRow[];
+    return systemSlip({ module, record }, versionsOf(templates));
+  }
+  const slips = await listSlips(caller);
+  return slips.find((s) => s.kind === 'template' && s.slug === slug) || null;
 }
 
 // Slips grouped for the index page, categories in first-seen order.

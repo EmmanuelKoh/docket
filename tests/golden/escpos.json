@@ -1,0 +1,134 @@
+{
+  "templates": {
+    "starter/Morning Brief": {
+      "sha256": "b5600fa4cf0eb66782b37b344572a11e26c2a3c883e722eb3967468c10d65a9c",
+      "length": 28817,
+      "width": 576,
+      "height": 400,
+      "encoding": "raster",
+      "printedRows": 400,
+      "chunks": 1,
+      "previewPixelsSha256": "83f2e08206e3fe800008f7981f8c1f01a4f0a1d43492d5b149190afa2f279e19"
+    },
+    "starter/Budget": {
+      "sha256": "3b508eb88954b5828bef0d174c08e490077889215172404d3431f235e1770e3e",
+      "length": 19745,
+      "width": 576,
+      "height": 274,
+      "encoding": "raster",
+      "printedRows": 274,
+      "chunks": 1,
+      "previewPixelsSha256": "133cba1291235e44ce14c0cc5abb87959fe102f2b7354875bdc55de9744fe6ff"
+    },
+    "starter/Photo Card": {
+      "sha256": "9271740168e9bbec86d2fb7a9e07d93f37c9286b3ed8101fd4edae2a9050acea",
+      "length": 34578,
+      "width": 576,
+      "height": 507,
+      "encoding": "chunked-rotated",
+      "printedRows": 480,
+      "chunks": 1,
+      "previewPixelsSha256": "03d507efb64adb2597f3290f1a85070ae0c9e63a4789d812aba7ff5428112254"
+    },
+    "starter/Kanban": {
+      "sha256": "bcc27dfc34a32119529462ad0c19543edcf2fbf6e23506c428961fa3505dfb8b",
+      "length": 18809,
+      "width": 576,
+      "height": 261,
+      "encoding": "raster",
+      "printedRows": 261,
+      "chunks": 1,
+      "previewPixelsSha256": "8900308a16484c1b3b39082f2272069ef395a7b0965a833fae9be606bb4798ad"
+    },
+    "wc/WC Kickoff": {
+      "sha256": "2ff349a41fb4cfb875aed94ab47636eb64a884c62c5ba984c4fd9539ea5facd9",
+      "length": 23057,
+      "width": 576,
+      "height": 320,
+      "encoding": "raster",
+      "printedRows": 320,
+      "chunks": 1,
+      "previewPixelsSha256": "917e54b13b28d9fe7866ea4030af77c6193f255888054512387794493a8ebda1"
+    },
+    "wc/WC Goal": {
+      "sha256": "a93773640a6c2e226dcc9477418311ad93ad38c9e56204480052cdcbdd3d276d",
+      "length": 24209,
+      "width": 576,
+      "height": 336,
+      "encoding": "raster",
+      "printedRows": 336,
+      "chunks": 1,
+      "previewPixelsSha256": "9adf1ede9adef17db0b397dbf5bc317486d56017d16732e9d85ede96adfb3753"
+    },
+    "wc/WC Full Time": {
+      "sha256": "bd6ad8c1514fb86d5eb237434537100a8d37ede5ae133c5a309f81a79dfed6aa",
+      "length": 19961,
+      "width": 576,
+      "height": 277,
+      "encoding": "raster",
+      "printedRows": 277,
+      "chunks": 1,
+      "previewPixelsSha256": "1b3742e3169fb0c33b5495efa89da4c5722173ab5f2d44a5393d57f38cd48de8"
+    },
+    "brief/Daily Brief": {
+      "sha256": "ca032c5d49d599f25a33980c536928f667e9ebbaafdcc5199f06f7c5b3c56ea1",
+      "length": 28817,
+      "width": 576,
+      "height": 400,
+      "encoding": "raster",
+      "printedRows": 400,
+      "chunks": 1,
+      "previewPixelsSha256": "0b433840bd79a4e2d80cbe8cb5377eddc4c2450bbad98e7cb662609600434bcd"
+    },
+    "photo/Photo Print": {
+      "sha256": "30e7b4818ca7d3c8276c3c2fe42cae4a11bfc8f183438ddc4f92c2724e2c80d7",
+      "length": 30833,
+      "width": 576,
+      "height": 428,
+      "encoding": "raster",
+      "printedRows": 428,
+      "chunks": 1,
+      "previewPixelsSha256": "c667b47332bd91b92bded66b0a61f6f32a4026ff802fdca06d05c24dd570c6e8"
+    },
+    "task/Task": {
+      "sha256": "fda8e2b15814f626ce279912bbdb2633454be3c366bbb2a800b7cf70dd4f8e9d",
+      "length": 27593,
+      "width": 576,
+      "height": 383,
+      "encoding": "raster",
+      "printedRows": 383,
+      "chunks": 1,
+      "previewPixelsSha256": "c092ace07bca2b5d4da897e852e108ebbb3f09aa09a551bda6f28a537bf98f44"
+    },
+    "synthetic/Tall gray field": {
+      "sha256": "e57b0222472d8e373a5bf631c87a5814b94e9404e30fa045b886a0936e2ba403",
+      "length": 72601,
+      "width": 576,
+      "height": 1032,
+      "encoding": "chunked-rotated",
+      "printedRows": 1008,
+      "chunks": 2,
+      "previewPixelsSha256": "69f895a64126c21627014d6f8621f26ce99ba4bdee69aeb396137643a88222be"
+    }
+  },
+  "tape": {
+    "tape/F major (1 flat)": {
+      "sha256": "89f84bf793ad3e011abc53566453b9297e93ea23ddb2351142e1a2d6881cafc4",
+      "length": 38033,
+      "width": 576,
+      "height": 528,
+      "encoding": "raster",
+      "notes": 9,
+      "marks": 2
+    },
+    "tape/D major (2 sharps)": {
+      "sha256": "236d88dd58aebe7d2f3b9298655bc94964ccd7ed9322479465eb5b8ab3907bc0",
+      "length": 41633,
+      "width": 576,
+      "height": 578,
+      "encoding": "raster",
+      "notes": 9,
+      "marks": 2
+    }
+  }
+}

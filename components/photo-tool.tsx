@@ -254,7 +254,12 @@ export function PhotoTool() {
         </div>
         <div className="photo-actions">
           <span className="status" id="photoStatus" />
-          <button type="button" className="btn bite-heavy" id="printBtn" disabled>
+          <button
+            type="button"
+            className="btn bite-heavy"
+            id="printBtn"
+            disabled
+          >
             Print
           </button>
         </div>

@@ -1,7 +1,7 @@
 // heartbeat.js — the pulse that drives the plugin registry. POSTs /tick on an
 // interval; the server decides which plugins are enabled and due and runs
-// them. This replaces running agent/espn-poller.js (retired to reference/) —
-// the poller's logic now lives in plugins/espn-worldcup.js.
+// them. The World Cup logic that once ran as its own poller lives in
+// plugins/espn-worldcup.js.
 //
 // This is your Mac standing in for the ESP32. Run it alongside the server
 // and printer agent:

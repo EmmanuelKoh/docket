@@ -2,9 +2,13 @@
 // trigger, theme toggle, logout) with the identity-defining 1.5px ink
 // bottom rule, and the content column (max 1120px, gutters that never
 // drop below 48px on desktop, 16px on phones — spec spacing system).
+// The session check (a signed cookie, no store read) is the only thing
+// the shell waits for: the queue badge streams in inside Suspense, and
+// loading.tsx fills the content column until the page is ready.
 
 import { LogOut } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ContentColumn } from '@/components/content-column';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -13,24 +17,25 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { listJobs } from '@/lib/job-store.js';
-import { getSessionIdentity } from '../_lib/dashboard-session';
-import type { JobSummary } from '../_lib/format';
+import { getCaller } from '../_lib/caller';
+import { QueueBadge } from './queue-badge';
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const identity = await getSessionIdentity();
-  if (!identity) redirect('/login');
-
-  const jobs = (await listJobs(identity.userId, 1000)) as JobSummary[];
-  const queueCount = jobs.filter(
-    (j) => j.status === 'queued' || j.status === 'inflight',
-  ).length;
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
 
   return (
     <SidebarProvider>
-      <AppSidebar queueCount={queueCount} isAdmin={identity.role === 'admin'} />
+      <AppSidebar
+        queueBadge={
+          <Suspense fallback={null}>
+            <QueueBadge caller={caller} />
+          </Suspense>
+        }
+        isAdmin={caller.role === 'admin'}
+      />
       <SidebarInset className="bg-transparent">
         <header className="flex items-center justify-between border-b-[1.5px] border-b-ink px-4 py-3">
           <SidebarTrigger className="text-ink-faint hover:text-ink" />

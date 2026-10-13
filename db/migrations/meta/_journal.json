@@ -29,6 +29,13 @@
       "when": 1783892925533,
       "tag": "0003_special_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791848885605,
+      "tag": "0004_square_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

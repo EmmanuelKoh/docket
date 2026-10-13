@@ -7,9 +7,11 @@
 //     feature detection ("e.BigInt is not a function"). The rest are listed
 //     defensively — they only ever run on the server, so bundling buys
 //     nothing and risks the same class of breakage.
-//   - /tick seeds templates from reference/*.json and every render loads
-//     TTFs from render/fonts, both read with fs at runtime, so they must be
-//     traced into the deployed function bundles.
+//   - Template seeding reads reference/*.json (the sign-up hook in
+//     /api/auth, the Slips pages, /ingest; never /tick) and every render
+//     loads TTFs from render/fonts, both with fs at runtime, so they must
+//     be traced into the deployed function bundles. Keys match as
+//     substrings: '/slips' also covers /api/slips/*.
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -32,8 +34,14 @@ const nextConfig = {
     'satori-html',
   ],
   outputFileTracingIncludes: {
-    '/tick': ['./reference/**', './render/fonts/**'],
+    '/tick': ['./render/fonts/**'],
     '/ingest': ['./reference/**', './render/fonts/**'],
+    // Keys are picomatch globs, so brackets are escaped: '[...all]'
+    // unescaped is a character class and never matches
+    // (tests/route-config.test.ts checks every key).
+    '/api/auth/\\[...all\\]': ['./reference/**'],
+    '/slips': ['./reference/**'],
+    '/slips/\\[slug\\]': ['./reference/**'],
     '/preview': ['./render/fonts/**'],
     '/jobs': ['./render/fonts/**'],
     '/api/templates/thumb': ['./render/fonts/**'],

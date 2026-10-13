@@ -1,15 +1,15 @@
-// Queue — title with "refreshes every 3s" subtitle, job count right
+// Queue — title with a "What prints next." subtitle, job count right
 // (mono), then the live list (components/queue-list.tsx).
 
 import { redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
 import { queueData } from '@/app/_lib/queue-data';
 import { QueueList } from '@/components/queue-list';
 
 export default async function QueuePage() {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
-  const { jobs, count } = await queueData(owner);
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
+  const { jobs, count } = await queueData(caller);
 
   return (
     <div className="space-y-5">

@@ -1,76 +1,33 @@
-// /templates — CRUD for saved templates, used by the Studio
-// (components/studio-editor.tsx) and the Photo tool.
+// /templates — CRUD for saved templates (lib/ops/templates.js), used by the
+// Studio (components/studio-editor.tsx) and the Photo tool.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
+import { requestCaller } from '@/app/_lib/caller';
+import { json } from '@/app/_lib/http';
 import {
-  deleteTemplate,
-  getTemplates,
-  isReadOnly,
-  saveTemplate,
-} from '@/lib/store.js';
+  templatesDelete,
+  templatesList,
+  templatesSave,
+} from '@/lib/ops/templates.js';
 
 export async function GET(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-  try {
-    return Response.json(await getTemplates(owner));
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const caller = await requestCaller(req);
+  return json(() => templatesList(caller));
 }
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-  try {
-    const { name, template, data } = (await req.json().catch(() => ({}))) || {};
-    if (!name || !template) {
-      return Response.json(
-        { error: 'name and template are required' },
-        { status: 400 },
-      );
-    }
-    try {
-      const templates = await saveTemplate(owner, { name, template, data });
-      return Response.json(templates);
-    } catch (err) {
-      if (isReadOnly()) {
-        return Response.json(
-          { error: (err as Error).message, readOnly: true },
-          { status: 403 },
-        );
-      }
-      throw err;
-    }
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const caller = await requestCaller(req);
+  const body = (await req.json().catch(() => null)) || {};
+  return json(() =>
+    templatesSave(caller, {
+      name: body.name,
+      template: body.template,
+      data: body.data,
+    }),
+  );
 }
 
 export async function DELETE(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-  try {
-    const name = new URL(req.url).searchParams.get('name') || '';
-    if (!name) {
-      return Response.json(
-        { error: 'name query parameter is required' },
-        { status: 400 },
-      );
-    }
-    try {
-      const templates = await deleteTemplate(owner, name);
-      return Response.json(templates);
-    } catch (err) {
-      if (isReadOnly()) {
-        return Response.json(
-          { error: (err as Error).message, readOnly: true },
-          { status: 403 },
-        );
-      }
-      throw err;
-    }
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const caller = await requestCaller(req);
+  const name = new URL(req.url).searchParams.get('name') ?? '';
+  return json(() => templatesDelete(caller, { name }));
 }

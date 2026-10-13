@@ -2,34 +2,24 @@
 
 // The live queue list. Server renders the initial data; this component
 // then re-fetches /api/queue while the tab is visible, at a cadence that
-// follows the human: every 3s while they are active on the page, easing
-// to 30s after two idle minutes, and stopping entirely after thirty —
-// each poll is a function invocation and a Postgres read, and a tab
-// parked on a second monitor must not bill around the clock
-// (docs/store-costs.md). Any interaction resumes the fast cadence; the
-// quiet "refresh" control re-fetches on demand and doubles as the resume
-// affordance while paused. Job cards per spec: thumbnail, name +
-// "source · created HH:MM:SS", status mono (printing = red), rail =
-// "claimed Ns" for inflight or Cancel for queued only.
+// follows the human (components/hooks/use-eased-poll.ts): every 3s while
+// they are active on the page, easing to 30s after two idle minutes, and
+// stopping entirely after thirty. Any interaction resumes the fast
+// cadence; the quiet "refresh" control re-fetches on demand and doubles
+// as the resume affordance while paused. Job cards per spec: thumbnail
+// (straight from the artifact store when hosted), name + "source ·
+// created HH:MM:SS" (+ " · N failed attempts" once a printer handed it
+// back), status mono (printing = red), rail = "claimed Ns" for inflight
+// or Cancel for queued only.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { QueueJob } from '@/app/_lib/queue-data';
-
-const POLL_MS = 3000;
-const EASE_AFTER_MS = 2 * 60 * 1000;
-const EASE_POLL_MS = 30_000;
-const PAUSE_AFTER_MS = 30 * 60 * 1000;
-
-type PollMode = 'live' | 'eased' | 'paused';
+import { useEasedPoll } from '@/components/hooks/use-eased-poll';
 
 export function QueueList({ initial }: { initial: QueueJob[] }) {
   const [jobs, setJobs] = useState<QueueJob[]>(initial);
-  const [mode, setMode] = useState<PollMode>('live');
-  const lastActivity = useRef(Date.now());
-  const lastFetch = useRef(Date.now());
 
-  const refresh = useCallback(async () => {
-    lastFetch.current = Date.now();
+  const load = useCallback(async () => {
     try {
       const res = await fetch('/api/queue');
       if (!res.ok) return;
@@ -39,40 +29,7 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
       // transient network error — keep the last good list
     }
   }, []);
-
-  const manualRefresh = useCallback(() => {
-    lastActivity.current = Date.now();
-    setMode('live');
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const bump = () => {
-      lastActivity.current = Date.now();
-    };
-    window.addEventListener('pointerdown', bump);
-    window.addEventListener('keydown', bump);
-    document.addEventListener('visibilitychange', bump);
-
-    const t = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      const idle = Date.now() - lastActivity.current;
-      if (idle > PAUSE_AFTER_MS) {
-        setMode('paused');
-        return;
-      }
-      const eased = idle > EASE_AFTER_MS;
-      setMode(eased ? 'eased' : 'live');
-      const cadence = eased ? EASE_POLL_MS : POLL_MS;
-      if (Date.now() - lastFetch.current >= cadence - 100) refresh();
-    }, POLL_MS);
-    return () => {
-      clearInterval(t);
-      window.removeEventListener('pointerdown', bump);
-      window.removeEventListener('keydown', bump);
-      document.removeEventListener('visibilitychange', bump);
-    };
-  }, [refresh]);
+  const { mode, resume } = useEasedPoll(load);
 
   // cancel a queued job; requeue an inflight one (a stuck claim back to
   // queued). Both return the fresh list so the row updates in one round trip.
@@ -102,7 +59,7 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
       </span>
       <button
         type="button"
-        onClick={manualRefresh}
+        onClick={resume}
         className="transition-colors hover:text-ink"
       >
         refresh
@@ -135,7 +92,7 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
           <div className="flex items-start gap-4 sm:gap-6">
             <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
               <img
-                src={`/api/jobs/png?job=${encodeURIComponent(job.id)}`}
+                src={job.image}
                 alt=""
                 loading="lazy"
                 className="h-[74px] w-[110px] object-contain sm:h-[108px] sm:w-[158px]"
@@ -179,6 +136,7 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
               </div>
               <div className="mt-0.5 text-xs text-ink-muted">
                 {job.source} · created {job.createdTime}
+                {job.attemptsText ? ` · ${job.attemptsText}` : ''}
               </div>
               <div className="mt-2 flex items-center gap-3 sm:hidden">
                 <span

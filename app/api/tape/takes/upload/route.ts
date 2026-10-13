@@ -2,20 +2,22 @@
 // WAV (hosted driver only). The browser uploads straight to Vercel Blob,
 // because a long take's WAV exceeds the ~4.5MB request cap every normal
 // route lives under; the resulting URL is then attached to the take via
-// PATCH /api/tape/takes/{id}. Cookie session gates who can mint tokens.
+// PATCH /api/tape/takes/{id}. handleUpload speaks Vercel's client-upload
+// protocol; tape.authorizeUpload decides who may upload where.
 
 import { handleUpload } from '@vercel/blob/client';
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { audioUploadMode } from '@/lib/tape-store.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { errorResponse, signInRequired } from '@/app/_lib/http';
+import { tapeAuthorizeUpload } from '@/lib/ops/tape.js';
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-  if (audioUploadMode() !== 'client') {
-    return Response.json(
-      { error: "audio upload isn't available here" },
-      { status: 400 },
-    );
+  const caller = await requestCaller(req);
+  // No session: 401 before the body and handleUpload (which resolves the
+  // Blob token first, so a tokenless local request would get its 400).
+  // The one sessionless request handleUpload must see is Blob's own
+  // upload-completed callback, which carries a signature it verifies.
+  if (!caller && !req.headers.has('x-vercel-signature')) {
+    return signInRequired();
   }
   const body = await req.json().catch(() => null);
   if (!body) return Response.json({ error: 'invalid JSON' }, { status: 400 });
@@ -23,15 +25,8 @@ export async function POST(req: Request) {
     const result = await handleUpload({
       body,
       request: req,
-      onBeforeGenerateToken: async (pathname) => {
-        if (!pathname.startsWith(`tape/${owner}/`)) {
-          throw new Error('unexpected upload path');
-        }
-        return {
-          allowedContentTypes: ['audio/wav', 'audio/x-wav'],
-          addRandomSuffix: true,
-        };
-      },
+      onBeforeGenerateToken: (pathname) =>
+        tapeAuthorizeUpload(caller, { pathname }),
       onUploadCompleted: async () => {
         // the browser PATCHes the URL onto the take itself (this
         // callback doesn't fire from localhost anyway)
@@ -39,6 +34,8 @@ export async function POST(req: Request) {
     });
     return Response.json(result);
   } catch (err) {
+    // Op refusals by their code; the protocol's own errors stay 400.
+    if ((err as Error)?.name === 'OpError') return errorResponse(err);
     return Response.json({ error: (err as Error).message }, { status: 400 });
   }
 }

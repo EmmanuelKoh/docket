@@ -3,11 +3,11 @@
 // the page (spec).
 
 import { redirect } from 'next/navigation';
-import { sessionValid } from '../_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
 import { LoginForm } from './login-form';
 
 export default async function LoginPage() {
-  if (await sessionValid()) redirect('/');
+  if (await getCaller()) redirect('/');
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">

@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
 import { DeleteTemplateButton } from '@/components/delete-template-button';
 import { PrintTestButton } from '@/components/print-test-button';
 import {
@@ -14,6 +14,7 @@ import {
   ReceiptPreviewEmpty,
 } from '@/components/receipt-preview';
 import { SlipSystemPanel } from '@/components/slip-system-panel';
+import { slipsRegister } from '@/lib/ops/slips.js';
 import { getSlip } from '../../../_lib/slip-data';
 
 const clip = (s: string, n: number) =>
@@ -24,10 +25,11 @@ export default async function SlipPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
   const { slug } = await params;
-  const slip = await getSlip(owner, decodeURIComponent(slug));
+  await slipsRegister(caller); // a new owner's plugins and their templates
+  const slip = await getSlip(caller, decodeURIComponent(slug));
   if (!slip) notFound();
 
   return (
@@ -58,10 +60,10 @@ export default async function SlipPage({
         <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
           <div className="text-[13px] font-semibold text-ink">Preview</div>
           <div className="mt-3">
-            {slip.primaryTemplate ? (
+            {slip.thumb ? (
               <ReceiptPreview
-                src={`/api/templates/thumb?name=${encodeURIComponent(slip.primaryTemplate)}`}
-                alt={slip.primaryTemplate}
+                src={slip.thumb}
+                alt={slip.primaryTemplate || slip.title}
               />
             ) : (
               <ReceiptPreviewEmpty>
@@ -83,12 +85,12 @@ export default async function SlipPage({
             <p className="mt-2 text-xs text-ink-muted">
               Edit this template in the Studio.
             </p>
-            <a
+            <Link
               href={`/studio?template=${encodeURIComponent(slip.slug)}`}
               className="mt-3 inline-block text-xs text-ink-muted underline decoration-dotted underline-offset-4 hover:text-ink"
             >
               Open in Studio →
-            </a>
+            </Link>
           </section>
         )}
       </div>
@@ -104,12 +106,12 @@ export default async function SlipPage({
                 className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
               >
                 <span className="font-mono text-[13px] text-ink">{name}</span>
-                <a
+                <Link
                   href={`/studio?template=${encodeURIComponent(name)}`}
                   className="text-xs text-ink-muted hover:text-ink"
                 >
                   Open in Studio →
-                </a>
+                </Link>
               </div>
             ))
           ) : (

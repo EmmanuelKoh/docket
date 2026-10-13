@@ -4,7 +4,9 @@
 // pattern), styled by the docket spec: quiet ink-muted items, the active
 // item gains ink text plus a 1.5px register-red bar at its left edge (the
 // vertical cousin of the legacy nav's red underline). The queue item
-// carries a count badge, red only when nonzero (red-usage rule 4).
+// carries a count badge, red only when nonzero (red-usage rule 4): the
+// layout passes it in as a server-rendered slot that streams in on its
+// own (app/(dashboard)/queue-badge.tsx).
 
 import {
   AudioLines,
@@ -25,7 +27,6 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -49,10 +50,10 @@ const ACTIVE_BAR =
   'data-[active=true]:before:bg-red';
 
 export function AppSidebar({
-  queueCount,
+  queueBadge = null,
   isAdmin = false,
 }: {
-  queueCount: number;
+  queueBadge?: React.ReactNode;
   isAdmin?: boolean;
 }) {
   const pathname = usePathname();
@@ -90,11 +91,7 @@ export function AppSidebar({
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
-                  {item.url === '/queue' && queueCount > 0 ? (
-                    <SidebarMenuBadge className="font-mono text-red">
-                      {queueCount}
-                    </SidebarMenuBadge>
-                  ) : null}
+                  {item.url === '/queue' ? queueBadge : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

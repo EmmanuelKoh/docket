@@ -1,77 +1,43 @@
-// POST /api/slips/config?id=X — save a system slip's schedule + config
-// in one step, ported from the /dashboard/plugins/config handler. One save
-// updates everything: record, next-due time, due-index. Invalid input
-// saves nothing and returns the error for the inline red line.
+// POST /api/slips/config?id=X — save a system slip's schedule + config in
+// one step (slips.saveConfig). The Slips form posts flat fields: sched_every,
+// sched_at and sched_tz for the schedule, cfg_<key> for each config key;
+// this maps them to { schedule, config }. Invalid input saves nothing and
+// answers 400 with the error for the inline red line.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { getSlip, parseConfigField } from '@/app/_lib/slip-data';
-import {
-  getPlugin,
-  reschedule,
-  savePluginConfig,
-  syncTickSignal,
-  upsertPlugin,
-} from '@/lib/plugin-registry.js';
-import { validateSchedule } from '@/lib/schedule.js';
-import { PLUGINS } from '@/plugins/index.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { json } from '@/app/_lib/http';
+import { systemSlip } from '@/app/_lib/slip-data';
+import { slipsSaveConfig } from '@/lib/ops/slips.js';
 
-type PluginModule = {
-  id: string;
-  passive?: boolean;
-  defaults?: { config?: Record<string, unknown> };
-};
+const SCHEDULE_FIELDS = {
+  sched_every: 'every',
+  sched_at: 'at',
+  sched_tz: 'timezone',
+} as const;
+
+// Fields left out of the form stay out of the input, so the op keeps
+// their stored values.
+function fromForm(body: Record<string, unknown>) {
+  const schedule: Record<string, unknown> = {};
+  for (const [field, key] of Object.entries(SCHEDULE_FIELDS)) {
+    if (body[field] !== undefined) schedule[key] = body[field];
+  }
+  const config: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(body)) {
+    if (field.startsWith('cfg_')) config[field.slice('cfg_'.length)] = value;
+  }
+  return {
+    schedule: Object.keys(schedule).length ? schedule : undefined,
+    config,
+  };
+}
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const id = new URL(req.url).searchParams.get('id') || '';
-  const record = await getPlugin(owner, id);
-  if (!record) return Response.json({ error: 'not found' }, { status: 404 });
-
-  const body = (await req.json().catch(() => ({}))) || {};
-  const module = (PLUGINS as PluginModule[]).find((m) => m.id === record.id);
-  const passive = !!module?.passive;
-  let error = '';
-
-  // Schedule: type is fixed by the plugin (every vs at); the user edits
-  // its values. Passive plugins have no schedule fields.
-  let schedule = record.schedule || null;
-  if (!passive) {
-    const raw = record.schedule?.at
-      ? { at: body.sched_at, timezone: body.sched_tz }
-      : { every: body.sched_every };
-    const v = validateSchedule(raw);
-    if (v.error) error = `schedule: ${v.error} (not saved)`;
-    else schedule = v.schedule;
-  }
-
-  const config = { ...(record.config || {}) };
-  if (!error) {
-    // Types come from the plugin's defaults.config (canonical), not the
-    // stored value — a previously mistyped value must not weaken parsing.
-    const defaultsCfg = module?.defaults?.config || {};
-    for (const key of Object.keys(config)) {
-      const raw = body[`cfg_${key}`];
-      if (raw === undefined) continue; // field not submitted — keep as is
-      const typeRef = key in defaultsCfg ? defaultsCfg[key] : config[key];
-      const parsed = parseConfigField(typeRef, raw);
-      if (parsed.error) {
-        error = `${key} ${parsed.error} (not saved)`;
-        break;
-      }
-      config[key] = parsed.value;
-    }
-  }
-
-  if (error) return Response.json({ error }, { status: 400 });
-
-  const updated = { ...record, schedule, config };
-  // One save updates everything: record, next-due time, due-index — and
-  // the Postgres config truth.
-  if (!passive && updated.enabled) reschedule(updated);
-  await upsertPlugin(updated, { create: false });
-  await savePluginConfig(updated);
-  await syncTickSignal(owner);
-  return Response.json({ slip: await getSlip(owner, id) });
+  const caller = await requestCaller(req); // null -> the op answers 401 'sign in required'
+  const id = new URL(req.url).searchParams.get('id') ?? '';
+  const raw = await req.json().catch(() => null);
+  const body = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return json(async () => ({
+    slip: systemSlip(await slipsSaveConfig(caller, { id, ...fromForm(body) })),
+  }));
 }

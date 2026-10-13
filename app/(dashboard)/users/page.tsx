@@ -1,19 +1,17 @@
-// /users — admin-only: who has an account, and open invite links.
-// Reads Postgres directly (server component); create/revoke actions go
-// through /api/users/invites. Non-admins get a quiet note, not a 404,
-// so the page can stay linked in the sidebar for admins only.
+// /users — admin-only: who has an account, and open invite links
+// (users.list in lib/ops/accounts.js); create/revoke actions go through
+// /api/users/invites. Non-admins get a quiet note, not a 404, so the page
+// can stay linked in the sidebar for admins only.
 
-import { and, desc, gt, isNull } from 'drizzle-orm';
-import { getSessionIdentity } from '@/app/_lib/dashboard-session';
-import { invite, user } from '@/db/schema.js';
-import { getDb } from '@/lib/db.js';
+import { getCaller } from '@/app/_lib/caller';
+import { usersList } from '@/lib/ops/accounts.js';
 import { InviteRow, NewInviteForm } from './users-client';
 
 export const dynamic = 'force-dynamic';
 
 export default async function UsersPage() {
-  const identity = await getSessionIdentity();
-  if (!identity || identity.role !== 'admin') {
+  const caller = await getCaller();
+  if (caller?.role !== 'admin') {
     return (
       <p className="text-xs text-ink-faint">
         Accounts are managed by the owner of this docket.
@@ -26,30 +24,16 @@ export default async function UsersPage() {
     name: string;
     email: string;
     role: string | null;
-    createdAt: Date;
+    createdAt: string;
   };
-  type InviteRowData = { token: string; email: string | null; expiresAt: Date };
-
-  const db = await getDb();
-  const users: UserRow[] = await db
-    .select({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      createdAt: user.createdAt,
-    })
-    .from(user)
-    .orderBy(desc(user.createdAt));
-  const invites: InviteRowData[] = await db
-    .select({
-      token: invite.token,
-      email: invite.email,
-      expiresAt: invite.expiresAt,
-    })
-    .from(invite)
-    .where(and(isNull(invite.usedAt), gt(invite.expiresAt, new Date())))
-    .orderBy(desc(invite.createdAt));
+  type InviteRowData = {
+    token: string;
+    email: string | null;
+    expiresAt: string;
+  };
+  const list = await usersList(caller);
+  const users: UserRow[] = list.users;
+  const invites: InviteRowData[] = list.invites;
 
   return (
     <div className="space-y-8">
@@ -85,7 +69,7 @@ export default async function UsersPage() {
               key={i.token}
               token={i.token}
               email={i.email}
-              expiresAt={i.expiresAt.toISOString()}
+              expiresAt={i.expiresAt}
             />
           ))}
           {invites.length === 0 ? (
