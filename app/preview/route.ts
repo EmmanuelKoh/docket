@@ -1,35 +1,31 @@
 // POST /preview — renders a Liquid template + data through the real render
 // core and returns the 1-bit dithered PNG (exactly what the printer would
-// produce). Ported from api/preview.js at the same path for the studio.
+// produce), via templates.preview. The Studio and Photo pages call it.
 
-import {
-  requestSessionValid,
-  unauthorizedJson,
-} from '@/app/_lib/dashboard-session';
-import { renderToPreview } from '@/render/render-core.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { errorResponse } from '@/app/_lib/http';
+import { templatesPreview } from '@/lib/ops/templates.js';
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  if (!(await requestSessionValid(req))) return unauthorizedJson();
-
-  const { template, data } = (await req.json().catch(() => ({}))) || {};
-  if (!template) {
-    return Response.json({ error: 'template is required' }, { status: 400 });
-  }
-
+  const caller = await requestCaller(req);
+  const body = (await req.json().catch(() => null)) || {};
   try {
-    const result = await renderToPreview(template, data || {});
-    return new Response(new Uint8Array(result.preview), {
+    const image = await templatesPreview(caller, {
+      template: body.template,
+      data: body.data,
+    });
+    return new Response(new Uint8Array(image.body), {
       status: 200,
       headers: {
-        'Content-Type': 'image/png',
-        'Content-Length': String(result.preview.length),
-        'X-Image-Width': String(result.width),
-        'X-Image-Height': String(result.height),
+        'Content-Type': image.contentType,
+        'Content-Length': String(image.body.length),
+        'X-Image-Width': String(image.width),
+        'X-Image-Height': String(image.height),
       },
     });
   } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+    return errorResponse(err);
   }
 }

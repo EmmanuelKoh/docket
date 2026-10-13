@@ -289,7 +289,7 @@ function harmonicPitch(x, sr, fMin, gen, holdF0) {
 var PEAK_CUTOFF = 0.9;   // take the first NSDF peak >= cutoff × tallest
 var CAND_CUTOFF = 0.5;   // report peaks >= this × tallest as candidates
 var FREQ_MIN = 60;       // Hz — NSDF search band (the tracker narrows it
-var FREQ_MAX = 1400;     //      further with its live-tunable limits)
+var FREQ_MAX = 1400;     //      further with its own freqMin/freqMax)
 
 function nsdfPitch(x, sr) {
   var n = x.length;

@@ -1,12 +1,13 @@
-// GET /api/queue — JSON for the Queue page's poll. The client polls every
-// 3 seconds ONLY while the tab is visible (components/queue-list.tsx);
+// GET /api/queue: JSON for the Queue page's poll. The client polls ONLY
+// while the tab is visible, on the eased cadence (3s while active, 30s
+// after two idle minutes, paused after thirty; components/queue-list.tsx);
 // hidden tabs must never keep hitting the store (docs/store-costs.md).
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
+import { requestCaller } from '@/app/_lib/caller';
+import { json } from '@/app/_lib/http';
 import { queueData } from '@/app/_lib/queue-data';
 
 export async function GET(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-  return Response.json(await queueData(owner));
+  const caller = await requestCaller(req);
+  return json(() => queueData(caller));
 }

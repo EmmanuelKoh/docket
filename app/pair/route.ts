@@ -8,12 +8,11 @@
 //   {hardwareId, code}  -> poll; 204 while unclaimed, {token} exactly once
 //                          after the owner claims the code on /printer
 //
-// Pairing is a rare, human-present event, so this path may query
-// Postgres — the device-cadence rule guards /next and /tick, not this.
+// The flow lives in lib/ops/device-service.js#pair; the throttle is
+// per request, so it stays here.
 
-import { beginPairing, pollPairing } from '@/lib/devices.js';
-
-const HARDWARE_ID = /^[a-zA-Z0-9:_-]{6,64}$/;
+import { pair } from '@/lib/ops/device-service.js';
+import { deviceErrorResponse } from '../_lib/device-auth';
 
 // Tiny per-IP throttle: pairing is seconds-per-decade traffic, so
 // anything chatty is abuse. Per warm instance is good enough.
@@ -40,19 +39,11 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const hardwareId =
-    typeof body?.hardwareId === 'string' ? body.hardwareId : '';
-  if (!HARDWARE_ID.test(hardwareId)) {
-    return Response.json({ error: 'hardwareId required' }, { status: 400 });
+  try {
+    const result = await pair(body);
+    if (!result) return new Response(null, { status: 204 });
+    return Response.json(result);
+  } catch (err) {
+    return deviceErrorResponse(err);
   }
-
-  const code = typeof body?.code === 'string' ? body.code.toUpperCase() : '';
-  if (!code) {
-    const pairing = await beginPairing(hardwareId);
-    return Response.json({ ...pairing, pollSeconds: 5 });
-  }
-
-  const result = await pollPairing(hardwareId, code);
-  if (!result) return new Response(null, { status: 204 });
-  return Response.json(result);
 }

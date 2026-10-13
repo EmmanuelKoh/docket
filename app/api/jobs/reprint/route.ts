@@ -1,37 +1,12 @@
 // POST /api/jobs/reprint?job=ID — re-render from the stored template+data
-// and queue a fresh job. Never resends old bytes: the render pipeline may
-// have improved since the original print.
+// and queue a fresh job (lib/ops/jobs.js). Raw jobs (Tape) answer 400.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { createJob, getJob } from '@/lib/job-store.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { json } from '@/app/_lib/http';
+import { jobsReprint } from '@/lib/ops/jobs.js';
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const id = new URL(req.url).searchParams.get('job');
-  const job = id ? await getJob(owner, id) : null;
-  if (!job)
-    return Response.json({ error: 'record not found' }, { status: 404 });
-  // Raw-bytes jobs (source: tape) carry no template to re-render from.
-  if (!job.template)
-    return Response.json(
-      { error: 'printed from a tool — print it again there' },
-      { status: 400 },
-    );
-
-  try {
-    const result = await createJob(owner, {
-      template: job.template,
-      data: job.data,
-      name: job.name || job.id,
-      source: 'reprint',
-    });
-    return Response.json({ queued: result.id });
-  } catch (err) {
-    return Response.json(
-      { error: `reprint failed · ${(err as Error).message}` },
-      { status: 500 },
-    );
-  }
+  const caller = await requestCaller(req); // null -> the op answers 401 'sign in required'
+  const id = new URL(req.url).searchParams.get('job') ?? '';
+  return json(() => jobsReprint(caller, { id }));
 }

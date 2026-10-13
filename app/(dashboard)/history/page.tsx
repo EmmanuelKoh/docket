@@ -5,10 +5,17 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
 import { HistoryList, type HistoryRow } from '@/components/history-list';
-import { listJobs } from '@/lib/job-store.js';
-import { agoShort, HISTORY_STATUSES, type JobSummary } from '../../_lib/format';
+import { jobsList } from '@/lib/ops/jobs.js';
+import {
+  agoShort,
+  failedAttempts,
+  HISTORY_STATUSES,
+  historyStamp,
+  type JobSummary,
+  jobImageSrc,
+} from '../../_lib/format';
 
 const PER_PAGE = 20;
 const FILTERS = ['all', ...HISTORY_STATUSES];
@@ -22,11 +29,18 @@ function statusColor(status: string): string {
 function historyRow(j: JobSummary): HistoryRow {
   return {
     id: j.id,
+    image: jobImageSrc(j),
     name: j.name || j.id,
-    sub: j.source || '—',
+    sub: [j.source || '—', failedAttempts(j.attempts)]
+      .filter(Boolean)
+      .join(' · '),
     statusText: j.status,
     statusColor: statusColor(j.status),
+    stamp: historyStamp(j.status),
     railTime: agoShort(j.createdAt),
+    // the Reprint route refuses the rest; raw rows the old deployment
+    // inserted after the migration still say 'template' but lack one
+    reprintable: j.kind === 'template' && j.hasTemplate,
   };
 }
 
@@ -35,18 +49,18 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
   const params = await searchParams;
   const filter = HISTORY_STATUSES.includes(params.filter || '')
     ? (params.filter as string)
     : 'all';
 
-  const all = ((await listJobs(owner, 1000)) as JobSummary[]).filter((j) =>
-    filter === 'all'
-      ? HISTORY_STATUSES.includes(j.status)
-      : j.status === filter,
-  );
+  const all: JobSummary[] = await jobsList(caller, {
+    limit: 1000,
+    status: filter === 'all' ? HISTORY_STATUSES : [filter],
+    attempts: true,
+  });
   const pages = Math.max(1, Math.ceil(all.length / PER_PAGE));
   const page = Math.min(
     Math.max(1, parseInt(params.page || '1', 10) || 1),

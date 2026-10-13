@@ -271,7 +271,10 @@ mistakes stay off production.
    secrets.h is gitignored):
    - wifi name/password (must be a **2.4GHz** network)
    - server URL = `http://<laptop-ip>:3000`
-   - device token = the `DEVICE_TOKEN` value from the repo's `.env`
+   - device token: either the laptop's `DEVICE_TOKEN` (`dev-token` unless
+     `.env` sets another), or `""` to pair the board with your local
+     account (it prints a code; enter it on the Printer page, and if it
+     prints a new code before it shows `pair: claimed`, enter the new one)
    Then open `docket-agent.ino` in the Arduino IDE (it picks up secrets.h
    automatically from the same folder) and check `PIN_TX` / `PIN_RX` match
    your board.
@@ -280,8 +283,9 @@ mistakes stay off production.
 5. Open the local studio (`http://localhost:3000/studio`), hit **Print**.
 
 **Done when:** the receipt prints from the ESP32 with no Mac process
-involved, the Serial Monitor shows `job job-N: printed` then `ack`, and the
-dashboard's job goes queued → printing → done.
+involved, the Serial Monitor shows `job <owner>~job-N: printed` then
+`ack: <owner>~job-N`, and the dashboard's job goes queued → printing →
+done.
 
 **Measure your printer.** Every unit has physical quirks the datasheet
 won't tell you: unprintable side margins, blade-to-data distance, the blank
@@ -296,7 +300,11 @@ line can mute its transmitter.
 **If it fails:**
 - Jobs fetch but nack with `EOT... = -1` → power-cycle the printer (see quirk above).
 - Never joins wifi → 5GHz-only network name, or typo'd password.
-- `tick: 401` / `next: 401` → `DEVICE_TOKEN` doesn't match the `.env`.
+- `tick: 401` / `next: 401` → the server does not know the token: a
+  `DEVICE_TOKEN` in secrets.h that doesn't match the laptop's, or a paired
+  token that was revoked or belongs to another server's database. After 10
+  401s in a row the firmware wipes a paired token and prints a new pairing
+  code. A secrets.h token is never wiped; fix it and flash again.
 - Fetches but prints garbage → baud mismatch (Stage 0 vs `PRINTER_BAUD`).
 - Prints a partial receipt then nacks → flow-control stall; enable XON/XOFF
   in the printer's serial settings if available, or drop the baud one step.
@@ -316,8 +324,9 @@ proves the device cooperates. Queue a job for each drill and watch:
   complete. A torn half-receipt in the bin is expected; the complete one
   follows.
 - **Server unreachable after printing** (stop `npm run dev` right as it
-  prints) → Serial Monitor shows `ack failed — will retry`; restart the
-  server; the ack lands before any new job is fetched. No double print.
+  prints) → Serial Monitor reports the failed ack and that it will retry;
+  restart the server; the ack lands before any new job is fetched. No
+  double print.
 
 **Done when:** all four drills end with exactly one complete printed
 receipt and a clean queue.
@@ -326,13 +335,21 @@ receipt and a clean queue.
 
 ## Stage 6: Cutover to production
 
-1. In the sketch config, change `SERVER_URL` to the production Vercel URL
-   and `DEVICE_TOKEN` to the production token. Re-upload.
-2. Watch the Serial Monitor: `tick: ok` against production, then leave the
-   ESP32 on its wall brick next to the printer.
+1. In `secrets.h`, set `SECRET_SERVER_URL` to the production URL and
+   `SECRET_DEVICE_TOKEN` to `""`. Re-upload. A token paired against the
+   laptop is still in flash and production does not know it: after 10
+   401s the firmware wipes it and enters pairing.
+2. The printer prints a pairing code. Sign in to the hosted dashboard and
+   enter the code on the Printer page. The Serial Monitor shows
+   `pair: claimed`, then `tick: ok` against production. Leave the ESP32 on
+   its wall brick next to the printer.
+   If the printer prints a new code after you entered one but before it
+   shows `pair: claimed` (it rebooted, or 14 minutes passed since it
+   printed the code), the code you entered is void. Enter the newly
+   printed code.
 3. On the Mac: stop `printer-agent.js` and `heartbeat.js` for good.
-4. Confirm from the hosted dashboard: Home shows recent device contact, and
-   a test print from the studio comes out of the printer.
+4. Confirm from the hosted dashboard: Overview shows the printer seen
+   moments ago, and a test print from the studio comes out of the printer.
 
 The Mac is now out of the system: plugins run and receipts print with the
 laptop closed.
@@ -366,6 +383,6 @@ laptop closed.
 | Loopback fails (Stage 1) | Wrong Port selected in Arduino IDE |
 | No Port at all | Charge-only USB cable, or missing CP210x/CH340 driver |
 | Won't join wifi | Network is 5GHz; use a 2.4GHz one |
-| `401` in Serial Monitor | DEVICE_TOKEN doesn't match the server's |
+| `401` in Serial Monitor | The server doesn't know the token: a wrong secrets.h token, or a paired token revoked or from another server (10 in a row wipe a paired token and restart pairing) |
 | Partial print then nack | Flow-control stall; enable XON/XOFF on the printer |
 | Paper-out never detected | Printer's TXD-back wire (to the RX pin) not connected |

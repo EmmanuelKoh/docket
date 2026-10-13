@@ -6,18 +6,22 @@
 // is the real rendered receipt on white, top-cropped with the dashed
 // edge, names are mono, hover shifts the border to --ink-faint (no
 // shadows or motion). The card IS the button. "New template" opens the
-// Studio blank.
+// Studio blank (a client-side Link, like every Studio link). Previews
+// load from a versioned URL (slip.thumb), so a revisit paints them from
+// the browser cache.
 
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
+import { slipsRegister } from '@/lib/ops/slips.js';
 import { groupByCategory, listSlips } from '../../_lib/slip-data';
 
 export default async function SlipsPage() {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
-  const slips = await listSlips(owner);
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
+  await slipsRegister(caller); // a new owner's plugins and their templates
+  const slips = await listSlips(caller);
   const groups = groupByCategory(slips);
 
   return (
@@ -30,12 +34,12 @@ export default async function SlipsPage() {
             configure, preview, and print
           </p>
         </div>
-        <a
+        <Link
           href="/studio?new=1"
           className="shrink-0 whitespace-nowrap rounded-md border-[0.5px] border-border bg-raised px-3 py-1.5 text-xs text-ink hover:border-ink-faint"
         >
           New template
-        </a>
+        </Link>
       </div>
 
       {groups.map((group) => (
@@ -68,11 +72,11 @@ export default async function SlipsPage() {
                 {/* the full receipt at paper width on white, like every
                     other preview; the chips sit in the top white margin */}
                 <div className="relative border-b border-dashed border-dash bg-white pb-4">
-                  {r.primaryTemplate ? (
+                  {r.thumb ? (
                     /* same paper treatment as the other previews: the
                        receipt inset on white at 92.3%, centered */
                     <img
-                      src={`/api/templates/thumb?name=${encodeURIComponent(r.primaryTemplate)}`}
+                      src={r.thumb}
                       alt={`${r.title} preview`}
                       loading="lazy"
                       className="mx-auto mt-9 block w-[92.3%]"

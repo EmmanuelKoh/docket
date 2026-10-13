@@ -1,50 +1,37 @@
 // POST /api/tape/print — queue a take from the Tape tool. The browser
 // renders the ESC/POS bytes itself (that's the tool's whole premise: the
-// preview IS the print bytes), so this route just validates and stores —
-// no Liquid, no Satori, no font tracing needed. Cookie session like the
+// preview IS the print bytes), so this route just hands them to
+// jobs.createRaw (lib/ops/jobs.js), which validates and stores — no
+// Liquid, no Satori, no font tracing needed. Cookie session like the
 // other dashboard JSON APIs.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { createRawJob } from '@/lib/job-store.js';
-
-// Vercel's request cap is ~4.5MB; a very long take (base64-inflated)
-// could brush it. Reject clearly rather than opaquely.
-const MAX_B64 = 3 * 1024 * 1024;
+import { requestCaller } from '@/app/_lib/caller';
+import { json, signInRequired } from '@/app/_lib/http';
+import { TAPE_ENCODER } from '@/components/tape-renderer.js';
+import { jobsCreateRaw } from '@/lib/ops/jobs.js';
 
 export async function POST(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const body = await req.json().catch(() => null);
-  if (!body) return Response.json({ error: 'invalid JSON' }, { status: 400 });
-  const { bytes, png, width, height, name } = body;
-  if (typeof bytes !== 'string' || typeof png !== 'string' || !bytes || !png) {
-    return Response.json(
-      { error: 'bytes and png (base64) required' },
-      { status: 400 },
-    );
-  }
-  if (bytes.length > MAX_B64 || png.length > MAX_B64) {
-    return Response.json(
-      { error: 'take too long for one job — split it' },
-      { status: 413 },
-    );
-  }
-
-  try {
-    const result = await createRawJob(owner, {
-      name: typeof name === 'string' && name ? name : 'Tape take',
+  const caller = await requestCaller(req);
+  if (!caller) return signInRequired(); // before reading two base64 payloads
+  const body = (await req.json().catch(() => null)) || {};
+  return json(async () => {
+    const { id, status } = await jobsCreateRaw(caller, {
+      bytes: body.bytes,
+      png: body.png,
+      width: body.width,
+      height: body.height,
+      // Tape's labels in History (the op has no defaults of its own)
+      name:
+        typeof body.name === 'string' && body.name ? body.name : 'Tape take',
       source: 'tape',
-      bytes: Buffer.from(bytes, 'base64'),
-      png: Buffer.from(png, 'base64'),
-      width: Number(width) || 576,
-      height: Number(height) || 0,
+      // the framing of the renderer's toEscpos: one raster, upright
+      encoding: {
+        mode: 'raster',
+        rotate: 0,
+        flushCut: false,
+        encoder: TAPE_ENCODER,
+      },
     });
-    return Response.json(
-      { id: result.id, status: result.status },
-      { status: 201 },
-    );
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+    return { id, status };
+  }, 201);
 }

@@ -68,7 +68,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 1. Open **docket forwarder**.
 2. Ingest URL: `https://your-app.vercel.app/ingest` (or your deployment).
-   Ingest token: the `INGEST_TOKEN` you set in the Vercel env. Tap **Save**.
+   Ingest token: the token shown on your docket's message-ingest Slips
+   page (each account has its own; it also decides whose printer gets the
+   slips). Tap **Save**.
 3. Tap **Grant permissions** → allow SMS and notifications.
 4. Tap **Start forwarder**. A persistent "Forwarding incoming messages"
    notification confirms it's running.
@@ -91,5 +93,8 @@ adb logcat -s docket-forwarder
 - First launch adopts the current newest message id per table as a baseline,
   so your existing history is not replayed. Only messages received after you
   start the service are forwarded.
-- No duplicate protection on the server yet; the app's per-table "last seen
-  id" prevents the app from re-sending, which covers the normal case.
+- The app's per-table "last seen id" keeps it from re-sending a message it
+  got a `2xx` for. A resend after a timeout prints once: the server answers
+  the same text from the same sender and source within 15 minutes with
+  `200 {"duplicate": true}`, or `409` while the first copy is still being
+  handled (the app retries it on its next scan).

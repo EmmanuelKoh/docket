@@ -2,11 +2,14 @@
 //
 //   node scripts/show-plugin.js <pluginId>
 //
-// Goes through the plugin-registry facade, so it works with both drivers
-// (STORE_DRIVER=json|redis) and the configured owner.
+// Calls the slips.get operation as the configured owner (OWNER_ID), so it
+// works with both drivers (STORE_DRIVER=json|redis). Credential values
+// (message-ingest's ingestToken) are left out of config: the op shows them
+// only to a signed-in user, on the Slips page.
 
-import { OWNER_ID, STORE_DRIVER } from '../config.js';
-import { getPlugin } from '../lib/plugin-registry.js';
+import { OWNER_ID } from '../config.js';
+import { systemCaller } from '../lib/ops/caller.js';
+import { slipsGet } from '../lib/ops/slips.js';
 
 const pluginId = process.argv[2];
 if (!pluginId) {
@@ -14,9 +17,16 @@ if (!pluginId) {
   process.exit(1);
 }
 
-const record = await getPlugin(OWNER_ID, pluginId);
+let record;
+try {
+  ({ record } = await slipsGet(systemCaller(OWNER_ID, 'cli:show-plugin'), { id: pluginId }));
+} catch (err) {
+  console.error(`${pluginId}: ${err.message} (owner "${OWNER_ID}")`);
+  process.exit(1);
+}
+// null until the owner's first Slips page view registers the module.
 if (!record) {
-  console.error(`plugin "${pluginId}" not found for owner "${OWNER_ID}" (${STORE_DRIVER} driver)`);
+  console.error(`${pluginId}: not registered (owner "${OWNER_ID}")`);
   process.exit(1);
 }
 

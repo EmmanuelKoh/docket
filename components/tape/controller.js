@@ -1,7 +1,7 @@
 // components/tape/controller.js — the Tape tool's orchestrator. Owns the
 // session objects (recorder, analyzer, player, view, renderer, tracker,
 // take document) and the flow between them; writes every UI-visible fact
-// into the store (store.js) for React to render. React handlers call the
+// into the store (store.ts) for React to render. React handlers call the
 // methods returned here — nothing in this file touches control DOM.
 //
 // Pipeline (all in the browser). LIVE: mic → audio-io.js (decimated,

@@ -2,23 +2,28 @@
 // panel: receipts are paper, in both themes), the 4-cell stat strip (one
 // bordered container split by hairlines; queue number red only when
 // nonzero), the system line (online dot per the 90-second rule), and
-// RECENT: the three newest history rows. Data shapes ported from the
-// legacy homePage() in api/dashboard.js.
+// RECENT: the three newest history rows. The history rows come from
+// jobs.list, the queue cell from jobs.queueSize (the same read as the
+// sidebar badge, shared per request: no listing of live jobs), printer
+// presence from printers.status (the same online rule as Printer), the
+// template count from templates.list, the plugin count from slips.list.
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
+import { queueSize } from '@/app/_lib/queue-data';
 import { ReceiptPreview } from '@/components/receipt-preview';
-import { listJobs } from '@/lib/job-store.js';
-import { listPlugins } from '@/lib/plugin-registry.js';
-import { getState } from '@/lib/state-store.js';
-import { getTemplates } from '@/lib/store.js';
+import { jobsList } from '@/lib/ops/jobs.js';
+import { printersStatus } from '@/lib/ops/printers.js';
+import { slipsList } from '@/lib/ops/slips.js';
+import { templatesList } from '@/lib/ops/templates.js';
 import pkg from '@/package.json';
 import {
   agoShort,
   agoText,
   HISTORY_STATUSES,
   type JobSummary,
+  jobImageSrc,
 } from '../_lib/format';
 
 function statusColor(status: string): string {
@@ -28,18 +33,24 @@ function statusColor(status: string): string {
 }
 
 export default async function OverviewPage() {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
-  const [templates, plugins, jobs, device] = await Promise.all([
-    getTemplates(owner),
-    listPlugins(owner),
-    listJobs(owner, 1000) as Promise<JobSummary[]>,
-    getState(owner, 'device'),
+  const caller = await getCaller();
+  if (!caller?.ownerId) redirect('/login');
+  const [templates, slips, size, history, presence] = await Promise.all([
+    templatesList(caller),
+    slipsList(caller),
+    queueSize(caller),
+    // newest first: the hero and the three RECENT rows
+    jobsList(caller, { limit: 3, status: HISTORY_STATUSES }) as Promise<
+      JobSummary[]
+    >,
+    // a member reads the shared printer's heartbeat (primary owner's slot)
+    printersStatus(caller),
   ]);
 
-  const queued = jobs.filter((j) => j.status === 'queued').length;
-  const printing = jobs.filter((j) => j.status === 'inflight').length;
-  const history = jobs.filter((j) => HISTORY_STATUSES.includes(j.status));
+  // registered system slips (a module without a record has not been set
+  // up: the Slips pages register on view)
+  const plugins = slips.flatMap((p) => (p.record ? [p.record] : []));
+  const { queued, inflight: printing } = size;
   const last = history[0];
 
   const queueSubParts = [];
@@ -47,9 +58,7 @@ export default async function OverviewPage() {
   if (queued) queueSubParts.push(`${queued} queued`);
   const queueSub = queueSubParts.join(' · ') || 'nothing waiting';
 
-  const lastSeen = device?.lastSeenAt as string | undefined;
-  const stale =
-    !lastSeen || Date.now() - new Date(lastSeen).getTime() > 90 * 1000;
+  const { lastSeenAt: lastSeen, online } = presence;
 
   const stats = [
     { label: 'Templates', value: templates.length, sub: 'in the store' },
@@ -79,7 +88,7 @@ export default async function OverviewPage() {
         {last ? (
           <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-start">
             <ReceiptPreview
-              src={`/api/jobs/png?job=${encodeURIComponent(last.id)}`}
+              src={jobImageSrc(last)}
               alt={last.name || last.id}
               className="sm:w-[400px] sm:shrink-0"
             />
@@ -127,7 +136,7 @@ export default async function OverviewPage() {
       <div className="flex flex-wrap items-center gap-6 px-1 text-xs text-ink-muted">
         <span className="flex items-center gap-2">
           <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${stale ? 'bg-ink-faint' : 'bg-ink'}`}
+            className={`inline-block h-1.5 w-1.5 rounded-full ${online ? 'bg-ink' : 'bg-ink-faint'}`}
           />
           {lastSeen
             ? `printer seen ${agoText(lastSeen)}`
@@ -151,14 +160,14 @@ export default async function OverviewPage() {
         </div>
         {history.length ? (
           <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised">
-            {history.slice(0, 3).map((j, i) => (
+            {history.map((j, i) => (
               <div
                 key={j.id}
                 className={`flex items-start gap-4 px-4 py-4 sm:gap-6 sm:px-5 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
               >
                 <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
                   <img
-                    src={`/api/jobs/png?job=${encodeURIComponent(j.id)}`}
+                    src={jobImageSrc(j)}
                     alt=""
                     loading="lazy"
                     className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"

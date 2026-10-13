@@ -1,32 +1,28 @@
-// GET /api/jobs/png?job=ID — the stored preview PNG for thumbnails.
-// Session-gated like every dashboard JSON/asset route (the legacy
-// equivalent is GET /jobs?png=ID). A job's PNG never changes, so short
-// private caching keeps repeat paints free.
+// GET /api/jobs/png?job=ID — the stored preview PNG for thumbnails, for
+// rows jobs.list gives no imageUrl (local, where the PNG is inline in the
+// row); hosted pages load the artifact's public URL instead
+// (app/_lib/format.ts jobImageSrc). Session-gated like every dashboard
+// JSON/asset route (the legacy equivalent is GET /jobs?png=ID). A job's
+// PNG never changes, so short private caching keeps repeat paints free.
 
-import { requestOwner, unauthorizedJson } from '@/app/_lib/dashboard-session';
-import { getJobPng } from '@/lib/job-store.js';
+import { requestCaller } from '@/app/_lib/caller';
+import { errorResponse } from '@/app/_lib/http';
+import { jobsImage } from '@/lib/ops/jobs.js';
 
 export async function GET(req: Request) {
-  const owner = await requestOwner(req);
-  if (!owner) return unauthorizedJson();
-
-  const id = new URL(req.url).searchParams.get('job');
-  if (!id) {
-    return Response.json(
-      { error: 'job query parameter is required' },
-      { status: 400 },
-    );
+  const caller = await requestCaller(req);
+  const id = new URL(req.url).searchParams.get('job') ?? '';
+  try {
+    const png = await jobsImage(caller, { id });
+    return new Response(new Uint8Array(png.body), {
+      status: 200,
+      headers: {
+        'Content-Type': png.contentType,
+        'Content-Length': String(png.body.length),
+        'Cache-Control': 'private, max-age=3600',
+      },
+    });
+  } catch (err) {
+    return errorResponse(err);
   }
-
-  const png = await getJobPng(owner, id);
-  if (!png) return new Response(null, { status: 404 });
-
-  return new Response(new Uint8Array(png), {
-    status: 200,
-    headers: {
-      'Content-Type': 'image/png',
-      'Content-Length': String(png.length),
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
 }

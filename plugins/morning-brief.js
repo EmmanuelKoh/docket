@@ -3,10 +3,10 @@
 // the day's weather (Open-Meteo, no API key), and a focus line.
 //
 // When it runs: the schedule ({ at: "06:30", timezone }) — the runner fires
-// this plugin once per day at that wall-clock time (edit on the Plugins
+// this plugin once per day at that wall-clock time (edit on its Slips
 // page). run() no longer watches the clock itself.
 //
-// Config (all editable from the Plugins page):
+// Config (all editable from its Slips page):
 //   icsUrls    array of secret iCal addresses. Google Calendar: Settings →
 //              [calendar] → "Secret address in iCal format" — one per
 //              calendar (work, personal, family, ...). Treat as secrets.
@@ -26,8 +26,9 @@
 // runner records lastError (red on the plugin card) and retries at the
 // next interval. A brief silently missing a calendar would lie on paper.
 // Weather failure only degrades its stat to "—".
-
-import ical from 'node-ical';
+//
+// node-ical loads inside fetchFeed, not at module load: plugins/index.js is
+// imported by /ingest and the Slips pages, which never parse a calendar.
 
 export const id = 'morning-brief';
 
@@ -97,6 +98,7 @@ async function fetchFeed(url) {
     // instead of the "Secret address in iCal format".
     throw new Error('feed is not iCal data — use the calendar\'s "Secret address in iCal format"');
   }
+  const { default: ical } = await import('node-ical');
   return ical.async.parseICS(text);
 }
 

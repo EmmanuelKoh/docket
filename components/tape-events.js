@@ -14,8 +14,8 @@
 // ornament) never commits, while a genuine note-to-note bend commits as
 // soon as the new pitch has held. Octave errors (the classic harmonic
 // flip of autocorrelation trackers) must hold several times longer
-// before they are believed. All thresholds are live-tunable sliders on
-// the Tape page.
+// before they are believed. The Tape tool passes fixed thresholds
+// (components/tape/controller.js trackerValues); no control exposes them.
 
 export const TRACKER_DEFAULTS = {
   clarityMin: 0.5, // frames below this confidence count as unvoiced

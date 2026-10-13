@@ -17,12 +17,14 @@ out_*.png
 # in production without them — tfjs reads the HTML error page as floats)
 !public/basic-pitch/*.bin
 
-# Job queue (runtime data, not source)
-jobs/*
-!jobs/.gitkeep
-
-# Runtime template store (seeded from reference/starter-templates.json)
+# Local runtime state: PGlite (data/pg), json-driver files, Tape takes
 data/
+
+# Private local images (the code never reads or writes jobs/)
+jobs/
+
+# Scratch output (screenshots, probes)
+tmp/
 
 # Per-phase teaching notes for the multi-user build (private, not shipped)
 learning/

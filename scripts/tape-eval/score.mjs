@@ -75,8 +75,11 @@ async function scoreFixture(truthPath) {
   // check); TAPE_DETUNE=-50 shifts the input off the semitone grid in
   // cents BEFORE tuning normalization (same rule: scores must not
   // move); TAPE_RETUNE=0 disables the tuning stage for A/B;
-  // TAPE_DEREVERB=1 (+ TAPE_RT60 / TAPE_DRSTRENGTH) A/Bs the
-  // corpus-vetoed dereverb stage
+  // TAPE_TARGET sets the loudness normalization's target RMS (default
+  // 0.025, normalize.mjs); TAPE_DEREVERB=1 A/Bs the corpus-vetoed
+  // dereverb stage, with TAPE_RT60 (assumed room decay in seconds,
+  // default 0.6) and TAPE_DRSTRENGTH (subtraction strength, default 1.0)
+  // as its settings (dereverb.mjs)
   const { notes, tuningCents } = await transcribeWithMeta(wav, {
     ...(process.env.TAPE_GAIN ? { gain: parseFloat(process.env.TAPE_GAIN) } : {}),
     ...(process.env.TAPE_DETUNE

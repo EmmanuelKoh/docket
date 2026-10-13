@@ -3,11 +3,9 @@
 // claims the token atomically at submit, so this page's check is only a
 // courtesy). Invalid: a plain explanation, no form.
 
-import { and, eq, gt, isNull } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { sessionValid } from '@/app/_lib/dashboard-session';
-import { invite } from '@/db/schema.js';
-import { getDb } from '@/lib/db.js';
+import { getCaller } from '@/app/_lib/caller';
+import { invitesCheck } from '@/lib/ops/accounts.js';
 import { InviteForm } from './invite-form';
 
 export default async function InvitePage({
@@ -15,22 +13,15 @@ export default async function InvitePage({
 }: {
   params: Promise<{ token: string }>;
 }) {
-  if (await sessionValid()) redirect('/');
+  const caller = await getCaller();
+  if (caller) redirect('/');
   const { token } = await params;
 
-  const db = await getDb();
-  const rows = await db
-    .select({ email: invite.email })
-    .from(invite)
-    .where(
-      and(
-        eq(invite.token, token),
-        isNull(invite.usedAt),
-        gt(invite.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-  const found = rows[0];
+  // Unknown, used and expired links are not_found; anything else is a real error.
+  const found = await invitesCheck(caller, { token }).catch((err) => {
+    if (err?.name === 'OpError' && err.code === 'not_found') return null;
+    throw err;
+  });
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">

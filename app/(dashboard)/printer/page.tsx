@@ -5,10 +5,9 @@
 // firmware, not from the dashboard.
 
 import { redirect } from 'next/navigation';
-import { sessionOwner } from '@/app/_lib/dashboard-session';
+import { getCaller } from '@/app/_lib/caller';
 import { PRINT_WIDTH } from '@/config.js';
-import { listDevices } from '@/lib/devices.js';
-import { getState } from '@/lib/state-store.js';
+import { printersOverview } from '@/lib/ops/printers.js';
 import pkg from '@/package.json';
 import { agoText } from '../../_lib/format';
 import {
@@ -23,7 +22,7 @@ import {
 type DeviceRow = {
   id: string;
   name: string | null;
-  pairedAt: Date | null;
+  pairedAt: string | null;
   role: 'owner' | 'member';
   primaryOwnerId: string;
   shareCode: string | null;
@@ -31,17 +30,14 @@ type DeviceRow = {
 };
 
 export default async function PrinterPage() {
-  const owner = await sessionOwner();
-  if (!owner) redirect('/login');
-  const paired: DeviceRow[] = await listDevices(owner);
+  const caller = await getCaller();
+  if (!caller) redirect('/login');
+  // One device listing for both: the presence reads the printer's primary
+  // owner's slot, so a shared printer shows online for its members too.
+  const { devices, status } = await printersOverview(caller);
+  const paired: DeviceRow[] = devices;
+  const { lastSeenAt: lastSeen, online } = status;
   const pairingPending = paired.some((d) => d.pairedAt === null);
-  // The online heartbeat lives on each device's primary owner's slot;
-  // members read the same slot, so a shared printer shows online for all.
-  const presenceOwner = paired[0]?.primaryOwnerId ?? owner;
-  const device = await getState(presenceOwner, 'device');
-  const lastSeen = device?.lastSeenAt as string | undefined;
-  const online =
-    !!lastSeen && Date.now() - new Date(lastSeen).getTime() <= 90 * 1000;
 
   const rows = [
     {
@@ -100,7 +96,7 @@ export default async function PrinterPage() {
                 <span className="leader" aria-hidden />
                 <span className="text-xs text-ink-faint">
                   {d.pairedAt
-                    ? `${d.role === 'member' ? 'shared with you · ' : ''}paired ${agoText(d.pairedAt.toISOString())}`
+                    ? `${d.role === 'member' ? 'shared with you · ' : ''}paired ${agoText(d.pairedAt)}`
                     : 'pairing…'}
                 </span>
                 {d.role === 'owner' ? (

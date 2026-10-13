@@ -4,6 +4,19 @@
     "includes": [
       "app/**",
       "components/**",
+      "lib/**",
+      "render/**",
+      "plugins/**",
+      "scripts/**",
+      "agent/**",
+      "transport/**",
+      "tests/**",
+      "db/**",
+      "!db/migrations",
+      "config.js",
+      "middleware.ts",
+      "next.config.mjs",
+      "vitest.config.ts",
       "!components/photo-engine.js",
       "!app/(dashboard)/photo/photo-tool.css"
     ]
@@ -30,5 +43,238 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "lib/**",
+        "render/**",
+        "plugins/**",
+        "scripts/**",
+        "agent/**",
+        "transport/**",
+        "db/**",
+        "config.js",
+        "middleware.ts",
+        "next.config.mjs"
+      ],
+      "formatter": {
+        "enabled": false
+      },
+      "assist": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["app/**", "components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noCommonJs": "error",
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "UI and route code reaches Postgres only through lib/ops/ operations.",
+                  "@neondatabase/serverless": "Database drivers live in lib/db.js.",
+                  "@upstash/redis": "The Redis client lives in lib/redis.js.",
+                  "@vercel/blob": "Blob access lives in lib/artifacts/."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@/lib/*",
+                      "@/lib/**",
+                      "!@/lib/ops",
+                      "!@/lib/ops/**",
+                      "!@/lib/auth-client",
+                      "!@/lib/auth-client.*",
+                      "!@/lib/auth-server",
+                      "!@/lib/auth-server.js",
+                      "**/lib/*",
+                      "**/lib/**",
+                      "!**/lib/ops",
+                      "!**/lib/ops/**",
+                      "!**/lib/auth-client",
+                      "!**/lib/auth-client.*",
+                      "!**/lib/auth-server",
+                      "!**/lib/auth-server.js",
+                      "@/db",
+                      "@/db/**",
+                      "**/db/schema*",
+                      "@/render",
+                      "@/render/**",
+                      "**/render/render-core*",
+                      "@/plugins",
+                      "@/plugins/**",
+                      "./plugins",
+                      "./plugins/*",
+                      "../**/plugins",
+                      "../**/plugins/*"
+                    ],
+                    "message": "UI and route code calls lib/ops/ operations; stores, render-core and plugins sit behind them."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm/*",
+                      "@upstash/redis/*",
+                      "@neondatabase/serverless/*",
+                      "@electric-sql/pglite",
+                      "@electric-sql/pglite/*"
+                    ],
+                    "message": "Database and Redis drivers live in lib/; UI and route code calls lib/ops/ operations."
+                  },
+                  {
+                    "group": [
+                      "@/lib/auth-server",
+                      "@/lib/auth-server.js",
+                      "**/lib/auth-server",
+                      "**/lib/auth-server.js"
+                    ],
+                    "message": "Pages and routes get a Caller from app/_lib/caller.ts; only app/_lib/dashboard-session.ts, the auth route and logout use lib/auth-server.js."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "app/_lib/dashboard-session.ts",
+        "app/api/auth/**",
+        "app/logout/route.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "UI and route code reaches Postgres only through lib/ops/ operations.",
+                  "@neondatabase/serverless": "Database drivers live in lib/db.js.",
+                  "@upstash/redis": "The Redis client lives in lib/redis.js.",
+                  "@vercel/blob": "Blob access lives in lib/artifacts/."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@/lib/*",
+                      "@/lib/**",
+                      "!@/lib/ops",
+                      "!@/lib/ops/**",
+                      "!@/lib/auth-client",
+                      "!@/lib/auth-client.*",
+                      "!@/lib/auth-server",
+                      "!@/lib/auth-server.js",
+                      "**/lib/*",
+                      "**/lib/**",
+                      "!**/lib/ops",
+                      "!**/lib/ops/**",
+                      "!**/lib/auth-client",
+                      "!**/lib/auth-client.*",
+                      "!**/lib/auth-server",
+                      "!**/lib/auth-server.js",
+                      "@/db",
+                      "@/db/**",
+                      "**/db/schema*",
+                      "@/render",
+                      "@/render/**",
+                      "**/render/render-core*",
+                      "@/plugins",
+                      "@/plugins/**",
+                      "./plugins",
+                      "./plugins/*",
+                      "../**/plugins",
+                      "../**/plugins/*"
+                    ],
+                    "message": "UI and route code calls lib/ops/ operations; stores, render-core and plugins sit behind them."
+                  },
+                  {
+                    "group": [
+                      "drizzle-orm/*",
+                      "@upstash/redis/*",
+                      "@neondatabase/serverless/*",
+                      "@electric-sql/pglite",
+                      "@electric-sql/pglite/*"
+                    ],
+                    "message": "Database and Redis drivers live in lib/; UI and route code calls lib/ops/ operations."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["lib/**", "render/**", "plugins/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "next",
+                      "next/*",
+                      "react",
+                      "react/*",
+                      "react-dom",
+                      "react-dom/*"
+                    ],
+                    "message": "Domain code must run outside Next.js and React."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["plugins/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "next",
+                      "next/*",
+                      "react",
+                      "react/*",
+                      "react-dom",
+                      "react-dom/*"
+                    ],
+                    "message": "Domain code must run outside Next.js and React."
+                  },
+                  {
+                    "group": [
+                      "**/lib/*",
+                      "**/lib/**",
+                      "**/db/*",
+                      "**/db/**",
+                      "@/lib/*",
+                      "@/lib/**",
+                      "@/db/*",
+                      "@/db/**"
+                    ],
+                    "message": "Plugins reach stores and jobs only through ctx."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // scripts/create-user.js — bootstrap an account without an invite, via
-// the Better Auth admin API (server-side createUser skips the invite
-// gate, which only guards /sign-up/email).
+// the users.create operation (Better Auth's server-side createUser, which
+// skips the invite gate guarding /sign-up/email). The only script that
+// calls as an admin.
 //
 //   node scripts/create-user.js "Name" email [role]
 //
@@ -14,7 +15,8 @@
 // for production, run with the production database:
 //   DATABASE_URL="postgres://..." node scripts/create-user.js ...
 
-import { getAuth } from '../lib/auth-server.js';
+import { systemCaller } from '../lib/ops/caller.js';
+import { usersCreate } from '../lib/ops/accounts.js';
 
 const [name, email, role = 'admin', passwordArg] = process.argv.slice(2);
 
@@ -65,20 +67,15 @@ if (!password) {
     process.exit(1);
   }
 }
-if (password.length < 8) {
-  console.error('password must be at least 8 characters');
-  process.exit(1);
-}
 
-const auth = await getAuth();
 try {
-  const res = await auth.api.createUser({
-    body: { name, email, password, role },
-  });
-  console.log(`created ${role} account ${res.user.id} for ${email}`);
+  const caller = systemCaller(null, 'cli:create-user', { admin: true });
+  const { user } = await usersCreate(caller, { name, email, password, role });
+  console.log(`created ${user.role} account ${user.id} for ${user.email}`);
   // The open PGlite handle keeps the event loop alive; exit explicitly.
   process.exit(0);
 } catch (err) {
-  console.error('failed:', err.body?.message || err.message);
+  // The op checks the password length and role, and reports a taken email.
+  console.error('failed:', err.message);
   process.exit(1);
 }

@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "biome check app components",
+    "lint": "biome check .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run tape:doc",
     "tape:eval": "node scripts/tape-eval/score.mjs",
     "tape:doc": "node scripts/test-tape-doc.mjs",
     "db:generate": "drizzle-kit generate",
@@ -36,6 +39,7 @@
     "react-dom": "^19.2.7",
     "satori": "^0.12.1",
     "satori-html": "^0.3.2",
+    "zod": "^4.6.7",
     "zustand": "^5.0.14"
   },
   "license": "MIT",
@@ -55,6 +59,8 @@
     "drizzle-kit": "^0.31.10",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.11"
   }
 }

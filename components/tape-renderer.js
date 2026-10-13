@@ -367,6 +367,11 @@ const SIG_STEPS_FLAT = [4, 7, 3, 6, 2, 5, 1];
 const WIDTH = 576;
 const WIDTH_BYTES = WIDTH / 8;
 
+// Names toEscpos's framing (one raster, no rotation, feed + full cut) for
+// the job record's encoding. Bump it only when that framing changes, not
+// for layout or glyph edits.
+export const TAPE_ENCODER = 'tape-renderer/1';
+
 export const TAPE_DEFAULTS = {
   msPerRow: 20, // one row of tape per this much SOUNDING time
   staffGap: 28, // dots between adjacent staff lines

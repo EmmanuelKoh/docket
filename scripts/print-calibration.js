@@ -1,13 +1,14 @@
 // scripts/print-calibration.js — print a grayscale calibration receipt.
 //
-// Prints seven labeled rows, one per candidate tone curve (gamma). Each row:
-// an 11-step wedge (black -> white, 10% steps) and a continuous ramp, run
-// through the exact photo pipeline (same dither, same printer path).
+// Prints three labeled rows through the exact photo pipeline (same
+// dither, same printer path): the calibrated tone curve (CURVE below) as
+// an 11-step wedge (white -> black, 10% steps) over a continuous ramp,
+// the same curve as one tall ramp, and an uncorrected gamma 1.00 control.
 //
-// Read the print: pick the row where the wedge steps are all DISTINCT and
-// look evenly spaced (especially 70-100% — dark steps must not fuse into
-// black), and the ramp looks smooth. Set that row's gamma as GAMMA in
-// components/photo-engine.js.
+// Read the print: the curve's wedge steps should be DISTINCT and look
+// evenly spaced (especially 70-100%: dark steps must not fuse into
+// black), and its ramp should look smooth. If not, adjust CURVE here and
+// its copy in components/photo-engine.js together.
 //
 //   node scripts/print-calibration.js                 -> production (PRINT_SERVER)
 //   node scripts/print-calibration.js http://localhost:3000
@@ -126,4 +127,4 @@ if (!resp.ok) {
   process.exit(1);
 }
 console.log(`queued ${body.id} (${body.width}x${body.height}) on ${SERVER}`);
-console.log('read the print, then set the winning gamma as GAMMA in components/photo-engine.js');
+console.log('read the print; if the steps are uneven, adjust CURVE here and in components/photo-engine.js');
