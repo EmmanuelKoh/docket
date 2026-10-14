@@ -20,7 +20,11 @@ import {
   slipsSetEnabled,
 } from '@/lib/ops/slips.js';
 import { templatesSave } from '@/lib/ops/templates.js';
-import { getPlugin, getPluginConfig } from '@/lib/plugin-registry.js';
+import {
+  getPlugin,
+  getPluginConfig,
+  isCredentialShape,
+} from '@/lib/plugin-registry.js';
 
 // PRINT_WIDTH and FONT_DIR forced to their defaults (as
 // tests/job-kind.test.ts does), so a developer's .env cannot change what
@@ -195,6 +199,37 @@ describe('slips.saveConfig', () => {
       message: 'ingestToken must not be blank (not saved)',
     });
     expect((await stored(a.id, INGEST)).config.ingestToken).toBe(token);
+  });
+
+  it('saves only an ingestToken /ingest would look up', async () => {
+    const a = await registered();
+    const minted = (await getPlugin(a.id, INGEST))?.config.ingestToken;
+    expect(minted).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(isCredentialShape(minted)).toBe(true);
+
+    for (const bad of ['two words', 'x'.repeat(129), 'café-token']) {
+      await expect(
+        slipsSaveConfig(a.caller, { id: INGEST, config: { ingestToken: bad } }),
+        bad,
+      ).rejects.toMatchObject({
+        code: 'invalid',
+        message:
+          'ingestToken must be 1 to 128 visible ASCII characters, with no spaces (not saved)',
+      });
+    }
+    expect((await stored(a.id, INGEST)).config.ingestToken).toBe(minted);
+
+    // A typed token of any visible ASCII still saves and resolves.
+    const typed = `my.Token!${randomUUID()}`;
+    await slipsSaveConfig(a.caller, {
+      id: INGEST,
+      config: { ingestToken: ` ${typed} ` },
+    });
+    expect((await stored(a.id, INGEST)).config.ingestToken).toBe(typed);
+    const sender = await callerForCredential(INGEST, 'ingestToken', typed, [
+      'messages.deliver',
+    ]);
+    expect(sender?.ownerId).toBe(a.id);
   });
 });
 

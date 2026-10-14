@@ -18,7 +18,26 @@ Text receipts print as one `GS v 0` raster. Dithered images print as
 memorize-then-print chunks (`GS *` / `GS /`), rotated 180° with a flush cut
 (`render/render-core.js`, `docs/rp850-field-notes.md`).
 
+## What you need
+
+- Node 22.12 or later.
+- Optionally, an 80mm ESC/POS thermal printer.
+  - A serial printer, like the Rongta RP850 this build uses, needs an
+    ESP32 board and a MAX3232 serial adapter.
+    [docs/receipt-printer-build-guide.md](docs/receipt-printer-build-guide.md)
+    has the parts list and the bring-up steps.
+  - A network printer that accepts jobs on TCP port 9100 can use the
+    laptop printer agent (`agent/printer-agent.js`) instead.
+- You do not need a printer to develop. Set `PRINTER_IP=file:data/prints`
+  and the laptop agent writes each job's bytes to `data/prints/` and marks
+  the job done (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+- To host it: Vercel (with Vercel Blob), Upstash Redis and Neon. Local
+  development needs no cloud account.
+
 ## Install
+
+`.nvmrc` pins Node 22. `nvm use` picks the newest 22 you have installed,
+which must be 22.12 or later (vite, the test runner's bundler, needs it).
 
 ```
 npm install
@@ -46,7 +65,7 @@ cp .env.example .env
 | `DATABASE_URL` | *(unset = PGlite)* | Postgres connection (Neon). Unset, local dev uses PGlite, an embedded Postgres |
 | `DATA_DIR` | `data/` | Local state: json-driver files, local artifacts, PGlite |
 | `PGLITE_DIR` | `DATA_DIR/pg` | Where PGlite keeps its files |
-| `BETTER_AUTH_SECRET` | *(falls back to `SESSION_SECRET`)* | Signs account session cookies. Set it in production |
+| `BETTER_AUTH_SECRET` | *(falls back to `SESSION_SECRET`, then Better Auth's own `AUTH_SECRET` or `BETTER_AUTH_SECRETS`; with none set locally, generated once in `DATA_DIR/auth-secret`)* | Signs account session cookies. Set it in production, where it has no default |
 | `BETTER_AUTH_URL` | *(unset = inferred per request)* | Canonical origin in production |
 | `JOB_CAP` | `50` | Job records kept per owner. Past it, the oldest done and failed jobs are trimmed |
 | `LEASE_SECONDS` | `120` | Redis driver: seconds before an unacked job returns to the queue |
@@ -55,7 +74,7 @@ cp .env.example .env
 | `PRINT_SERVER` | `http://localhost:$PORT` (agents), `http://localhost:3000` (calibration) | Server URL for the laptop agents and `scripts/print-calibration.js` (`PORT` defaults to 3000; the script's first argument overrides it) |
 | `HEARTBEAT_SECONDS` | `30` | Seconds between `/tick` POSTs from `agent/heartbeat.js` |
 | `POLL_INTERVAL` | `3000` | Laptop printer agent: milliseconds between `/next` polls |
-| `PRINTER_IP` / `PRINTER_PORT` | `192.168.1.87` / `9100` | The printer on your network, for the laptop printer agent only |
+| `PRINTER_IP` / `PRINTER_PORT` | *(none; unset, the agent exits)* / `9100` | Laptop printer agent only: a network printer's address, or `file:<dir>` to write each job to `<dir>/<job id>.bin` with no printer |
 | `PRINT_WIDTH` | `576` | Dots per line (576 for 80mm, 384 for 58mm) |
 | `FONT_DIR` | `render/fonts` | Directory with the DejaVu TTFs |
 | `GEMINI_API_KEY` | *(unset)* | Google AI Studio key for message classification. Without it a message fails, except one starting with `task:` |
@@ -75,22 +94,57 @@ points `DATABASE_URL` at a production database, prefix local commands with
 
 ## Deploy
 
-The hosted app runs on Vercel, and a push to `main` deploys it. Set these
-in the Vercel project's environment:
+The hosted app runs on Vercel. A first deploy:
 
-- `STORE_DRIVER=redis`.
-- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` from Upstash (the
-  Vercel Marketplace integration's `KV_REST_API_URL` and
-  `KV_REST_API_TOKEN` also work).
-- `BLOB_READ_WRITE_TOKEN`, which Vercel sets when a Blob store is connected
-  to the project.
-- `DATABASE_URL`, the Neon connection string.
-- `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` set to the site's origin.
-- `GEMINI_API_KEY` if you use message ingestion.
+1. Fork this repository and import the fork into Vercel as a new project.
+   In the project's settings, set Node.js Version to 22.x. package.json
+   names no Node version, so this setting decides it.
+2. In the project's Storage tab, add Upstash Redis, Vercel Blob and a Neon
+   database. Create the Blob store with public access: the code writes
+   every object as public and builds public URLs, so a private store does
+   not work. Connect each store to the Production environment only. Then
+   check that the Production variables (Settings, Environment Variables)
+   include:
+   - `DATABASE_URL`, the Neon connection string.
+   - `BLOB_READ_WRITE_TOKEN`.
+   - `KV_REST_API_URL` and `KV_REST_API_TOKEN`, or
+     `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` from the
+     Upstash console.
+3. Add these Production variables:
+   - `STORE_DRIVER=redis`.
+   - `BETTER_AUTH_SECRET`, set to the output of `openssl rand -base64 32`.
+   - `BETTER_AUTH_URL`, set to the site's origin, for example
+     `https://your-app.vercel.app`.
+   - `GEMINI_API_KEY`, only if you use message ingestion.
+4. Redeploy, so the deployment picks up the variables.
+5. In a clone of your fork, run `npm install`. Then create the schema and
+   the first admin account in the Neon database. Copy the connection
+   string from the project's `DATABASE_URL`:
 
-Before you deploy code that reads new columns, run `npm run db:migrate`
-with `DATABASE_URL` pointing at Neon. The stores select whole rows, so code
-ahead of the schema fails every query on that table.
+   ```
+   DATABASE_URL="<neon connection string>" npm run db:migrate
+   DATABASE_URL="<neon connection string>" node scripts/create-user.js "Your Name" you@example.com
+   ```
+
+   `create-user.js` prompts for the password. Sign in on the site with
+   that email and password.
+6. In `firmware/docket-agent/`, copy `secrets.h.example` to `secrets.h`.
+   Set your Wi-Fi name and password, set `SECRET_SERVER_URL` to the site's
+   origin with no trailing slash, and leave `SECRET_DEVICE_TOKEN` empty.
+   Flash the ESP32 as Stage 4 of
+   [docs/receipt-printer-build-guide.md](docs/receipt-printer-build-guide.md)
+   describes.
+7. The printer prints a pairing code. Enter it on the Printer page.
+
+Do not connect the stores or set these variables for the Preview
+environment. A preview deployment runs the code of a branch or pull
+request, and with production stores that code can read and change your
+production data. Give Preview its own stores, or none.
+
+After the first deploy, a push to `main` deploys. Before you deploy code
+that reads new columns, run `npm run db:migrate` with `DATABASE_URL`
+pointing at Neon. The stores select whole rows, so code ahead of the
+schema fails every query on that table.
 
 Vercel sets `VERCEL_GIT_COMMIT_SHA`. Its short hash is part of the slip
 preview images' cache key, so a deploy that changes rendering refreshes
@@ -201,8 +255,10 @@ token and pairs again. `X-Job-Id` is opaque to the firmware, and a bare
 The device POSTs `/tick` every 30 seconds. Apart from dashboard pages
 polling while they are open (see Polling above), nothing else in the
 system runs on its own timer. Locally, `node agent/heartbeat.js` and
-`node agent/printer-agent.js` stand in for the ESP32; the printer agent
-sends jobs over TCP (`transport/print-net.js`).
+`node agent/printer-agent.js` stand in for the ESP32. The printer agent
+sends jobs over TCP (`transport/print-net.js`), or with
+`PRINTER_IP=file:<dir>` writes each one to a file and acks it
+(`transport/print-file.js`).
 
 ## Plugins
 
@@ -421,14 +477,16 @@ plugins/
 reference/
   *-templates.json         Starter and plugin template sets, seeded per owner
 agent/
-  printer-agent.js         Laptop printer agent (polls /next, prints over TCP, acks)
+  printer-agent.js         Laptop printer agent (polls /next, prints over TCP or to files, acks)
   heartbeat.js             Laptop heartbeat (POSTs /tick)
 transport/
   print-net.js             TCP sender (printToNetwork)
+  print-file.js            Dry-run sink: job bytes to <dir>/<job id>.bin
 public/
   dither-worker.js         Photo viewfinder dither (Web Worker)
   pcm-worklet.js pitch-worker.js  Tape audio capture and pitch detection
   basic-pitch/             Tape transcription model
+  tf-wasm/                 tfjs WebAssembly fallback for the Tape transcriber
 firmware/
   docket-agent/            ESP32 sketch: pairing, /next, /ack, /nack, /tick
 android-forwarder/         Android app: SMS/RCS -> POST /ingest
@@ -468,5 +526,7 @@ service.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Contributions are welcome, see
+MIT (see [LICENSE](LICENSE)), except the files listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which keep their own
+licenses. Contributions are welcome, see
 [CONTRIBUTING.md](CONTRIBUTING.md).

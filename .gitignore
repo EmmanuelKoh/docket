@@ -1,6 +1,12 @@
 node_modules/
-.env
 .DS_Store
+
+# Environment files hold secrets; only the template is tracked
+.env*
+!.env.example
+
+# Vercel CLI project link
+.vercel/
 
 # Next.js build output
 .next/
@@ -20,8 +26,9 @@ out_*.png
 # Local runtime state: PGlite (data/pg), json-driver files, Tape takes
 data/
 
-# Private local images (the code never reads or writes jobs/)
-jobs/
+# Private local images in the repo-root jobs/ folder (the code never
+# reads or writes it). Anchored, so app/jobs/ and app/api/jobs/ stay tracked.
+/jobs/
 
 # Scratch output (screenshots, probes)
 tmp/

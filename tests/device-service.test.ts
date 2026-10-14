@@ -6,15 +6,19 @@
 // and falls back to that memory only while the flag cannot be read; a
 // job nacked 3 times waits behind later jobs, and the Queue view lists it
 // there (reading the queue's order only then); an owner re-pairing keeps
-// the members in the token mirror; a non-device caller; and the device
-// error mapping (never 401).
+// the members in the token mirror; a non-device caller; the device
+// error mapping (never 401); and the shape checks: a token that cannot be
+// a minted one answers 401 and a bad hardwareId 400, both with no store
+// call, and the token cache holds at most 1000 tokens.
 
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { deviceErrorResponse } from '@/app/_lib/device-auth';
 import { queueData } from '@/app/_lib/queue-data';
 import { POST as ackRoute } from '@/app/ack/route.ts';
 import { POST as nackRoute } from '@/app/nack/route.ts';
+import { GET as nextRoute } from '@/app/next/route.ts';
+import { POST as pairRoute } from '@/app/pair/route.ts';
 import { DEVICE_TOKEN } from '@/config.js';
 import {
   beginPairing,
@@ -32,6 +36,7 @@ import {
   BLOB_HOST,
   blobs,
   calls,
+  countPostgres,
   put as fakePut,
   fetchStub,
   listOf,
@@ -368,6 +373,120 @@ describe('callers', () => {
       expect(await res.json()).toEqual({ error: 'server error' });
     } finally {
       logged.mockRestore();
+    }
+  });
+});
+
+// From here on every Postgres query is logged too, so "no store call"
+// covers Redis, Blob and Postgres.
+describe('token and hardware id shape, hosted', () => {
+  beforeAll(async () => {
+    await countPostgres();
+    vi.setSystemTime(T0 + 2 * 3_600_000); // past every earlier window
+  });
+
+  const nextWith = (token: string) =>
+    nextRoute(
+      new Request('http://docket.test/next', {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+  const mintedShape = () => randomBytes(32).toString('base64url');
+  const pairWith = (body: unknown) =>
+    pairRoute(
+      new Request('http://docket.test/pair', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  it('a token that cannot be a minted one answers 401 with no store call', async () => {
+    const minted = mintedShape();
+    expect(minted).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    for (const bad of [
+      'x',
+      minted.slice(0, 42),
+      `${minted}A`,
+      `${minted.slice(0, 42)}+`,
+      `${minted.slice(0, 42)}=`,
+      `${minted.slice(0, 42)}.`,
+      `${minted.slice(0, 42)} `,
+      'é'.repeat(43),
+    ]) {
+      let status = 0;
+      const log = await logOf(async () => {
+        status = (await nextWith(bad)).status;
+      });
+      expect(status, bad).toBe(401);
+      expect(log, bad).toEqual([]);
+      expect(await resolveDeviceToken(bad), bad).toBeNull();
+    }
+  });
+
+  it('the dev DEVICE_TOKEN, not minted-shaped, still passes', async () => {
+    expect(DEVICE_TOKEN).not.toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect((await nextWith(DEVICE_TOKEN)).status).not.toBe(401);
+  });
+
+  it('a minted-shaped unknown token is looked up once, then refused from memory', async () => {
+    const token = mintedShape();
+    let status = 0;
+    const first = await logOf(async () => {
+      status = (await nextWith(token)).status;
+    });
+    expect(status).toBe(401);
+    expect(first.map((c) => c.split(' ').slice(0, 2).join(' '))).toEqual([
+      'redis get',
+      'pg select',
+    ]);
+    const again = await logOf(async () => {
+      status = (await nextWith(token)).status;
+    });
+    expect(status).toBe(401);
+    expect(again).toEqual([]);
+  });
+
+  it('remembers at most 1000 tokens, dropping the oldest', async () => {
+    const tokens = Array.from({ length: 1001 }, mintedShape);
+    for (const t of tokens) await resolveDeviceToken(t);
+    expect(await logOf(() => resolveDeviceToken(tokens[1]))).toEqual([]);
+    expect(
+      (await logOf(() => resolveDeviceToken(tokens[0]))).map((c) =>
+        c.split(' ').slice(0, 2).join(' '),
+      ),
+    ).toEqual(['redis get', 'pg select']);
+  });
+
+  it('/pair answers 400 to a bad hardwareId before any store call', async () => {
+    for (const hardwareId of [
+      '',
+      'esp32',
+      'x'.repeat(65),
+      'esp32 AABBCCDDEEFF',
+      'esp32-<script>',
+      'esp32-ÄÖÜ123',
+      '../../etc/hosts',
+      123456789,
+      null,
+    ]) {
+      let status = 0;
+      const log = await logOf(async () => {
+        status = (await pairWith({ hardwareId })).status;
+      });
+      expect(status, String(hardwareId)).toBe(400);
+      expect(log, String(hardwareId)).toEqual([]);
+    }
+  });
+
+  it('/pair accepts the firmware hardwareId and one of 64 characters', async () => {
+    // firmware/docket-agent/docket-agent.ino hardwareId(): "esp32-" + MAC.
+    const mac = randomBytes(6).toString('hex').toUpperCase();
+    for (const hardwareId of [`esp32-${mac}`, `hw:${'a'.repeat(58)}_-`]) {
+      expect(hardwareId.length).toBeLessThanOrEqual(64);
+      const res = await pairWith({ hardwareId });
+      expect(res.status, hardwareId).toBe(200);
+      expect((await res.json()).code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
     }
   });
 });

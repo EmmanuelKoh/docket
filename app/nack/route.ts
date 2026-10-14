@@ -11,9 +11,9 @@ import {
 } from '../_lib/device-auth';
 
 export async function POST(req: Request) {
-  const caller = await deviceCaller(req);
-  if (!caller) return unauthorized();
   try {
+    const caller = await deviceCaller(req);
+    if (!caller) return unauthorized();
     const id = new URL(req.url).searchParams.get('job');
     return Response.json(await nack(caller, id));
   } catch (err) {

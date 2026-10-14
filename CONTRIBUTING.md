@@ -4,6 +4,9 @@ Contributions of all kinds are welcome: bug reports, ideas, code and docs.
 
 ## Report a bug
 
+Report security bugs privately as [SECURITY.md](SECURITY.md) describes,
+not in an issue.
+
 Open an issue with what you tried, what you expected, what happened, the
 steps to reproduce, and your environment (OS, Node version, printer model
 if it matters).
@@ -23,6 +26,10 @@ implementation ideas if you have them.
 CI runs `npm run check` on every push and pull request.
 
 ## Development setup
+
+You need Node 22.12 or later, which vite (the test runner's bundler)
+needs. `.nvmrc` pins 22, so `nvm use` picks the newest Node 22 you have
+installed.
 
 ```bash
 git clone https://github.com/EmmanuelKoh/docket.git
@@ -66,6 +73,13 @@ The ESP32 is optional. Two laptop helpers stand in for it:
 node agent/printer-agent.js   # polls /next and sends jobs to PRINTER_IP over TCP
 node agent/heartbeat.js       # POSTs /tick, which runs due plugins
 ```
+
+The printer agent needs `PRINTER_IP` in `.env` and exits without it. Set
+it to the address of an ESC/POS printer on your network that listens on
+TCP port 9100. With no printer, set `PRINTER_IP=file:data/prints`. The
+agent then writes each job's bytes to `data/prints/<job id>.bin` and acks
+it, so the job goes from queued to done. A serial printer, like the RP850
+in this build, needs the ESP32.
 
 They send `DEVICE_TOKEN` (`dev-token` locally), which acts for the account
 named by `OWNER_ID`. Set `OWNER_ID` in `.env` to the account id
@@ -200,9 +214,13 @@ start with `enabled: false`.
 - Update `docs/design-spec.md` when you change the dashboard UI.
 - Add new environment variables to `.env.example` (a test checks it) and
   to the README table.
-- Never commit secrets or personal data. `data/`, `.env` and
-  `firmware/docket-agent/secrets.h` are gitignored. Use placeholder
-  domains and numbers in docs.
+- A file from another project (a font, a model, a binary, copied code)
+  keeps its license. List it in `THIRD_PARTY_NOTICES.md` with its
+  copyright lines, and add the license text there or in a `LICENSE` file
+  beside it. A test checks this for fonts, models and binaries.
+- Never commit secrets or personal data. `data/`, every `.env` file
+  except `.env.example`, `.vercel/` and `firmware/docket-agent/secrets.h`
+  are gitignored. Use placeholder domains and numbers in docs.
 
 ## Questions
 

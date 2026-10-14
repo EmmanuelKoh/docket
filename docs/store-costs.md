@@ -109,8 +109,12 @@ token is minted and after any Postgres hit: one GET for the entry and one
 GET of the owner's message-ingest record, which must still hold that
 token. Postgres answers only on a mirror miss (flushed Redis, an edited
 token) and for an unknown token. An instance remembers an unknown token
-for a minute and refuses it again with no Redis or Postgres read. Each
-message then claims `rp:{owner}:seen:message-ingest:{sha256}` (SET NX
+for a minute and refuses it again with no Redis or Postgres read. A
+token no config could hold (over 128 characters, spaces or non-ASCII)
+costs no read at all. An instance looks up at most 30 tokens a minute
+that it has never resolved; past that `/ingest` answers 429 with no
+read. Each message then claims
+`rp:{owner}:seen:message-ingest:{sha256}` (SET NX
 EX 90, just past the 60s function limit) and marks it done with one
 more SET (EX 900), so a resend within 15 minutes costs five commands and
 no Postgres. A handled message still wakes Neon for the
@@ -200,7 +204,11 @@ Requests. On Hobby the allowances bind instead: 500K Redis commands and
 Probed July 2026 against the production store
 (probe script in git history): an overwritten flag is visible to a
 cache-busted fetch in 46-184ms; plain fetches can lag ~2s on the CDN, so
-the reader always cache-busts.
+the reader always cache-busts. That probe wrote flags with a cache
+max-age of 0. Since @vercel/blob 1.0 the lowest allowed value is 60
+seconds, so flags are now written with 60. A plain fetch can then lag up
+to a minute. A cache-busted fetch is a new CDN key each time, so it
+should still see a write within the probed window.
 
 The tick flag (tick-flag/{owner}.json) applies the same idea to /tick: it
 holds the owner's earliest nextDueAt, refreshed by everything that changes
@@ -264,7 +272,27 @@ enabling a plugin reschedules it from now.
 - **Nothing on the device cadence queries Postgres.** `/next` and an idle
   `/tick` read Blob flags, and Redis on a safety check. Postgres answers
   for a claimed job, a plugin run that prints, pairing, a device token the
-  mirror does not hold, and human traffic.
+  mirror does not hold, and human traffic. A device token not shaped like
+  a minted one answers 401 with no read. An instance's token cache holds
+  at most 1,000 tokens, known or unknown, and drops the oldest.
+- **Unknown tokens have a read budget.** Each warm instance looks up at
+  most 30 device tokens and 30 ingest tokens a minute that have never
+  resolved on that instance (`lib/ops/identity.js`). Past that, device
+  endpoints answer 503 with Retry-After and `/ingest` answers 429, with
+  no Redis or Postgres read. A flood of random tokens then costs at most
+  about 60 Redis GETs and 60 Postgres queries a minute per instance
+  (each budget allows a mirror read and then a Postgres query), instead
+  of one of each per request. A token that has resolved on the instance
+  is never limited, even after its cache entry expires: the instance
+  keeps up to 1,000 such token hashes per kind.
+  A device this instance has not served yet (after a deploy or a cold
+  start) gets 503 for as long as a flood keeps the budget spent, which
+  can be longer than a minute. It never gets 401: the firmware keeps its
+  token and retries every 15 seconds.
+- **Pairing cleans up after itself.** Each new device row from `/pair`
+  runs one DELETE of at most 100 rows that no account claimed, created
+  over a day ago, with no live code (`lib/devices.js`). It runs only when
+  a row is added, never on the device cadence.
 - **Dashboard polls only while visible, and ease off when idle**: the
   Queue page (`/api/queue`) and the Studio's recent jobs (`/jobs`) poll
   only while `document.visibilityState` is visible, every 3s while the

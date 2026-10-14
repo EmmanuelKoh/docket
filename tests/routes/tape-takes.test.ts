@@ -2,10 +2,12 @@
 // driver: a new take tells the browser to upload its WAV straight to Blob
 // (audioUploadMode stays synchronous), the audio attach answers 400 for a
 // URL the store refuses, now that the route no longer checks hosts, and
-// the upload route refuses a request with no session unless it is Blob's
-// own signed upload-completed callback.
+// the upload route refuses every request with no session (a signed
+// callback too, since its tokens ask Blob for none) and mints a token
+// through the real @vercel/blob/client handleUpload.
 
 import { randomUUID } from 'node:crypto';
+import { getPayloadFromClientToken } from '@vercel/blob/client';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { PATCH } from '@/app/api/tape/takes/[id]/route';
 import { POST } from '@/app/api/tape/takes/route';
@@ -92,30 +94,51 @@ it('PATCH attaches an uploaded WAV, and answers 400 for a refused URL', async ()
   expect(ok.body.take.hasAudio).toBe(true);
 });
 
-it('the upload route: 401 without a session, but a signed callback reaches handleUpload', async () => {
+it('the upload route: 401 without a session, a signed callback included', async () => {
   const completed = JSON.stringify({
     type: 'blob.upload-completed',
     payload: { blob: { url: 'x' }, tokenPayload: null },
   });
-  const anonymous = new Request('http://docket.test/api/tape/takes/upload', {
-    method: 'POST',
-    body: completed,
-  });
-  const res = await uploadRoute(anonymous);
-  expect(res.status).toBe(401);
-  expect(anonymous.bodyUsed).toBe(false);
-
-  // Blob's callback carries no session, only a signature handleUpload
-  // checks (this one is wrong, so it answers 400, not 401).
-  const signed = await uploadRoute(
-    new Request('http://docket.test/api/tape/takes/upload', {
+  for (const headers of [{}, { 'x-vercel-signature': 'deadbeef' }]) {
+    const anonymous = new Request('http://docket.test/api/tape/takes/upload', {
       method: 'POST',
-      headers: { 'x-vercel-signature': 'deadbeef' },
+      headers,
       body: completed,
-    }),
-  );
-  expect(signed.status).toBe(400);
-  expect(await signed.json()).toEqual({
-    error: 'Vercel Blob: Invalid callback signature',
+    });
+    const res = await uploadRoute(anonymous);
+    expect(res.status).toBe(401);
+    expect(anonymous.bodyUsed).toBe(false);
+  }
+});
+
+it('the upload route mints a client token for your own tape/ path, with no callback', async () => {
+  const generate = (pathname: string) =>
+    uploadRoute(
+      request('/api/tape/takes/upload', 'POST', {
+        type: 'blob.generate-client-token',
+        payload: { pathname, multipart: false, clientPayload: null },
+      }),
+    );
+
+  // With a callback URL set, a route that passed onUploadCompleted would
+  // put a callback in the token.
+  vi.stubEnv('VERCEL_BLOB_CALLBACK_URL', 'https://docket.test');
+  const pathname = `tape/${owner}/${randomUUID()}.wav`;
+  const res = await generate(pathname);
+  vi.unstubAllEnvs();
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.type).toBe('blob.generate-client-token');
+  const payload = getPayloadFromClientToken(body.clientToken);
+  expect(payload).toMatchObject({
+    pathname,
+    allowedContentTypes: ['audio/wav', 'audio/x-wav'],
+    addRandomSuffix: true,
   });
+  expect(payload).not.toHaveProperty('onUploadCompleted');
+  expect(payload.validUntil).toBeGreaterThan(Date.now());
+
+  const foreign = await generate(`tape/someone-else/${randomUUID()}.wav`);
+  expect(foreign.status).toBe(400);
+  expect(await foreign.json()).toEqual({ error: 'unexpected upload path' });
 });

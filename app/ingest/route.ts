@@ -11,15 +11,20 @@
 // messages.deliver only. It resolves from a kv mirror; Postgres answers
 // only on a mirror miss, and a token it did not know is refused from
 // memory for the next minute (lib/plugin-registry.js
-// findOwnerByCredential).
+// findOwnerByCredential). A token no config could hold (over 128
+// characters, spaces, non-ASCII) is refused before any lookup.
 //
-// Statuses the forwarder sees: 401 bad token, 400 no text, 200 handled
-// (blank text answers { skipped: 'empty' }, a message already handled in
-// the last 15 minutes { duplicate: true }), 409 the same message is still
-// being handled, 502 handling failed. It retries anything but a 2xx on its
-// next scan.
+// Each warm instance looks up at most 30 tokens a minute that it does not
+// already know (lib/ops/identity.js); past that /ingest answers 429 with
+// Retry-After, and the forwarder retries on its next scan.
+//
+// Statuses the forwarder sees: 401 bad token, 429 too many unknown
+// tokens, 400 no text, 200 handled (blank text answers
+// { skipped: 'empty' }, a message already handled in the last 15 minutes
+// { duplicate: true }), 409 the same message is still being handled, 502
+// handling failed. It retries anything but a 2xx on its next scan.
 
-import { json } from '@/app/_lib/http';
+import { errorResponse, json } from '@/app/_lib/http';
 import { callerForCredential } from '@/lib/ops/identity.js';
 import { messagesDeliver } from '@/lib/ops/messages.js';
 
@@ -30,11 +35,19 @@ export async function POST(req: Request) {
   const token = header.startsWith('Bearer ')
     ? header.slice('Bearer '.length)
     : new URL(req.url).searchParams.get('token') || '';
-  const caller = token
-    ? await callerForCredential('message-ingest', 'ingestToken', token, [
-        'messages.deliver',
-      ])
-    : null;
+  let caller: Awaited<ReturnType<typeof callerForCredential>> = null;
+  try {
+    caller = token
+      ? await callerForCredential('message-ingest', 'ingestToken', token, [
+          'messages.deliver',
+        ])
+      : null;
+  } catch (err) {
+    // OpError 'busy' answers 429; a store failure stays a bare 500.
+    if ((err as { name?: string })?.name === 'OpError')
+      return errorResponse(err);
+    throw err;
+  }
   if (!caller) {
     return Response.json(
       { error: 'missing or invalid ingest token' },

@@ -15,9 +15,9 @@ import {
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const caller = await deviceCaller(req); // store failure throws -> 500, as before
-  if (!caller) return unauthorized();
   try {
+    const caller = await deviceCaller(req);
+    if (!caller) return unauthorized();
     return Response.json(await runDue(caller));
   } catch (err) {
     return deviceErrorResponse(err);

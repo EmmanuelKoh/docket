@@ -3,7 +3,8 @@
 // is not_found (the route answers 404), never a render; a preview of a
 // draft with a Liquid error or a Satori layout error is invalid (the
 // route answers 400 and logs nothing), since the Studio previews while the
-// author types. A template a plugin declares or the Photo tool prints
+// author types. An image source the renderer will not fetch previews
+// blank. A template a plugin declares or the Photo tool prints
 // with cannot be deleted (conflict, naming who uses it).
 
 import { randomUUID } from 'node:crypto';
@@ -97,7 +98,6 @@ describe('templates.preview', () => {
         '<div>{{ who | append }}</div>', // filter missing its argument: render error
         '<div><span>{{ who }}</span><span>b</span></div>', // two children, no display:flex
         '<div style="display:flex;transform: rota">{{ who }}</div>', // half-typed CSS value
-        '<div style="display:flex"><img src="logo.png" width="8" height="8"/></div>', // relative src
       ]) {
         const err = await templatesPreview(a.caller, { template: draft }).catch(
           (e) => e,
@@ -112,6 +112,30 @@ describe('templates.preview', () => {
       expect(logged).not.toHaveBeenCalled();
     } finally {
       logged.mockRestore();
+    }
+  });
+
+  it('an image source that is not data: or allowed https previews blank, not as an error', async () => {
+    // render/image-guard.js: a relative, http: or file: src never reaches
+    // Satori (which fetched http and refused the rest with an error); it
+    // becomes a transparent pixel and the draft still previews.
+    const a = account();
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const src of [
+        'logo.png',
+        'http://example.test/x.png',
+        'file:///etc/hosts',
+      ]) {
+        const res = await preview(
+          a,
+          `<div style="display:flex"><img src="${src}" width="8" height="8"/></div>`,
+        );
+        expect(res.status, src).toBe(200);
+        expect(res.headers.get('content-type'), src).toBe('image/png');
+      }
+    } finally {
+      warned.mockRestore();
     }
   });
 
