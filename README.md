@@ -9,6 +9,22 @@ slips by Gemini). A multi-user dashboard manages it all. Accounts are
 invite-only, and each account has its own templates, plugins, history and
 printers.
 
+<table>
+  <tr>
+    <td valign="top"><img src="docs/images/receipt-daily-brief.png" width="240" alt="Daily Brief receipt: Friday, 3 meetings, 72 degrees with a 20% chance of rain, three schedule lines and a focus bar"></td>
+    <td valign="top"><img src="docs/images/receipt-task.png" width="240" alt="Task receipt: a 'Before leaving' checklist with three items, the sender and the original message"></td>
+    <td valign="top"><img src="docs/images/receipt-wc-goal.png" width="240" alt="World Cup goal receipt: Portugal 1, Uzbekistan 0, with the scorer, minute and assist"></td>
+  </tr>
+  <tr>
+    <td valign="top">Daily Brief. The morning-brief plugin prints it at a set time each morning.</td>
+    <td valign="top">Task. The message-ingest plugin prints it from a forwarded text.</td>
+    <td valign="top">WC Goal. The espn-worldcup plugin prints it when a team scores.</td>
+  </tr>
+</table>
+
+Each image is the renderer's 1-bit output for sample data, the same image
+the printer receives.
+
 Templates render entirely in Node, with no headless browser:
 
 **Liquid template + data -> HTML -> Satori (flexbox layout) -> SVG -> resvg
@@ -17,6 +33,29 @@ Templates render entirely in Node, with no headless browser:
 Text receipts print as one `GS v 0` raster. Dithered images print as
 memorize-then-print chunks (`GS *` / `GS /`), rotated 180° with a flush cut
 (`render/render-core.js`, `docs/rp850-field-notes.md`).
+
+## Status
+
+Everything in this README is built and runs on one hosted instance with
+one printer: a Rongta RP850 on 80mm paper, driven by an ESP32 DevKit
+(WROOM-32) through a MAX3232 serial adapter at 115200 baud.
+[docs/rp850-field-notes.md](docs/rp850-field-notes.md) has that printer's
+measured behavior. One person maintains the project, and the hosted
+instance is invite-only. To run your own, see [Deploy](#deploy).
+
+One printer fits inside the free plans of Vercel (Hobby), Upstash and Neon:
+
+| Meter | One printer, per 30 days | Free allowance |
+|---|---|---|
+| Vercel function invocations (`/next` and `/tick` polls) | 604,800 | 1,000,000 |
+| Vercel CDN Requests (measured, whole instance) | 929,361 | 1,000,000 |
+| Upstash Redis commands (idle, one account) | about 112,000 | 500,000 |
+| Vercel Blob writes | 2 or 3 per print | 2,000 |
+
+The World Cup plugin adds up to about 300,000 Redis commands a month while
+it is on. On Hobby, an allowance that runs out is not billed: the feature
+stops until 30 days have passed. The numbers and their sources are in
+[docs/store-costs.md](docs/store-costs.md).
 
 ## What you need
 
@@ -340,9 +379,9 @@ starts switched off for a new account.
 
 | Event | Template | Trigger |
 |-------|----------|---------|
-| Kickoff | `WC Kickoff` | Match state changes from `pre` to `in` |
-| Goal | `WC Goal` | A team's score goes up |
-| Full-time | `WC Full Time` | Match state changes from `in` to `post` |
+| Kickoff | [`WC Kickoff`](docs/images/receipt-wc-kickoff.png) | Match state changes from `pre` to `in` |
+| Goal | [`WC Goal`](docs/images/receipt-wc-goal.png) | A team's score goes up |
+| Full-time | [`WC Full Time`](docs/images/receipt-wc-full-time.png) | Match state changes from `in` to `post` |
 
 When a score goes up, the plugin fetches the ESPN summary for the scorer
 and minute. Goals come from `summary.rosters[].roster[].plays[]` where
