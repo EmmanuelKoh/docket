@@ -55,12 +55,12 @@ and the Printer page every 3s while a pairing is pending.
 
 ## Layout
 
-- `app/`: Next.js App Router (TypeScript, Tailwind 4, the shadcn kit in
-  `components/ui/`). Dashboard pages live in the `(dashboard)/` route group
-  behind the session. `next.config.mjs` keeps the render/plugin deps in
-  `serverExternalPackages` (Turbopack breaks node-ical and the resvg native
-  module otherwise) and traces `reference/**` and `render/fonts/**` into the
-  functions that read them.
+- `app/`: Next.js App Router (TypeScript, Tailwind 4, the hardware kit in
+  `components/hardware/` and `app/hardware.css`). Dashboard pages live in
+  the `(dashboard)/` route group behind the session. `next.config.mjs`
+  keeps the render/plugin deps in `serverExternalPackages` (Turbopack
+  breaks node-ical and the resvg native module otherwise) and traces
+  `reference/**` and `render/fonts/**` into the functions that read them.
 - `render/render-core.js`: Liquid -> Satori -> resvg -> Floyd-Steinberg
   (serpentine + threshold jitter) -> ESC/POS. Dithered jobs (taller than
   160 rows with tone transitions > 0.2/px; text is ~0.01-0.12) are
@@ -205,12 +205,29 @@ and the Printer page every 3s while a pairing is pending.
 templates (Satori's CSS dialect, thermal-paper rules); give it to any
 LLM asked to design one.
 
-`docs/design-spec.md` is the visual source of truth (monochrome + register
-red, both themes, strict red-usage rules). **Update it whenever the UI
-changes**; it must describe what's built. Key rules that keep recurring:
-buttons never repeat an already-clickable object's default action; rows
-with thumbnails top-align; thumbnails sit on #fff in both themes; red only
-where the spec's red-usage rules allow it.
+`docs/design-spec.md` is the visual source of truth (direction E: the
+printer's own control deck, both themes, strict accent rules). **Update it
+whenever the UI changes**; it must describe what's built. `DESIGN.md`
+holds the tokens and components once it exists. Rules that keep
+recurring:
+
+- Accent jobs: red only for the current page's flag, printing, failures,
+  waiting jobs, the one print key on a screen, and Tape's live audio and
+  selection; green only for the online LED; orange only for a slide
+  switch's ON mark. A key that does not print is never red.
+- Materials: build pages from the kit (`components/hardware/`, `hw-`
+  classes in `app/hardware.css`; paper parts in
+  `components/hardware/paper.css`). Pages add layout around the parts; a
+  new look for a part goes into the kit. Depth comes from the material (soft offset shadows, sprites in
+  `public/hardware/` with their origin embedded), never hard offset
+  shadows or decorative gradients. Motion is short mechanical travel: no
+  fades, no springs.
+- Paper: receipts and thumbnails stay white paper in both themes; the
+  Studio and Photo previews keep exact 576px pixels.
+- Type: body 16px, secondary 14px minimum; capitals only by CSS on
+  hardware legends; mono only for times, dates, codes and values.
+- Buttons never repeat an already-clickable object's default action;
+  rows with thumbnails top-align.
 
 ## Hardware truths
 

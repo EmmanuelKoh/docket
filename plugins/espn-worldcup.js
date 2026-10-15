@@ -17,11 +17,13 @@ import { escapeStrings } from '../render/escape-html.js';
 
 export const id = 'espn-worldcup';
 
-// Card copy for the dashboard's Recipes pages.
+// Card copy for the Slips pages. trigger: what makes it print, shown where
+// a slip with a daily time shows its next run.
 export const meta = {
-  title: 'World Cup watcher',
+  title: 'World Cup',
   description: 'Prints kickoff, goals, and full-time slips for live FIFA World Cup matches.',
   category: 'sports',
+  trigger: 'Each goal',
 };
 
 export const defaults = {

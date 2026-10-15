@@ -42,3 +42,10 @@ learning/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Impeccable design runs: generated images, prompts and review
+# screenshots stay out of the public repo
+.impeccable/mocks/
+.impeccable/prompts/
+.impeccable/review/
+.impeccable/questions/

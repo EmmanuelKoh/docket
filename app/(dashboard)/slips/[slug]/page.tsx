@@ -1,24 +1,27 @@
-// A slip's page. Left: the preview stage (the primary template rendered
-// through the real pipeline, on white) with Print test beneath it. Right:
-// for system slips, the toggle + PARAMETERS panel; for template
-// slips, a quiet info card. Below: TEMPLATES (each opens the Studio)
-// and, for system slips, the STATE debug record.
+// A slip's page (design spec: pages, Slips). Left: the slip's receipt
+// feeding out of the printer at its true size (the primary template
+// rendered with its sample data), with the red Print test key under it.
+// Right: for a plugin's slip, its Schedule and Settings modules and its
+// templates, each with a key into the Studio; for a template slip, a
+// Template module, and Delete beside the title.
 
-import Link from 'next/link';
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
+import { getSlip } from '@/app/_lib/slip-data';
+import { BackLink } from '@/components/back-link';
 import { DeleteTemplateButton } from '@/components/delete-template-button';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Row } from '@/components/hardware/row';
+import { Note } from '@/components/hardware/text';
 import { PrintTestButton } from '@/components/print-test-button';
-import {
-  ReceiptPreview,
-  ReceiptPreviewEmpty,
-} from '@/components/receipt-preview';
 import { SlipSystemPanel } from '@/components/slip-system-panel';
 import { slipsRegister } from '@/lib/ops/slips.js';
-import { getSlip } from '../../../_lib/slip-data';
 
-const clip = (s: string, n: number) =>
-  s.length > n ? `${s.slice(0, n)}\n…` : s;
+export const metadata: Metadata = { title: 'Slips' };
 
 export default async function SlipPage({
   params,
@@ -33,106 +36,96 @@ export default async function SlipPage({
   if (!slip) notFound();
 
   return (
-    <div className="space-y-5">
-      <div>
-        <Link href="/slips" className="text-xs text-ink-faint hover:text-ink">
-          ← slips
-        </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="font-mono text-base font-medium text-ink">
-              {slip.title}
-            </h1>
-            <p className="mt-0.5 max-w-xl text-xs text-ink-muted">
-              {slip.description}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {slip.kind === 'template' ? (
-              <DeleteTemplateButton name={slip.slug} />
-            ) : null}
-          </div>
-        </div>
-      </div>
+    <>
+      <BackLink fallback="/slips" className="-mt-3 mb-1" />
+      <PageTitle
+        className={slip.description ? 'mb-3' : undefined}
+        actions={
+          slip.kind === 'template' ? (
+            <DeleteTemplateButton name={slip.slug} />
+          ) : null
+        }
+      >
+        {slip.title}
+      </PageTitle>
+      {slip.description ? (
+        <p className="mt-0 mb-10 max-w-[60ch] text-ink-muted max-sm:mb-7">
+          {slip.description}
+        </p>
+      ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* preview stage */}
-        <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
-          <div className="text-[13px] font-semibold text-ink">Preview</div>
-          <div className="mt-3">
+      <div className="flex flex-wrap items-start gap-x-[52px] gap-y-12">
+        <section
+          aria-label="Preview"
+          className="min-w-0 flex-[999_1_624px] min-[876px]:pl-[18px]"
+        >
+          <PrinterEdge />
+          <PaperRoll>
             {slip.thumb ? (
-              <ReceiptPreview
+              <PaperSlip
                 src={slip.thumb}
-                alt={slip.primaryTemplate || slip.title}
+                alt={`${slip.primaryTemplate || slip.title} receipt`}
+                fed
+                tear="new"
               />
             ) : (
-              <ReceiptPreviewEmpty>
-                No template to preview yet.
-              </ReceiptPreviewEmpty>
+              <PaperSlip fed tear="new">
+                <p className="m-0 py-14 text-center text-[#4a4741]">
+                  No template to preview yet.
+                </p>
+              </PaperSlip>
             )}
-          </div>
-          <div className="mt-3 flex justify-center">
+          </PaperRoll>
+          <div className="mt-7">
             <PrintTestButton slug={slip.slug} />
           </div>
         </section>
 
-        {/* controls */}
-        {slip.kind === 'system' ? (
-          <SlipSystemPanel initial={slip} />
-        ) : (
-          <section className="h-fit rounded-md border-[0.5px] border-border bg-raised px-4 py-4">
-            <div className="text-[13px] font-semibold text-ink">Template</div>
-            <p className="mt-2 text-xs text-ink-muted">
-              Edit this template in the Studio.
-            </p>
-            <Link
-              href={`/studio?template=${encodeURIComponent(slip.slug)}`}
-              className="mt-3 inline-block text-xs text-ink-muted underline decoration-dotted underline-offset-4 hover:text-ink"
-            >
-              Open in Studio →
-            </Link>
-          </section>
-        )}
-      </div>
-
-      {/* templates */}
-      <section>
-        <div className="text-[13px] font-semibold text-ink">Templates</div>
-        <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised">
-          {slip.templates.length ? (
-            slip.templates.map((name, i) => (
-              <div
-                key={name}
-                className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
+        <div className="flex min-w-[280px] flex-[1_1_360px] flex-col gap-[30px] max-[400px]:min-w-0">
+          {slip.kind === 'system' ? (
+            <>
+              <SlipSystemPanel slip={slip} />
+              <Module
+                number={slip.fields?.length ? '03' : '02'}
+                title="Templates"
+                flush
               >
-                <span className="font-mono text-[13px] text-ink">{name}</span>
-                <Link
-                  href={`/studio?template=${encodeURIComponent(name)}`}
-                  className="text-xs text-ink-muted hover:text-ink"
-                >
-                  Open in Studio →
-                </Link>
-              </div>
-            ))
+                {slip.templates.map((name) => (
+                  <Row key={name} tight>
+                    <span className="min-w-0 truncate font-semibold">
+                      {name}
+                    </span>
+                    <KeyGroup>
+                      <PushKey
+                        size="compact"
+                        href={`/studio?template=${encodeURIComponent(name)}`}
+                      >
+                        Open in Studio
+                      </PushKey>
+                    </KeyGroup>
+                  </Row>
+                ))}
+                {slip.templates.length === 0 ? (
+                  <Row>
+                    <Note>This slip prints without a template.</Note>
+                  </Row>
+                ) : null}
+              </Module>
+            </>
           ) : (
-            <p className="px-5 py-4 text-sm text-ink-faint">
-              No templates declared.
-            </p>
+            <Module number="01" title="Template">
+              <Note>Edit this template in Studio.</Note>
+              <KeyGroup className="self-start">
+                <PushKey
+                  href={`/studio?template=${encodeURIComponent(slip.slug)}`}
+                >
+                  Open in Studio
+                </PushKey>
+              </KeyGroup>
+            </Module>
           )}
         </div>
-      </section>
-
-      {/* state */}
-      {slip.kind === 'system' ? (
-        <section>
-          <div className="text-[13px] font-semibold text-ink">State</div>
-          <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised px-5 py-4">
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
-              {clip(JSON.stringify(slip.state || {}, null, 2), 1200)}
-            </pre>
-          </div>
-        </section>
-      ) : null}
-    </div>
+      </div>
+    </>
   );
 }

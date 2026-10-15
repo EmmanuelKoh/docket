@@ -1,38 +1,34 @@
 // The dashboard's loading state (design spec: shell, "Loading"). Next
 // shows it in the content column the moment a page is requested, while
-// the page's data loads; the sidebar and header around it stay put. It
-// sketches the common page grammar in flat blocks: a title block, then
-// one list container of three ledger rows (thumbnail frame, name bar,
-// rail bar), hairline-separated. Blocks are --hairline on --raised, no
-// red, a slow opacity pulse only where motion is welcome.
+// the page's data loads; the panel around it stays put. It sketches the
+// common page grammar in E materials: a faint block where the printed
+// title goes, then a module with a blank label plate and three rows on
+// dashed rules (a white paper thumbnail, a name bar, a shorter line
+// bar). No red and no motion: E moves only when something is pressed.
 
 const ROWS = [0, 1, 2];
 
 export default function DashboardLoading() {
   return (
-    <div role="status" className="space-y-5">
+    <div role="status">
       <span className="sr-only">Loading</span>
-      <div aria-hidden="true" className="space-y-5 motion-safe:animate-pulse">
-        <div>
-          <div className="h-4 w-28 bg-hairline" />
-          <div className="mt-2 h-3 w-48 max-w-full bg-hairline" />
-        </div>
-        <div className="border-[0.5px] border-border bg-raised">
-          {ROWS.map((i) => (
-            <div
-              key={i}
-              className={`flex items-start gap-4 px-4 py-4 sm:gap-6 sm:px-5 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
-            >
-              <div className="h-16 w-24 shrink-0 border-[0.5px] border-border bg-page sm:h-[86px] sm:w-[130px]" />
-              <div className="min-w-0 grow pt-1">
-                <div className="flex items-center justify-between gap-6">
-                  <div className="h-3 w-40 max-w-full bg-hairline" />
-                  <div className="hidden h-3 w-20 shrink-0 bg-hairline sm:block" />
+      <div aria-hidden="true" className="flex flex-col gap-7 sm:gap-10">
+        <div className="h-[43px] w-48 max-w-full rounded-[2px] bg-ink/[0.07] sm:h-[58px] sm:w-56" />
+        <div className="hw-module hw-panel max-w-[720px]">
+          <div className="hw-plate">
+            <span className="block h-2.5 w-20 rounded-[1px] bg-plate-ink/25" />
+          </div>
+          <div className="hw-module-body">
+            {ROWS.map((i) => (
+              <div key={i} className="hw-row items-start justify-start gap-4">
+                <div className="h-[54px] w-[72px] shrink-0 bg-paper shadow-[0_0_0_1px_rgba(30,28,24,0.12),0_1px_2px_rgba(30,28,24,0.12)]" />
+                <div className="flex min-w-0 grow flex-col gap-2.5 pt-1">
+                  <div className="h-3.5 w-44 max-w-full rounded-[1px] bg-ink/[0.1]" />
+                  <div className="h-3 w-24 rounded-[1px] bg-ink/[0.07]" />
                 </div>
-                <div className="mt-2.5 h-2.5 w-24 bg-hairline" />
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

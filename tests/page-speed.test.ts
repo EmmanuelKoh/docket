@@ -1,8 +1,9 @@
 // tests/page-speed.test.ts — dashboard page speed, on the page side. The
-// dashboard layout waits on nothing but the session: the queue badge is a
-// Suspense slot that reads jobs.queueSize (never a job listing), and
-// Overview takes its queue cell from the same read instead of listing
-// live jobs. loading.tsx is the skeleton Next shows meanwhile.
+// dashboard layout waits on nothing but the session: the panel's printer
+// line is a Suspense slot that reads printers.overview and jobs.queueSize
+// (never a job listing), and Home takes its printer state and waiting
+// count from the same reads, with one bounded listing of today's prints.
+// loading.tsx is the skeleton Next shows meanwhile.
 // Slip previews carry their template's updatedAt (and the deploy's short
 // commit hash, when set) as ?v=, so a save or a deploy changes the URL.
 // Studio links are client-side (next/link).
@@ -16,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getSlip, listSlips, thumbSrc } from '@/app/_lib/slip-data';
 import { type Caller, userCaller } from '@/lib/ops/caller.js';
 import { jobsCreateRaw, jobsList, jobsQueueSize } from '@/lib/ops/jobs.js';
+import { printersOverview } from '@/lib/ops/printers.js';
 import { slipsRegister } from '@/lib/ops/slips.js';
 import { templatesList, templatesSave } from '@/lib/ops/templates.js';
 
@@ -30,6 +32,10 @@ vi.mock('@/app/_lib/caller', () => ({
   getCaller: async () => session.caller,
   requestCaller: async () => session.caller,
 }));
+// Pages read the viewer's time zone from a cookie; no request here.
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 // The real ops, watched.
 vi.mock('@/lib/ops/jobs.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/ops/jobs.js')>();
@@ -38,6 +44,10 @@ vi.mock('@/lib/ops/jobs.js', async (importOriginal) => {
     jobsList: vi.fn(real.jobsList),
     jobsQueueSize: vi.fn(real.jobsQueueSize),
   };
+});
+vi.mock('@/lib/ops/printers.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/ops/printers.js')>();
+  return { ...real, printersOverview: vi.fn(real.printersOverview) };
 });
 
 beforeAll(() => {
@@ -59,6 +69,27 @@ const account = () => {
 };
 const listCalls = () => vi.mocked(jobsList).mock.calls;
 const sizeCalls = () => vi.mocked(jobsQueueSize).mock.calls;
+const overviewCalls = () => vi.mocked(printersOverview).mock.calls;
+const clearCalls = () => {
+  vi.mocked(jobsList).mockClear();
+  vi.mocked(jobsQueueSize).mockClear();
+  vi.mocked(printersOverview).mockClear();
+};
+
+// What printers.overview answers for an account with one printer.
+const onePrinter = (caller: Caller, online: boolean) => ({
+  devices: [
+    {
+      id: 'device-1',
+      name: 'Kitchen printer',
+      pairedAt: new Date().toISOString(),
+      role: 'owner',
+      primaryOwnerId: caller.ownerId,
+      members: [],
+    },
+  ],
+  status: { lastSeenAt: new Date().toISOString(), online },
+});
 
 // Two queued jobs and one a printer holds.
 async function threeLive(caller: Caller) {
@@ -89,78 +120,107 @@ function findAll(node: unknown, type: unknown, out: ReactElement[] = []) {
 }
 
 describe('the dashboard layout', () => {
-  it('waits on no store read: the queue badge is a Suspense slot', async () => {
+  it('waits on no store read: the printer line is a Suspense slot', async () => {
     const caller = account();
     const { default: DashboardLayout } = await import(
       '@/app/(dashboard)/layout'
     );
-    const { QueueBadge } = await import('@/app/(dashboard)/queue-badge');
+    const { PrinterStatus } = await import('@/app/(dashboard)/printer-status');
     const { AppSidebar } = await import('@/components/app-sidebar');
-    vi.mocked(jobsList).mockClear();
-    vi.mocked(jobsQueueSize).mockClear();
+    clearCalls();
 
     const shell = await DashboardLayout({ children: null });
     expect(listCalls()).toEqual([]);
     expect(sizeCalls()).toEqual([]);
+    expect(overviewCalls()).toEqual([]);
 
     const [sidebar] = findAll(shell, AppSidebar);
-    const slot = (sidebar.props as { queueBadge: ReactElement }).queueBadge;
+    const slot = (sidebar.props as { status: ReactElement }).status;
     expect(slot.type).toBe(Suspense);
-    const [badge] = findAll(slot, QueueBadge);
-    expect((badge.props as { caller: Caller }).caller).toBe(caller);
+    const [line] = findAll(slot, PrinterStatus);
+    expect((line.props as { caller: Caller }).caller).toBe(caller);
   });
 
-  it('the badge counts queued and printing jobs from jobs.queueSize', async () => {
+  it('the printer line reads printers.overview and jobs.queueSize, never a job listing', async () => {
     const caller = account();
-    const { QueueBadge } = await import('@/app/(dashboard)/queue-badge');
-    expect(await QueueBadge({ caller })).toBeNull(); // nothing waiting: no badge
+    const { PrinterStatus } = await import('@/app/(dashboard)/printer-status');
+    const line = async () =>
+      renderToStaticMarkup((await PrinterStatus({ caller })) as ReactElement);
 
+    clearCalls();
+    expect(await line()).toContain('No printer');
+    expect(overviewCalls()).toEqual([[caller]]);
+    expect(sizeCalls()).toEqual([[caller]]);
+    expect(listCalls()).toEqual([]);
+
+    vi.mocked(printersOverview).mockResolvedValueOnce(onePrinter(caller, true));
+    const online = await line();
+    expect(online).toContain('Kitchen printer');
+    expect(online).toContain('Online');
+    expect(online).toContain('hw-led--on');
+
+    // a printer that holds a job is printing: red LED, red word
     await threeLive(caller);
-    vi.mocked(jobsList).mockClear();
-    const badge = await QueueBadge({ caller });
-    expect(renderToStaticMarkup(badge as ReactElement)).toMatch(
-      /data-sidebar="menu-badge"[^>]*>3</,
+    vi.mocked(printersOverview).mockResolvedValueOnce(onePrinter(caller, true));
+    const printing = await line();
+    expect(printing).toContain('Printing');
+    expect(printing).toContain('hw-led--red');
+    expect(printing).toMatch(/class="[^"]*text-red[^"]*">Printing</);
+
+    // not seen for 90 seconds: offline, whatever it held
+    vi.mocked(printersOverview).mockResolvedValueOnce(
+      onePrinter(caller, false),
     );
+    const offline = await line();
+    expect(offline).toContain('Offline');
+    expect(offline).not.toMatch(/hw-led--(on|red)/);
     expect(listCalls()).toEqual([]);
   });
 
-  it('a failed read shows no badge instead of breaking the shell', async () => {
-    const { QueueBadge } = await import('@/app/(dashboard)/queue-badge');
+  it('a failed read shows no printer line instead of breaking the shell', async () => {
+    const { PrinterStatus } = await import('@/app/(dashboard)/printer-status');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(jobsQueueSize).mockRejectedValueOnce(new Error('redis down'));
-    expect(await QueueBadge({ caller: account() })).toBeNull();
-    expect(logged).toHaveBeenCalledWith('[queue badge]', expect.any(Error));
+    vi.mocked(printersOverview).mockRejectedValueOnce(new Error('neon down'));
+    expect(await PrinterStatus({ caller: account() })).toBeNull();
+    expect(logged).toHaveBeenCalledWith('[printer status]', expect.any(Error));
     logged.mockRestore();
   });
 });
 
-describe('Overview', () => {
-  it('takes the queue cell from jobs.queueSize and lists only the recent history', async () => {
+describe('Home', () => {
+  it('lists today from one bounded read and takes the printer and waiting count from the shared reads', async () => {
     const caller = account();
     await threeLive(caller);
-    const { default: OverviewPage } = await import('@/app/(dashboard)/page');
-    vi.mocked(jobsList).mockClear();
-    vi.mocked(jobsQueueSize).mockClear();
+    const { default: HomePage } = await import('@/app/(dashboard)/page');
+    clearCalls();
 
-    const html = renderToStaticMarkup(await OverviewPage());
+    const html = renderToStaticMarkup(await HomePage());
     expect(listCalls()).toEqual([
-      [caller, { limit: 3, status: ['done', 'failed', 'canceled'] }],
+      [caller, { limit: 20, status: ['inflight', 'done'] }],
     ]);
     expect(sizeCalls()).toEqual([[caller]]);
-    expect(html).toContain('1 printing · 2 queued');
+    expect(overviewCalls()).toEqual([[caller]]);
+    // the job a printer holds feeds out of the printer, captioned Printing
+    expect(html).toContain('Printing');
+    expect(html).toContain('2 waiting');
+    expect(html).toContain('No printer yet');
+    // the printed title, not a stat grid
+    expect(html).toMatch(/<h1 class="hw-title[^"]*"[^>]*>Today<\/h1>/);
   });
 });
 
 describe('loading.tsx', () => {
-  it('is a skeleton announced as loading, with three list rows', async () => {
+  it('is a skeleton announced as loading: a module with three rows, still and never red', async () => {
     const { default: DashboardLoading } = await import(
       '@/app/(dashboard)/loading'
     );
     const html = renderToStaticMarkup(DashboardLoading());
     expect(html).toMatch(/^<div role="status"/);
     expect(html).toContain('<span class="sr-only">Loading</span>');
-    expect(html.match(/border-t-hairline/g)).toHaveLength(2); // rows 2 and 3
-    expect(html).not.toMatch(/text-red|bg-red/);
+    expect(html).toContain('class="hw-plate"');
+    expect(html.match(/class="hw-row[ "]/g)).toHaveLength(3);
+    expect(html).not.toMatch(/text-red|bg-red|hw-led--red|key-red|flag/);
+    expect(html).not.toMatch(/animate-/); // E moves only when pressed
   });
 });
 
@@ -278,7 +338,8 @@ describe('Studio links', () => {
       'app/(dashboard)/slips/[slug]/page.tsx',
     ]) {
       const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-      expect(src, f).toMatch(/<Link\s[^>]*href=\{?[`'"]\/studio/);
+      // a Link, or a link key (PushKey with href renders a Link)
+      expect(src, f).toMatch(/<(Link|PushKey)\s[^>]*href=\{?[`'"]\/studio/);
     }
   });
 });

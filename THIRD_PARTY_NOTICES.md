@@ -75,11 +75,10 @@ this file lists with each one's copyright lines.
   [public/tf-wasm/LICENSE](public/tf-wasm/LICENSE) and
   [public/tf-wasm/README.md](public/tf-wasm/README.md).
 
-## shadcn/ui components
+## shadcn/ui helper
 
-- Files: `components/ui/*.tsx`, `components/hooks/use-mobile.ts`, and the
-  `cn` helper in `components/utils.ts`.
-- Source: added with the shadcn CLI, then restyled for Docket.
+- Files: the `cn` helper in `components/utils.ts`.
+- Source: added with the shadcn CLI.
   <https://github.com/shadcn-ui/ui>
 - Copyright (c) 2023 shadcn.
 - License: MIT. Full text [below](#mit-license-shadcnui).

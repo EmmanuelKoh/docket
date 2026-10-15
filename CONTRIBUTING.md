@@ -213,7 +213,7 @@ and the plain functions in `lib/ops/device-service.js`, and they answer
 4. Call operations for the data.
 5. Put the interactive parts in a `'use client'` component that calls an
    `app/api/` route.
-6. Add the page to the sidebar in `components/app-sidebar.tsx`.
+6. Add a key for the page to the key bank in `components/app-sidebar.tsx`.
 7. Describe the page in `docs/design-spec.md`, which must match what is
    built.
 

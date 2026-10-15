@@ -348,7 +348,7 @@ receipt and a clean queue.
    printed the code), the code you entered is void. Enter the newly
    printed code.
 3. On the Mac: stop `printer-agent.js` and `heartbeat.js` for good.
-4. Confirm from the hosted dashboard: Overview shows the printer seen
+4. Confirm from the hosted dashboard: Home shows the printer seen
    moments ago, and a test print from the studio comes out of the printer.
 
 The Mac is now out of the system: plugins run and receipts print with the

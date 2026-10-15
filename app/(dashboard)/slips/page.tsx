@@ -1,124 +1,131 @@
-// Slips — everything the printer can produce, grouped by category.
-// Card and section grammar follows byos_next's recipes index (category
-// label + count chip + hairline rule; 1/2/3-column responsive grid;
-// aspect-ratio preview with chips overlaid; name row with the corner
-// arrow; description; mt-auto footer) re-voiced with docket tokens: hero
-// is the real rendered receipt on white, top-cropped with the dashed
-// edge, names are mono, hover shifts the border to --ink-faint (no
-// shadows or motion). The card IS the button. "New template" opens the
-// Studio blank (a client-side Link, like every Studio link). Previews
-// load from a versioned URL (slip.thumb), so a revisit paints them from
-// the browser cache.
+// Slips: everything the printer can produce, one module per category
+// (design spec: pages, Slips). Each slip is a row: a small receipt
+// thumbnail on white, the name (the link to the slip's page), what makes
+// it print, and for a slip that runs by itself (a plugin) its switch,
+// outside the link. A template slip shows when it was last saved, under a
+// shorter thumbnail (the top of its receipt). "New template" opens the Studio blank (a client-side
+// Link, like every Studio link). Thumbnails load from a versioned URL
+// (slip.thumb), so a revisit paints them from the browser cache.
 
-import { ArrowUpRight } from 'lucide-react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
+import { groupByCategory, listSlips, type Slip } from '@/app/_lib/slip-data';
+import { dayLabel, viewerTimeZone } from '@/app/_lib/time';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Row } from '@/components/hardware/row';
+import { Note } from '@/components/hardware/text';
+import { SlipSwitch } from '@/components/slip-switch';
+import { cn } from '@/components/utils';
 import { slipsRegister } from '@/lib/ops/slips.js';
-import { groupByCategory, listSlips } from '../../_lib/slip-data';
+
+export const metadata: Metadata = { title: 'Slips' };
+
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// Plate numbers in reading order: "01", "02"
+const plate = (i: number) => String(i + 1).padStart(2, '0');
+
+// "Edited today", "Edited yesterday", "Edited Tue 13 Oct"
+function editedLabel(at: number, tz: string, now: number) {
+  const day = dayLabel(at, tz, now);
+  return `Edited ${day === 'Today' || day === 'Yesterday' ? day.toLowerCase() : day}`;
+}
+
+function SlipRow({ slip, tz, now }: { slip: Slip; tz: string; now: number }) {
+  const href = `/slips/${encodeURIComponent(slip.slug)}`;
+  const system = slip.kind === 'system';
+  return (
+    <Row
+      off={system && !slip.enabled}
+      className="items-start justify-start gap-4 max-sm:flex-wrap"
+    >
+      {/* the name is the link for keyboards and screen readers; the
+          thumbnail is a second way in for a pointer */}
+      <Link
+        href={href}
+        tabIndex={-1}
+        aria-hidden="true"
+        className={cn(
+          'hw-thumb w-[88px] sm:w-[112px]',
+          system ? 'max-h-[150px]' : 'max-h-[84px]',
+        )}
+      >
+        {slip.thumb ? (
+          <img src={slip.thumb} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className="block h-[60px]" />
+        )}
+      </Link>
+      <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-0.5">
+        <Link href={href} className="hw-link self-start">
+          {slip.title}
+        </Link>
+        {system ? <span className="hw-row-sub">{slip.runLabel}</span> : null}
+        {!system && slip.editedAt ? (
+          <span className="hw-row-sub">
+            {editedLabel(slip.editedAt, tz, now)}
+          </span>
+        ) : null}
+        {slip.description ? (
+          <Note className="mt-1.5 line-clamp-2 max-w-[60ch]">
+            {slip.description}
+          </Note>
+        ) : null}
+      </div>
+      {system ? (
+        <SlipSwitch
+          id={slip.slug}
+          title={slip.title}
+          enabled={!!slip.enabled}
+          className="max-sm:ml-auto"
+        />
+      ) : null}
+    </Row>
+  );
+}
 
 export default async function SlipsPage() {
   const caller = await getCaller();
   if (!caller) redirect('/login');
   await slipsRegister(caller); // a new owner's plugins and their templates
-  const slips = await listSlips(caller);
+  const [slips, tz] = await Promise.all([listSlips(caller), viewerTimeZone()]);
   const groups = groupByCategory(slips);
+  const now = Date.now();
 
   return (
-    <div className="space-y-10">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-base font-medium text-ink">Slips</h1>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            {slips.length} slip{slips.length === 1 ? '' : 's'} · open one to
-            configure, preview, and print
-          </p>
-        </div>
-        <Link
-          href="/studio?new=1"
-          className="shrink-0 whitespace-nowrap rounded-md border-[0.5px] border-border bg-raised px-3 py-1.5 text-xs text-ink hover:border-ink-faint"
-        >
-          New template
-        </Link>
-      </div>
+    <>
+      <PageTitle
+        actions={
+          <KeyGroup>
+            <PushKey href="/studio?new=1">New template</PushKey>
+          </KeyGroup>
+        }
+      >
+        Slips
+      </PageTitle>
 
-      {groups.map((group) => (
-        <section key={group.category} className="space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-semibold text-ink">
-              {group.category}
-            </span>
-            <span className="rounded-full border-[0.5px] border-border px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">
-              {group.slips.length}
-            </span>
-            <span className="h-px flex-1 bg-hairline" />
-          </div>
-          {/* fixed 400px cards (the receipt-paper width) so the receipt in
-              each card lands at the same size as every other preview; full
-              width on screens narrower than the paper */}
-          <div
-            className="grid items-start gap-5"
-            style={{
-              gridTemplateColumns:
-                'repeat(auto-fill, minmax(min(100%, 400px), 400px))',
-            }}
+      <div className="flex max-w-[860px] flex-col gap-[30px]">
+        {groups.map((group, i) => (
+          <Module
+            key={group.category}
+            number={plate(i)}
+            title={sentence(group.category)}
+            flush
           >
-            {group.slips.map((r) => (
-              <Link
-                key={r.slug}
-                href={`/slips/${encodeURIComponent(r.slug)}`}
-                className="group flex flex-col overflow-hidden rounded-md border-[0.5px] border-border bg-raised transition-colors hover:border-ink-faint"
-              >
-                {/* the full receipt at paper width on white, like every
-                    other preview; the chips sit in the top white margin */}
-                <div className="relative border-b border-dashed border-dash bg-white pb-4">
-                  {r.thumb ? (
-                    /* same paper treatment as the other previews: the
-                       receipt inset on white at 92.3%, centered */
-                    <img
-                      src={r.thumb}
-                      alt={`${r.title} preview`}
-                      loading="lazy"
-                      className="mx-auto mt-9 block w-[92.3%]"
-                    />
-                  ) : null}
-                  <div className="absolute left-2 top-2 flex items-center gap-1">
-                    {r.kind === 'system' ? (
-                      <span
-                        className={`rounded-[4px] border-[0.5px] border-black/10 bg-white/85 px-1.5 py-0.5 text-[10px] backdrop-blur ${r.enabled ? 'text-neutral-600' : 'text-neutral-400'}`}
-                      >
-                        {r.enabled ? 'enabled' : 'off'}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex flex-1 flex-col gap-1.5 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="truncate font-mono text-sm font-medium text-ink">
-                      {r.title}
-                    </span>
-                    <ArrowUpRight
-                      size={16}
-                      className="mt-0.5 shrink-0 text-ink-faint transition-colors group-hover:text-ink"
-                    />
-                  </div>
-                  {r.description ? (
-                    <p className="line-clamp-2 text-[13px] leading-relaxed text-ink-muted">
-                      {r.description}
-                    </p>
-                  ) : null}
-                  <div className="mt-auto flex items-center justify-end pt-2 text-[11px] text-ink-faint">
-                    <span className="font-mono">
-                      {r.templates.length} template
-                      {r.templates.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                </div>
-              </Link>
+            {group.slips.map((slip) => (
+              <SlipRow key={slip.slug} slip={slip} tz={tz} now={now} />
             ))}
-          </div>
-        </section>
-      ))}
-    </div>
+          </Module>
+        ))}
+        {groups.length === 0 ? (
+          <Module number="01" title="Slips">
+            <Note>No slips yet. Make a template in Studio.</Note>
+          </Module>
+        ) : null}
+      </div>
+    </>
   );
 }

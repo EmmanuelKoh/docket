@@ -7,7 +7,11 @@
 //
 // configFields/untilText format a slip's config and next run; the
 // matching config parsing lives in slips.saveConfig, typed by the
-// module's defaults.config.
+// module's defaults.config. runLabel is the short line under a slip's
+// name: its next run when it has a daily time ("Tomorrow 06:30", in the
+// slip's own time zone), else what makes it print (the module's
+// meta.trigger, "Each text"). jobSourceLabels names a job's source for
+// captions ("Text messages", "Studio") from the same module list.
 //
 // Reads only: registration and plugin-template seeding run on the Slips
 // pages (slips.register) before they list.
@@ -22,6 +26,7 @@ import type { Caller } from '@/lib/ops/caller.js';
 import { slipsGet, slipsList } from '@/lib/ops/slips.js';
 import { templatesList } from '@/lib/ops/templates.js';
 import { agoText } from './format';
+import { nextRunLabel } from './time';
 
 export type ConfigField = {
   key: string;
@@ -41,6 +46,8 @@ export type Slip = {
   templates: string[]; // template-store names this slip prints with
   primaryTemplate: string | null; // for the preview stage
   thumb: string | null; // the preview image's URL (thumbSrc)
+  // template slips only: when the template was last saved (epoch ms)
+  editedAt?: number | null;
   // system slips only:
   enabled?: boolean;
   passive?: boolean;
@@ -49,6 +56,8 @@ export type Slip = {
   scheduleAt?: string;
   scheduleTz?: string;
   nextRunText?: string;
+  /** Next run or trigger, sentence case ("Tomorrow 06:30", "Each text") */
+  runLabel?: string;
   lastRunText?: string;
   lastRunRed?: boolean;
   fields?: ConfigField[];
@@ -58,7 +67,15 @@ export type Slip = {
 // The module part of a pair (slips.list): what the display needs of it.
 type SlipModule = {
   id: string;
-  meta: { title?: string; description?: string; category?: string };
+  meta: {
+    title?: string;
+    description?: string;
+    category?: string;
+    /** What makes it print, for a slip without a daily time ("Each text") */
+    trigger?: string;
+    /** Job sources its receipts carry besides the module id ("sms") */
+    sources?: string[];
+  };
   templates: string[];
   configLabels: Record<string, string>;
   scheduled: boolean;
@@ -118,6 +135,70 @@ export function untilText(ms: number): string {
   return `in ${Math.round(s / 86400)}d`;
 }
 
+// "Every 30 s", "Every 5 min", "Every 2 h" for a slip that runs on an
+// interval and declares no trigger.
+function everyLabel(seconds: number): string {
+  if (seconds >= 3600 && seconds % 3600 === 0) {
+    return `Every ${seconds / 3600} h`;
+  }
+  if (seconds >= 60 && seconds % 60 === 0) return `Every ${seconds / 60} min`;
+  return `Every ${seconds} s`;
+}
+
+// The line under a slip's name. Sentence case: the kit prints it in
+// capitals by CSS.
+export function runLabel(
+  { module, record }: { module: SlipModule; record: PluginRecord },
+  now: number = Date.now(),
+): string {
+  const schedule = record.schedule || {};
+  if (module.scheduled && schedule.at) {
+    return record.enabled && Number.isFinite(record.nextDueAt as number)
+      ? nextRunLabel(
+          record.nextDueAt as number,
+          schedule.timezone || 'UTC',
+          now,
+        )
+      : `Daily ${schedule.at}`;
+  }
+  if (module.meta?.trigger) return module.meta.trigger;
+  if (!module.scheduled) return 'Each message';
+  if (schedule.every) return everyLabel(schedule.every);
+  return '';
+}
+
+// Job source -> what a caption calls it. A plugin's jobs carry its module
+// id as their source, or one of the sources its meta lists (a forwarded
+// text carries 'sms'); the tools use their own names.
+const TOOL_SOURCES: [string, string][] = [
+  ['studio', 'Studio'],
+  ['photo', 'Photo'],
+  ['tape', 'Tape'],
+  ['reprint', 'Reprint'],
+  ['test', 'Test print'],
+];
+
+export function jobSourceLabels(
+  modules: { module: SlipModule }[],
+): Map<string, string> {
+  const labels = new Map(TOOL_SOURCES);
+  for (const { module } of modules) {
+    const title = module.meta?.title || module.id;
+    labels.set(module.id, title);
+    for (const source of module.meta?.sources ?? []) labels.set(source, title);
+  }
+  return labels;
+}
+
+/** A job source as a caption names it; '' when the job has none. */
+export function sourceLabel(
+  labels: Map<string, string>,
+  source: string | null | undefined,
+): string {
+  if (!source) return '';
+  return labels.get(source) ?? source.charAt(0).toUpperCase() + source.slice(1);
+}
+
 const humanizeKey = (k: string) =>
   k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
 
@@ -165,7 +246,7 @@ export function systemSlip(
     kind: 'system',
     title: module.meta?.title || module.id,
     description: module.meta?.description || '',
-    category: module.meta?.category || 'plugins',
+    category: module.meta?.category || 'other',
     templates,
     primaryTemplate: primary,
     thumb: thumbSrc(primary, primary ? versions.get(primary) : null),
@@ -175,6 +256,7 @@ export function systemSlip(
     scheduleEvery: schedule.every != null ? String(schedule.every) : '',
     scheduleAt: schedule.at ?? '',
     scheduleTz: schedule.timezone ?? '',
+    runLabel: runLabel({ module, record }),
     nextRunText: !record.enabled
       ? '—'
       : passive
@@ -200,11 +282,12 @@ function templateSlip(name: string, versions: Versions): Slip {
     slug: name,
     kind: 'template',
     title: name,
-    description: 'A stored template, printable from the Studio.',
+    description: '',
     category: 'templates',
     templates: [name],
     primaryTemplate: name,
     thumb: thumbSrc(name, versions.get(name)),
+    editedAt: versions.get(name) ?? null,
   };
 }
 

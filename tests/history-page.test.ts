@@ -1,6 +1,6 @@
 // tests/history-page.test.ts — a History record's rubber stamp names how
 // the job ended. done is PRINTED, canceled is CANCELED, failed is FAILED,
-// and only FAILED is red.
+// and only FAILED is marked as a failure (the kit's red fail stamp).
 
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -8,11 +8,7 @@ import { createElement, isValidElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { historyStamp } from '@/app/_lib/format';
-import {
-  HistoryList,
-  type HistoryRow,
-  HistoryStamp,
-} from '@/components/history-list';
+import { HistoryList, type HistoryRow } from '@/components/history-list';
 import { job } from '@/db/schema.js';
 import { getDb } from '@/lib/db.js';
 import * as jobStore from '@/lib/job-store.js';
@@ -29,6 +25,10 @@ const session = vi.hoisted(() => ({ caller: null as Caller | null }));
 vi.mock('@/app/_lib/caller', () => ({
   getCaller: async () => session.caller,
   requestCaller: async () => session.caller,
+}));
+// The page reads the viewer's time zone from a cookie; no request here.
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => undefined }),
 }));
 
 beforeAll(() => {
@@ -65,22 +65,44 @@ async function rawJob(caller: Caller, name: string) {
 }
 
 describe('History stamps', () => {
-  it('map status to stamp: done PRINTED, canceled CANCELED, failed FAILED (red)', () => {
-    expect(historyStamp('done')).toEqual({ text: 'PRINTED', red: false });
-    expect(historyStamp('canceled')).toEqual({ text: 'CANCELED', red: false });
-    expect(historyStamp('failed')).toEqual({ text: 'FAILED', red: true });
+  it('map status to stamp: done printed, canceled canceled, failed failed', () => {
+    expect(historyStamp('done')).toBe('printed');
+    expect(historyStamp('canceled')).toBe('canceled');
+    expect(historyStamp('failed')).toBe('failed');
+    expect(historyStamp('queued')).toBeNull();
   });
 
-  it('the stamp prints its text, in red only for a failure', () => {
+  it('each row prints its stamp, marked as a failure only when it failed', () => {
+    const row = (name: string, status: string): HistoryRow => ({
+      id: `job-${name}`,
+      image: '/api/jobs/png?job=x',
+      width: 576,
+      height: 100,
+      name,
+      source: 'Studio',
+      time: '17:30',
+      stamp: historyStamp(status),
+      attempts: '',
+      reprintable: true,
+    });
     const html = (status: string) =>
       renderToStaticMarkup(
-        createElement(HistoryStamp, { stamp: historyStamp(status) }),
+        createElement(HistoryList, { rows: [row(status, status)] }),
       );
-    expect(html('done')).toMatch(/^<span class="stamp bite [^"]*">PRINTED</);
-    expect(html('canceled')).toMatch(/>CANCELED</);
-    expect(html('done')).not.toContain('stamp-red');
-    expect(html('canceled')).not.toContain('stamp-red');
-    expect(html('failed')).toMatch(/class="[^"]*stamp-red[^"]*">FAILED</);
+    const stamp = (markup: string) =>
+      markup
+        .match(/<span[^>]* class="(hw-stamp[^"]*)"[^>]*>([^<]*)</)
+        ?.slice(1);
+    const [printedClass, printedText] = stamp(html('done')) ?? [];
+    const [canceledClass, canceledText] = stamp(html('canceled')) ?? [];
+    const [failedClass, failedText] = stamp(html('failed')) ?? [];
+    expect(printedText).toBe('Printed');
+    expect(canceledText).toBe('Canceled');
+    expect(failedText).toBe('Failed');
+    expect(printedClass).not.toContain('hw-stamp--fail');
+    expect(canceledClass).not.toContain('hw-stamp--fail');
+    expect(canceledClass).toContain('hw-stamp--void');
+    expect(failedClass).toContain('hw-stamp--fail');
   });
 
   it('the History page stamps each row by its status', async () => {
@@ -110,13 +132,15 @@ describe('History stamps', () => {
       '@/app/(dashboard)/history/page'
     );
     const page = await HistoryPage({ searchParams: Promise.resolve({}) });
-    const [list] = findAll(page, HistoryList);
-    const rows = (list.props as { rows: HistoryRow[] }).rows;
+    // one list per day
+    const rows = findAll(page, HistoryList).flatMap(
+      (list) => (list.props as { rows: HistoryRow[] }).rows,
+    );
     const stamps = Object.fromEntries(rows.map((r) => [r.name, r.stamp]));
     expect(stamps).toEqual({
-      printed: { text: 'PRINTED', red: false },
-      canceled: { text: 'CANCELED', red: false },
-      failed: { text: 'FAILED', red: true },
+      printed: 'printed',
+      canceled: 'canceled',
+      failed: 'failed',
     });
   });
 });

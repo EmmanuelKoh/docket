@@ -47,7 +47,7 @@ change your production data.
    | `STORE_DRIVER` | `redis` |
    | `BETTER_AUTH_SECRET` | The output of `openssl rand -base64 32` |
    | `BETTER_AUTH_URL` | Your website's address, for example `https://your-app.vercel.app` |
-   | `GEMINI_API_KEY` | Only if you use the Message ingest slip: a Google AI Studio key |
+   | `GEMINI_API_KEY` | Only if you use the Text messages slip: a Google AI Studio key |
 
 2. Redeploy the project, so that it uses the new variables.
 

@@ -1,17 +1,17 @@
 'use client';
 
-// components/tape/tape-tool.tsx — the Tape studio's React layer. The
-// page commits to the session's state (data-mode on the root): EMPTY
-// keeps the session buttons in their fixed column spot over the takes
-// list, and the short paper strip carries the note (with the demo
-// action); RECORDING reduces to the REC banner,
-// the full-height live trace, Stop, and discard; LOADED is the full
-// bench — stage (roll, transport, inspector, print) and the project
-// column (takes, key, collapsible settings). Controls read the shared
-// store (store.ts) and call controller methods (controller.js); the
-// only imperative DOM is the canvas island inside .tape-roll, which the
-// controller's view module owns — the canvases stay mounted across all
-// modes, CSS hides them.
+// components/tape/tape-tool.tsx — the Tape studio's React layer, built
+// from the E hardware kit (components/hardware/). The page commits to the
+// session's state (data-mode on the root): EMPTY shows a short paper
+// strip with the note (and the demo action) beside the session keys and
+// the takes list; RECORDING reduces to the REC line, the full-height live
+// trace, Stop and Discard; LOADED is the full bench: the stage (paper
+// strip, transport, note inspector, print keys) and the project column
+// (takes, key, settings). Controls read the shared store (store.ts) and
+// call controller methods (controller.js); the only imperative DOM is the
+// canvas island inside .tape-roll, which the controller's view module
+// owns. The canvases stay mounted in every mode and CSS hides them; the
+// roll holds exactly the two canvases and the playhead.
 
 import {
   ChevronDown,
@@ -21,15 +21,19 @@ import {
   FastForward,
   Pause,
   Play,
-  Printer,
   Redo2,
   Rewind,
   Scissors,
   Square,
-  Trash2,
   Undo2,
 } from 'lucide-react';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Fader } from '@/components/hardware/fader';
+import { Field } from '@/components/hardware/field';
+import { Led } from '@/components/hardware/led';
+import { Module } from '@/components/hardware/module';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Note } from '@/components/hardware/text';
 import { createTapeController } from '@/components/tape/controller.js';
 import { floorToMidi } from '@/components/tape/doc.mjs';
 import {
@@ -44,7 +48,6 @@ import {
   noteLabel,
   TONIC_NAMES,
 } from '@/components/tape-renderer.js';
-import { useSidebar } from '@/components/ui/sidebar';
 
 type Controller = ReturnType<typeof createTapeController>;
 
@@ -57,6 +60,7 @@ const fmtTime = (sec: number) => {
   return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`;
 };
 
+// a fader: the label and its readout over a slot with a ribbed cap
 function Slider(props: {
   ctl: Controller | null;
   k: TapeSliderKey;
@@ -67,11 +71,17 @@ function Slider(props: {
   disabled?: boolean;
 }) {
   const value = useTape((s) => s.settings[props.k]);
+  const id = useId();
   return (
-    <div className="tape-row">
-      <span className="label">{props.label}</span>
-      <input
-        type="range"
+    <div className="tape-slider">
+      <label htmlFor={id} className="tape-slider-label">
+        {props.label}
+      </label>
+      <output htmlFor={id} className="tape-slider-value hw-mono">
+        {props.fmt ? props.fmt(value) : value}
+      </output>
+      <Fader
+        id={id}
         min={props.min}
         max={props.max}
         value={value}
@@ -80,51 +90,81 @@ function Slider(props: {
           props.ctl?.setSetting(props.k, parseFloat(e.target.value))
         }
       />
-      <span className="tape-val">{props.fmt ? props.fmt(value) : value}</span>
     </div>
   );
 }
 
-// a collapsible settings group — settings earn space only when open
-function Group(props: { title: string; children: React.ReactNode }) {
+// a collapsible settings section on the Settings module: settings earn
+// space only when open
+function Section(props: {
+  title: string;
+  sub?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <details className="tape-acc">
-      <summary className="label">{props.title}</summary>
-      <div className="tape-acc-body">{props.children}</div>
+    <details className="tape-section">
+      <summary className="tape-section-head">
+        <span className="hw-row-text">
+          <span className="hw-row-title">{props.title}</span>
+          {props.sub ? <span className="hw-row-sub">{props.sub}</span> : null}
+        </span>
+        <ChevronDown className="tape-section-chev" size={18} aria-hidden />
+      </summary>
+      <div className="tape-section-body">{props.children}</div>
     </details>
   );
 }
 
-// a file input dressed as a button — a loaded file opens as a new take
-function LoadAudio({
-  ctl,
-  label = 'Load audio',
-}: {
-  ctl: Controller | null;
-  label?: string;
-}) {
+// a hidden file input behind a key — a loaded file opens as a new take
+function LoadAudio({ ctl }: { ctl: Controller | null }) {
   const micOn = useTape((s) => s.micOn);
   const decoding = useTape((s) => s.decoding);
+  const input = useRef<HTMLInputElement>(null);
+  const off = micOn || decoding;
   return (
-    <label className={micOn || decoding ? 'btn disabled' : 'btn'}>
-      {label}
+    <>
+      <PushKey disabled={off} onClick={() => input.current?.click()}>
+        Load audio
+      </PushKey>
       <input
+        ref={input}
         type="file"
         accept="audio/*"
         hidden
-        disabled={micOn || decoding}
+        tabIndex={-1}
+        disabled={off}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) ctl?.loadClip(file);
           e.target.value = '';
         }}
       />
-    </label>
+    </>
   );
 }
 
-// the open project's phrases, as a sub-list under its takes-list row:
-// "Song" is the whole-take overview, each phrase opens its own tape
+// the session keys: both start a NEW take. They hold the top of the
+// project column in every mode, so Record never moves.
+function SessionKeys({ ctl }: { ctl: Controller | null }) {
+  const decoding = useTape((s) => s.decoding);
+  const micOn = useTape((s) => s.micOn);
+  return (
+    <KeyGroup className="tape-session">
+      <PushKey
+        disabled={decoding}
+        onClick={() => ctl?.toggleMic()}
+        // red only while the mic is live
+        led={<Led state={micOn ? 'printing' : 'offline'} lens="red" />}
+      >
+        Record
+      </PushKey>
+      <LoadAudio ctl={ctl} />
+    </KeyGroup>
+  );
+}
+
+// the open project's phrases, under its takes-list row: "Song" is the
+// whole-take overview, each phrase opens its own tape
 function PhraseList({ ctl }: { ctl: Controller | null }) {
   const phrases = useTape((s) => s.phrases);
   const active = useTape((s) => s.activePhrase);
@@ -135,63 +175,73 @@ function PhraseList({ ctl }: { ctl: Controller | null }) {
   const many = phrases.length > 1;
 
   return (
-    <div className="tape-phraselist">
+    <ul className="tape-phrases">
       {many && (
-        <button
-          type="button"
-          className={
-            view === 'song' ? 'tape-phrase-item selected' : 'tape-phrase-item'
-          }
-          disabled={busy}
-          onClick={() => ctl?.selectTab(-1)}
-        >
-          Song — all phrases
-        </button>
+        <li className="tape-phrase">
+          <button
+            type="button"
+            className="tape-phrase-open"
+            aria-current={view === 'song' ? 'true' : undefined}
+            disabled={busy}
+            onClick={() => ctl?.selectTab(-1)}
+          >
+            <span className="tape-phrase-name">Song</span>
+            <span className="tape-take-sub">All phrases</span>
+          </button>
+        </li>
       )}
       {many &&
         phrases.map((p, k) => (
-          <div key={`${p.t0}-${p.t1}`} className="tape-phrase-row">
+          <li key={`${p.t0}-${p.t1}`} className="tape-phrase">
             <button
               type="button"
-              className={
-                view === 'focus' && k === active
-                  ? 'tape-phrase-item selected'
-                  : 'tape-phrase-item'
+              className="tape-phrase-open"
+              aria-current={
+                view === 'focus' && k === active ? 'true' : undefined
               }
               disabled={busy}
               onClick={() => ctl?.selectTab(k)}
             >
-              Phrase {k + 1} · {fmtTime(p.t0)}–{fmtTime(p.t1)}
-              {p.editCount || p.frozen ? ' · edited' : ''}
+              <span className="tape-phrase-name">Phrase {k + 1}</span>
+              <span className="tape-take-sub">
+                {fmtTime(p.t0)}–{fmtTime(p.t1)}
+                {p.editCount || p.frozen ? ' · Edited' : ''}
+              </span>
             </button>
             {k > 0 && (
-              <button
-                type="button"
-                className="tape-chip-x"
-                disabled={busy}
-                aria-label={`Merge phrase ${k + 1} into phrase ${k}`}
-                onClick={() => ctl?.removeCutAt(k - 1)}
-              >
-                ✕
-              </button>
+              <KeyGroup>
+                <PushKey
+                  size="compact"
+                  disabled={busy}
+                  title={`Merge phrase ${k + 1} into phrase ${k}`}
+                  onClick={() => ctl?.removeCutAt(k - 1)}
+                >
+                  Merge
+                </PushKey>
+              </KeyGroup>
             )}
-          </div>
+          </li>
         ))}
-      <button
-        type="button"
-        className="tape-phrase-action"
-        disabled={busy}
-        onClick={() => ctl?.cutAtBreaths()}
-      >
-        cut into phrases at breaths
-      </button>
-    </div>
+      <li className="tape-phrase tape-phrase-cut">
+        <KeyGroup>
+          <PushKey
+            size="compact"
+            disabled={busy}
+            title="Start a phrase after each breath"
+            onClick={() => ctl?.cutAtBreaths()}
+          >
+            Cut at breaths
+          </PushKey>
+        </KeyGroup>
+      </li>
+    </ul>
   );
 }
 
-// the takes list: every saved take is a project — click a row to open
-// it; the open one (or the unsaved session) expands to its phrases.
-function Projects({ ctl }: { ctl: Controller | null }) {
+// the takes list: every saved take is a project. Open one with its row;
+// the open one (or the unsaved session) expands to its phrases. Delete
+// takes two presses and is soft (Undo restores it).
+function Takes({ ctl }: { ctl: Controller | null }) {
   const takes = useTape((s) => s.takes);
   const busy = useTape((s) => s.persistBusy);
   const hasTake = useTape((s) => s.hasTake);
@@ -199,8 +249,10 @@ function Projects({ ctl }: { ctl: Controller | null }) {
   const micOn = useTape((s) => s.micOn);
   const decoding = useTape((s) => s.decoding);
   const current = useTape((s) => s.currentTake);
+  const clipDur = useTape((s) => s.clipDur);
   const lastDeleted = useTape((s) => s.lastDeleted);
   const [name, setName] = useState('');
+  const [armed, setArmed] = useState<string | null>(null);
   const canSave = hasTake && hasAudio && !micOn && !decoding && !busy;
 
   // the name field follows the open take (load, save, untie)
@@ -212,116 +264,137 @@ function Projects({ ctl }: { ctl: Controller | null }) {
   }, [currentId]);
 
   return (
-    <div className="tape-group">
-      <span className="label">Takes</span>
+    <Module number="01" title="Takes" flush>
       {hasTake && (
-        <div className="tape-btnrow">
-          <input
-            className="tape-name"
-            type="text"
-            placeholder="name this take"
+        <div className="tape-save">
+          <Field
+            label="Take name"
+            placeholder="Take"
+            autoComplete="off"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <button
-            type="button"
-            className="btn small primary"
-            disabled={!canSave}
-            onClick={() => ctl?.saveTake(name.trim() || 'Take')}
-          >
-            {current ? 'Save' : 'Save take'}
-          </button>
-          {current && (
-            <button
-              type="button"
-              className="btn small"
-              disabled={!canSave}
-              onClick={() => ctl?.saveTakeAsNew(name.trim() || 'Take')}
-            >
-              Save as new
-            </button>
-          )}
+          <div className="tape-save-keys">
+            <KeyGroup>
+              <PushKey
+                disabled={!canSave}
+                onClick={() => ctl?.saveTake(name.trim() || 'Take')}
+              >
+                {current ? 'Save' : 'Save take'}
+              </PushKey>
+              {current && (
+                <PushKey
+                  disabled={!canSave}
+                  onClick={() => ctl?.saveTakeAsNew(name.trim() || 'Take')}
+                >
+                  Save as new
+                </PushKey>
+              )}
+            </KeyGroup>
+            {hasAudio && (
+              <button
+                type="button"
+                className="hw-link tape-textbtn"
+                disabled={micOn || decoding}
+                onClick={() => ctl?.downloadTake()}
+              >
+                Download WAV
+              </button>
+            )}
+          </div>
         </div>
       )}
-      {hasTake && hasAudio && (
-        <button
-          type="button"
-          className="tape-quiet"
-          disabled={micOn || decoding}
-          onClick={() => ctl?.downloadTake()}
-        >
-          download take (wav)
-        </button>
-      )}
-      <div className="tape-takes">
+      <ul className="tape-takes">
         {hasTake && !current && (
-          <>
-            <div className="tape-take-row current">
-              <span className="tape-take-open">
-                <span className="tape-take-name">unsaved take</span>
+          <li className="tape-take">
+            <div className="tape-take-row">
+              <span className="tape-take-open" aria-current="true">
+                <span className="tape-take-name">Unsaved take</span>
+                <span className="tape-take-sub">Open · {fmtTime(clipDur)}</span>
               </span>
             </div>
             <PhraseList ctl={ctl} />
-          </>
+          </li>
         )}
-        {takes?.map((t) => (
-          <Fragment key={t.id}>
-            <div
-              className={
-                t.id === currentId ? 'tape-take-row current' : 'tape-take-row'
-              }
-            >
-              <button
-                type="button"
-                className="tape-take-open"
-                disabled={busy || micOn || decoding || t.id === currentId}
-                onClick={() => ctl?.loadTakeById(t.id)}
-              >
-                <span className="tape-take-name" title={t.name}>
-                  {t.name}
-                </span>
-                <span className="tape-take-sub">{fmtTime(t.seconds)}</span>
-              </button>
-              <button
-                type="button"
-                className="tape-chip-x"
-                disabled={busy}
-                aria-label={`Delete ${t.name}`}
-                onClick={() => {
-                  if (window.confirm(`Delete "${t.name}"?`))
-                    ctl?.deleteTakeById(t.id);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            {t.id === currentId && <PhraseList ctl={ctl} />}
-          </Fragment>
-        ))}
+        {takes?.map((t) => {
+          const open = t.id === currentId;
+          return (
+            <li key={t.id} className="tape-take">
+              <div className="tape-take-row">
+                <button
+                  type="button"
+                  className="tape-take-open"
+                  aria-current={open ? 'true' : undefined}
+                  disabled={busy || micOn || decoding || open}
+                  onClick={() => ctl?.loadTakeById(t.id)}
+                >
+                  <span className="tape-take-name" title={t.name}>
+                    {t.name}
+                  </span>
+                  <span className="tape-take-sub">
+                    {open ? 'Open · ' : ''}
+                    {fmtTime(t.seconds)}
+                  </span>
+                </button>
+                <KeyGroup>
+                  {armed === t.id ? (
+                    <>
+                      <PushKey size="compact" onClick={() => setArmed(null)}>
+                        Keep
+                      </PushKey>
+                      <PushKey
+                        size="compact"
+                        disabled={busy}
+                        onClick={() => {
+                          setArmed(null);
+                          ctl?.deleteTakeById(t.id);
+                        }}
+                      >
+                        Delete take
+                      </PushKey>
+                    </>
+                  ) : (
+                    <PushKey
+                      size="compact"
+                      disabled={busy}
+                      title={`Delete ${t.name}`}
+                      onClick={() => setArmed(t.id)}
+                    >
+                      Delete
+                    </PushKey>
+                  )}
+                </KeyGroup>
+              </div>
+              {open && <PhraseList ctl={ctl} />}
+            </li>
+          );
+        })}
         {takes && takes.length === 0 && !hasTake && (
-          <p className="tape-hint">no saved takes yet</p>
+          <li className="tape-take">
+            <Note className="tape-empty-list">No saved takes yet.</Note>
+          </li>
         )}
-      </div>
+      </ul>
       {lastDeleted && (
-        <p className="tape-hint">
-          deleted “{lastDeleted.name}” —{' '}
+        <p className="tape-deleted hw-note">
+          Deleted “{lastDeleted.name}”.
           <button
             type="button"
-            className="tape-undo"
+            className="hw-link tape-textbtn"
             disabled={busy}
             onClick={() => ctl?.undeleteTake()}
           >
-            undo
+            Undo
           </button>
         </p>
       )}
-    </div>
+    </Module>
   );
 }
 
 // the key: Western major/minor signatures, or the mugham modes (Rast,
 // Shur, Segah, …) on a chosen tonic — a mugham pick derives the
-// best-fit printed signature, shown in the hint underneath
+// best-fit printed signature, shown in the note underneath
 function KeyPicker({
   ctl,
   keySig,
@@ -336,19 +409,20 @@ function KeyPicker({
     KEY_SIGS.find((k: { sharps: number }) => k.sharps === keySig)?.name ?? '';
 
   return (
-    <div className="tape-field">
-      <span className="label">Key</span>
-      <select
-        className="tape-select"
+    <Module number="02" title="Key">
+      <Field
+        as="select"
+        label="System"
         value={system}
         onChange={(e) => ctl?.setSetting('scaleSystem', e.target.value)}
       >
-        <option value="western">Western — major / minor</option>
-        <option value="mugham">Mugham — Rast, Shur, Segah…</option>
-      </select>
+        <option value="western">Western major and minor</option>
+        <option value="mugham">Mugham modes</option>
+      </Field>
       {system === 'western' ? (
-        <select
-          className="tape-select"
+        <Field
+          as="select"
+          label="Key"
           value={keySig}
           onChange={(e) =>
             ctl?.setSetting('keySig', parseInt(e.target.value, 10))
@@ -359,44 +433,47 @@ function KeyPicker({
               {k.name}
             </option>
           ))}
-        </select>
+        </Field>
       ) : (
         <>
-          <select
-            className="tape-select"
-            value={mode}
-            onChange={(e) => ctl?.setSetting('mughamMode', e.target.value)}
-          >
-            {MUGHAM_MODES.map((m: { id: string; name: string }) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="tape-select"
-            value={tonic}
-            onChange={(e) =>
-              ctl?.setSetting('mughamTonic', parseInt(e.target.value, 10))
-            }
-          >
-            {TONIC_NAMES.map((t: string, pc: number) => (
-              <option key={t} value={pc}>
-                on {t}
-              </option>
-            ))}
-          </select>
-          <p className="tape-hint">
-            {mughamKey(mode, tonic).name} — prints as {sigName}
-          </p>
+          <div className="tape-pair">
+            <Field
+              as="select"
+              label="Mode"
+              value={mode}
+              onChange={(e) => ctl?.setSetting('mughamMode', e.target.value)}
+            >
+              {MUGHAM_MODES.map((m: { id: string; name: string }) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Field>
+            <Field
+              as="select"
+              label="Tonic"
+              value={tonic}
+              onChange={(e) =>
+                ctl?.setSetting('mughamTonic', parseInt(e.target.value, 10))
+              }
+            >
+              {TONIC_NAMES.map((t: string, pc: number) => (
+                <option key={t} value={pc}>
+                  {t}
+                </option>
+              ))}
+            </Field>
+          </div>
+          <Note>
+            {mughamKey(mode, tonic).name} prints as {sigName}.
+          </Note>
         </>
       )}
-    </div>
+    </Module>
   );
 }
 
-function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
-  const decoding = useTape((s) => s.decoding);
+function Settings({ ctl }: { ctl: Controller | null }) {
   const keySig = useTape((s) => s.settings.keySig);
   const viewMode = useTape((s) => s.viewMode);
   const traceMode = useTape((s) => s.traceMode);
@@ -404,55 +481,11 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
   const activePhrase = useTape((s) => s.activePhrase);
   const phraseCount = useTape((s) => s.phrases.length);
 
-  // the session buttons sit in the SAME place in every mode — the top
-  // of the column — so Record never moves; the empty page just stops
-  // after the takes list (key and settings appear once there is
-  // something to act on)
-  if (mode === 'empty') {
-    return (
-      <div className="tape-controls">
-        <div className="tape-btnrow">
-          <button
-            type="button"
-            className="btn icon primary"
-            disabled={decoding}
-            onClick={() => ctl?.toggleMic()}
-          >
-            <span className="tape-lamp" />
-            Record
-          </button>
-          <LoadAudio ctl={ctl} />
-        </div>
-        <Projects ctl={ctl} />
-      </div>
-    );
-  }
-
   return (
-    <div className="tape-controls">
-      <div className="tape-btnrow">
-        <button
-          type="button"
-          className="btn icon primary"
-          disabled={decoding}
-          onClick={() => ctl?.toggleMic()}
-        >
-          <span className="tape-lamp" />
-          Record
-        </button>
-        <LoadAudio ctl={ctl} />
-      </div>
-
-      <Projects ctl={ctl} />
-
-      <KeyPicker ctl={ctl} keySig={keySig} />
-
-      <Group
-        title={
-          phraseCount > 1
-            ? `Detection · phrase ${activePhrase + 1}`
-            : 'Detection'
-        }
+    <Module number="03" title="Settings" flush>
+      <Section
+        title="Detection"
+        sub={phraseCount > 1 ? `Phrase ${activePhrase + 1}` : undefined}
       >
         <Slider
           ctl={ctl}
@@ -465,46 +498,40 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
         />
         {frozen && (
           <>
-            <p className="tape-hint">
+            <Note>
               {phraseCount > 1
-                ? `Editing pauses detection. Start over re-detects phrase ${activePhrase + 1}.`
-                : 'Editing pauses detection. Start over re-detects from the recording.'}
-            </p>
-            <button
-              type="button"
-              className="btn small"
-              onClick={() => ctl?.reread()}
-            >
-              Start over
-            </button>
+                ? `Editing pauses detection. Start over detects phrase ${activePhrase + 1} again.`
+                : 'Editing pauses detection. Start over detects the recording again.'}
+            </Note>
+            <KeyGroup className="self-start">
+              <PushKey size="compact" onClick={() => ctl?.reread()}>
+                Start over
+              </PushKey>
+            </KeyGroup>
           </>
         )}
-      </Group>
+      </Section>
 
-      <Group title="View">
-        <div className="tape-field">
-          <span className="label">Notation</span>
-          <select
-            className="tape-select"
-            value={viewMode}
-            onChange={(e) => ctl?.setViewMode(e.target.value)}
-          >
-            <option value="full">Full notation</option>
-            <option value="skeleton">Main notes only</option>
-          </select>
-        </div>
-        <div className="tape-field">
-          <span className="label">Pitch trace</span>
-          <select
-            className="tape-select"
-            value={traceMode}
-            onChange={(e) => ctl?.setTraceMode(e.target.value)}
-          >
-            <option value="hidden">Hidden</option>
-            <option value="aligned">Aligned under the tape</option>
-            <option value="linear">Linear time — continuous</option>
-          </select>
-        </div>
+      <Section title="View">
+        <Field
+          as="select"
+          label="Notation"
+          value={viewMode}
+          onChange={(e) => ctl?.setViewMode(e.target.value)}
+        >
+          <option value="full">Full notation</option>
+          <option value="skeleton">Main notes only</option>
+        </Field>
+        <Field
+          as="select"
+          label="Pitch trace"
+          value={traceMode}
+          onChange={(e) => ctl?.setTraceMode(e.target.value)}
+        >
+          <option value="hidden">Hidden</option>
+          <option value="aligned">Aligned under the tape</option>
+          <option value="linear">Linear time</option>
+        </Field>
         {traceMode === 'linear' && (
           <Slider
             ctl={ctl}
@@ -515,13 +542,13 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
             fmt={(v) => `${v} px/s`}
           />
         )}
-      </Group>
+      </Section>
 
-      <Group title="Layout">
+      <Section title="Layout">
         <Slider
           ctl={ctl}
           k="msPerRow"
-          label="Ms per row"
+          label="Time per row"
           min={5}
           max={60}
           fmt={(v) => `${v} ms`}
@@ -558,14 +585,32 @@ function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
           max={1000}
           fmt={(v) => `${v} ms`}
         />
-      </Group>
+      </Section>
+    </Module>
+  );
+}
+
+// the project column. The empty page stops after the takes list; the key
+// and the settings appear once there is something to act on.
+function Controls({ ctl, mode }: { ctl: Controller | null; mode: TapeMode }) {
+  const keySig = useTape((s) => s.settings.keySig);
+  return (
+    <div className="tape-controls">
+      <SessionKeys ctl={ctl} />
+      <Takes ctl={ctl} />
+      {mode === 'loaded' && (
+        <>
+          <KeyPicker ctl={ctl} keySig={keySig} />
+          <Settings ctl={ctl} />
+        </>
+      )}
     </div>
   );
 }
 
-// the editing strip: what the selected note is, and what can be done to
+// the note inspector: what the selected note is, and what can be done to
 // it. Shown once a take is decoded; before a selection it teaches the
-// click affordance. Undo/redo live here and work without a selection.
+// click. Undo and Redo work without a selection.
 function Inspector({ ctl }: { ctl: Controller | null }) {
   const hasTake = useTape((s) => s.hasTake);
   const selection = useTape((s) => s.selection);
@@ -579,153 +624,153 @@ function Inspector({ ctl }: { ctl: Controller | null }) {
     !!selection &&
     playTime > selection.t0 + 0.02 &&
     playTime < selection.t1 - 0.02;
+  const isCut = !!selection && cuts.includes(selection.t0);
   return (
     <div className="tape-inspector">
-      <button
-        type="button"
-        className="btn small icon"
-        aria-label="Previous note"
-        title="Previous note (←)"
-        onClick={() => ctl?.selectAdjacent(-1)}
-      >
-        <ChevronLeft size={16} />
-      </button>
-      <button
-        type="button"
-        className="btn small icon"
-        aria-label="Next note"
-        title="Next note (→)"
-        onClick={() => ctl?.selectAdjacent(1)}
-      >
-        <ChevronRight size={16} />
-      </button>
+      <div className="tape-line">
+        <KeyGroup>
+          <PushKey
+            size="compact"
+            aria-label="Previous note"
+            title="Previous note (←)"
+            onClick={() => ctl?.selectAdjacent(-1)}
+          >
+            <ChevronLeft size={18} />
+          </PushKey>
+          <PushKey
+            size="compact"
+            aria-label="Next note"
+            title="Next note (→)"
+            onClick={() => ctl?.selectAdjacent(1)}
+          >
+            <ChevronRight size={18} />
+          </PushKey>
+        </KeyGroup>
+        {selection?.mark ? (
+          <span className="tape-readout hw-mono hw-ink">
+            Ornament · {fmtTime(selection.t0)}
+          </span>
+        ) : selection ? (
+          <span className="tape-readout hw-mono hw-ink">
+            {selection.label} · {fmtTime(selection.t0)}–{fmtTime(selection.t1)}
+          </span>
+        ) : (
+          <Note as="span" className="tape-readout-hint hw-ink">
+            {viewMode === 'full'
+              ? 'Pick a note on the tape to edit it.'
+              : 'Switch to Full notation to edit.'}
+          </Note>
+        )}
+        <KeyGroup className="tape-line-end">
+          <PushKey
+            size="compact"
+            disabled={!editCount}
+            aria-label={editCount ? `Undo, ${editCount} edits` : 'Undo'}
+            title="Undo (⌘Z)"
+            onClick={() => ctl?.undoEdit()}
+          >
+            <Undo2 size={16} />
+            {editCount ? <span className="hw-mono">{editCount}</span> : null}
+          </PushKey>
+          <PushKey
+            size="compact"
+            disabled={!redoCount}
+            aria-label="Redo"
+            title="Redo (⇧⌘Z)"
+            onClick={() => ctl?.redoEdit()}
+          >
+            <Redo2 size={16} />
+          </PushKey>
+        </KeyGroup>
+      </div>
       {selection?.mark ? (
-        // an ornament arc — standalone mark or a note's flag arc: both
-        // select the same way and can only be removed (a flag arc's
-        // removal toggles the owner note's ornament off)
-        <>
-          <span className="tape-val">ornament · {fmtTime(selection.t0)}</span>
-          <button
-            type="button"
-            className="btn small icon"
-            aria-label="Remove ornament"
+        // an ornament arc — a standalone mark or a note's flag arc: both
+        // select the same way and can only be removed (removing a flag arc
+        // turns the owner note's ornament off)
+        <KeyGroup className="tape-edit-keys">
+          <PushKey
+            size="compact"
             title="Remove ornament (⌫)"
             onClick={() => ctl?.removeNote()}
           >
-            <Trash2 size={15} />
-          </button>
-        </>
+            Remove
+          </PushKey>
+        </KeyGroup>
       ) : selection ? (
-        <>
-          <span className="tape-val">
-            {selection.label} · {fmtTime(selection.t0)}–{fmtTime(selection.t1)}
-          </span>
-          <button
-            type="button"
-            className="btn small icon"
+        <KeyGroup className="tape-edit-keys">
+          <PushKey
+            size="compact"
             aria-label="Pitch down a semitone"
             title="Pitch down a semitone (↓)"
             onClick={() => ctl?.nudgePitch(-1)}
           >
-            <ChevronDown size={16} />
-          </button>
-          <button
-            type="button"
-            className="btn small icon"
+            <ChevronDown size={18} />
+          </PushKey>
+          <PushKey
+            size="compact"
             aria-label="Pitch up a semitone"
             title="Pitch up a semitone (↑)"
             onClick={() => ctl?.nudgePitch(1)}
           >
-            <ChevronUp size={16} />
-          </button>
-          <button
-            type="button"
-            className={selection.ornament ? 'btn small pressed' : 'btn small'}
-            title="Toggle the ornament arc (O)"
+            <ChevronUp size={18} />
+          </PushKey>
+          <PushKey
+            size="compact"
+            down={!!selection.ornament}
+            aria-pressed={!!selection.ornament}
+            title="Ornament arc (O)"
             onClick={() => ctl?.toggleOrnament()}
           >
             Ornament
-          </button>
-          <button
-            type="button"
-            className={selection.slide ? 'btn small pressed' : 'btn small'}
+          </PushKey>
+          <PushKey
+            size="compact"
+            down={!!selection.slide}
+            aria-pressed={!!selection.slide}
+            title="Slide from the previous note"
             onClick={() => ctl?.toggleSlide()}
           >
-            Slide from prev
-          </button>
-          <button
-            type="button"
-            className="btn small"
+            Slide
+          </PushKey>
+          <PushKey
+            size="compact"
             disabled={!canSplit}
             title={
               canSplit
                 ? 'Split at the playhead (S)'
-                : 'seek inside the note first'
+                : 'Move the playhead into the note first'
             }
             onClick={() => ctl?.splitAtPlayhead()}
           >
-            Split at playhead
-          </button>
-          <button
-            type="button"
-            className="btn small"
+            Split
+          </PushKey>
+          <PushKey
+            size="compact"
             disabled={!selection.canJoin}
             title="Join with the next note (J)"
             onClick={() => ctl?.joinNext()}
           >
-            Join next
-          </button>
-          <button
-            type="button"
-            className={
-              cuts.includes(selection.t0)
-                ? 'btn small icon pressed'
-                : 'btn small icon'
-            }
+            Join
+          </PushKey>
+          <PushKey
+            size="compact"
+            down={isCut}
+            aria-pressed={isCut}
             title="Start a new phrase at this note (C)"
             onClick={() => ctl?.cutBefore()}
           >
-            <Scissors size={14} /> Cut before
-          </button>
-          <button
-            type="button"
-            className="btn small icon"
-            aria-label="Remove note"
+            <Scissors size={15} />
+            Cut before
+          </PushKey>
+          <PushKey
+            size="compact"
             title="Remove note (⌫)"
             onClick={() => ctl?.removeNote()}
           >
-            <Trash2 size={15} />
-          </button>
-        </>
-      ) : (
-        <span className="tape-hint">
-          {viewMode === 'full'
-            ? 'pick a note on the tape to edit it'
-            : 'switch to Full notation to edit'}
-        </span>
-      )}
-      <span className="tape-inspector-spacer" />
-      <button
-        type="button"
-        className="btn small icon"
-        disabled={!editCount}
-        aria-label="Undo"
-        title="Undo (⌘Z)"
-        onClick={() => ctl?.undoEdit()}
-      >
-        <Undo2 size={15} />
-        {editCount ? ` ${editCount}` : ''}
-      </button>
-      <button
-        type="button"
-        className="btn small icon"
-        disabled={!redoCount}
-        aria-label="Redo"
-        title="Redo (⇧⌘Z)"
-        onClick={() => ctl?.redoEdit()}
-      >
-        <Redo2 size={15} />
-      </button>
+            Remove
+          </PushKey>
+        </KeyGroup>
+      ) : null}
     </div>
   );
 }
@@ -763,10 +808,9 @@ function TraceCanvas({
   );
 }
 
-// the take banner: an inverted ink bar over the roll, like the bold
-// knockout headers on the plugin receipts (see the World Cup FULL TIME
-// template) — the open take's name, or a red REC counter while live
-function TakeBanner() {
+// the line over the strip, printed on the ground: the open take's name
+// (and its phrase), or the red REC counter while the mic is live
+function StageCaption() {
   const micOn = useTape((s) => s.micOn);
   const hasTake = useTape((s) => s.hasTake);
   const current = useTape((s) => s.currentTake);
@@ -777,63 +821,67 @@ function TakeBanner() {
 
   if (micOn) {
     return (
-      <div className="tape-banner rec">
-        <span className="tape-lamp live" />
-        REC {fmtTime(clipDur)}
-      </div>
+      <p className="tape-caption hw-ink">
+        <span className="tape-rec">Rec</span>
+        <span className="tape-caption-time hw-mono">{fmtTime(clipDur)}</span>
+      </p>
     );
   }
   if (!hasTake) return null;
-  const name = current?.name ?? 'unsaved take';
-  const suffix =
+  const sub =
     phrases.length > 1
       ? focus
-        ? ` · phrase ${active + 1} of ${phrases.length}`
-        : ` · ${phrases.length} phrases`
+        ? `Phrase ${active + 1} of ${phrases.length}`
+        : `${phrases.length} phrases`
       : '';
   return (
-    <div className="tape-banner">
-      {name}
-      {suffix}
-    </div>
+    <p className="tape-caption hw-ink">
+      <span className="tape-caption-name">
+        {current?.name ?? 'Unsaved take'}
+      </span>
+      {sub ? <span className="tape-caption-sub hw-mono">{sub}</span> : null}
+    </p>
   );
 }
 
-// a friendly note on the bare paper before anything is on tape — the
-// real entry buttons keep their fixed place in the controls column;
-// only the demo phrase lives here, out of the way
+// the note on the bare paper before anything is on tape. The entry keys
+// keep their place in the project column; only the demo lives here.
 function EmptyNote({ ctl }: { ctl: Controller | null }) {
   return (
     <div className="tape-empty">
-      <span>
-        nothing on tape yet — press Record, open a saved take, or{' '}
+      <p className="tape-empty-title">Nothing on tape yet.</p>
+      <p className="tape-empty-text">
+        Press Record, open a saved take, or{' '}
         <button type="button" className="tape-demo" onClick={() => ctl?.demo()}>
-          try the demo phrase
+          load the demo phrase
         </button>
-      </span>
+        .
+      </p>
     </div>
   );
 }
 
 // the recording screen's only controls: Stop transcribes the take;
-// discard is the false-start escape (no transcription, back to empty)
+// Discard is the false-start escape (no transcription, back to empty)
 function RecordingControls({ ctl }: { ctl: Controller | null }) {
   return (
-    <div className="tape-recording-controls">
+    <div className="tape-line">
+      <KeyGroup>
+        <PushKey
+          size="large"
+          onClick={() => ctl?.toggleMic()}
+          // live audio: the red LED
+          led={<Led state="printing" />}
+        >
+          Stop
+        </PushKey>
+      </KeyGroup>
       <button
         type="button"
-        className="btn icon primary on big"
-        onClick={() => ctl?.toggleMic()}
-      >
-        <span className="tape-lamp live" />
-        Stop
-      </button>
-      <button
-        type="button"
-        className="tape-quiet"
+        className="hw-link tape-textbtn"
         onClick={() => ctl?.discard()}
       >
-        discard
+        Discard
       </button>
     </div>
   );
@@ -843,9 +891,9 @@ function TruncatedNote() {
   const truncated = useTape((s) => s.truncated);
   if (!truncated) return null;
   return (
-    <p className="tape-hint">
-      preview cut off here — the print still includes the whole take
-    </p>
+    <Note className="hw-ink">
+      The preview stops here. The print includes the whole take.
+    </Note>
   );
 }
 
@@ -858,74 +906,85 @@ function Transport({ ctl }: { ctl: Controller | null }) {
   const decoding = useTape((s) => s.decoding);
   const speed = useTape((s) => s.speed);
   const idle = !hasAudio || micOn || decoding;
+  const playing = playState === 'playing';
 
   return (
-    <div className="tape-transport">
-      <button
-        type="button"
-        className="btn small icon"
-        disabled={idle}
-        aria-label="Back 5 seconds"
-        title="Back 5 seconds (⇧<)"
-        onClick={() => ctl?.seekBy(-5)}
-      >
-        <Rewind size={15} />
-      </button>
-      <button
-        type="button"
-        className={
-          playState === 'playing' ? 'btn small icon on' : 'btn small icon'
-        }
-        disabled={idle}
-        aria-label={playState === 'playing' ? 'Pause' : 'Play'}
-        title={playState === 'playing' ? 'Pause (space)' : 'Play (space)'}
-        onClick={() => ctl?.playPause()}
-      >
-        {playState === 'playing' ? <Pause size={15} /> : <Play size={15} />}
-      </button>
-      <button
-        type="button"
-        className="btn small icon"
-        disabled={idle}
-        aria-label="Forward 5 seconds"
-        title="Forward 5 seconds (⇧>)"
-        onClick={() => ctl?.seekBy(5)}
-      >
-        <FastForward size={15} />
-      </button>
-      <button
-        type="button"
-        className="btn small icon"
-        disabled={idle || (playState === 'stopped' && playTime === 0)}
-        aria-label="Stop"
-        title="Stop"
-        onClick={() => ctl?.stopPlay()}
-      >
-        <Square size={13} />
-      </button>
-      <select
-        className="tape-select tape-speed"
-        value={String(speed)}
-        onChange={(e) => ctl?.setSpeed(parseFloat(e.target.value))}
-      >
-        <option value="0.25">0.25×</option>
-        <option value="0.5">0.5×</option>
-        <option value="0.75">0.75×</option>
-        <option value="1">1×</option>
-      </select>
-      <span className="tape-val tape-time">
+    <div className="tape-line">
+      <KeyGroup>
+        <PushKey
+          size="compact"
+          disabled={idle}
+          aria-label="Back 5 seconds"
+          title="Back 5 seconds (⇧<)"
+          onClick={() => ctl?.seekBy(-5)}
+        >
+          <Rewind size={17} />
+        </PushKey>
+        <PushKey
+          size="compact"
+          down={playing}
+          disabled={idle}
+          aria-label={playing ? 'Pause' : 'Play'}
+          title={playing ? 'Pause (space)' : 'Play (space)'}
+          onClick={() => ctl?.playPause()}
+          // live audio: held down with the red LED while it plays
+          led={playing ? <Led state="printing" /> : null}
+        >
+          {playing ? <Pause size={17} /> : <Play size={17} />}
+        </PushKey>
+        <PushKey
+          size="compact"
+          disabled={idle}
+          aria-label="Forward 5 seconds"
+          title="Forward 5 seconds (⇧>)"
+          onClick={() => ctl?.seekBy(5)}
+        >
+          <FastForward size={17} />
+        </PushKey>
+        <PushKey
+          size="compact"
+          disabled={idle || (playState === 'stopped' && playTime === 0)}
+          aria-label="Stop"
+          title="Stop"
+          onClick={() => ctl?.stopPlay()}
+        >
+          <Square size={15} />
+        </PushKey>
+      </KeyGroup>
+      <label className="tape-speed">
+        <span className="hw-label">Speed</span>
+        <select
+          className="hw-field hw-field--select"
+          value={String(speed)}
+          onChange={(e) => ctl?.setSpeed(parseFloat(e.target.value))}
+        >
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1">1×</option>
+        </select>
+      </label>
+      <span className="tape-time hw-mono hw-ink">
         {fmtTime(playTime)}
-        <span className="tape-dur"> / {fmtTime(clipDur)}</span>
+        <span className="tape-time-dur"> / {fmtTime(clipDur)}</span>
       </span>
-      <span className="tape-hint tape-hint-kbd">
-        drag tape to seek · space ▶ · ⇧&lt;&gt; ±5s · ←→ notes · ↑↓ pitch · 0–9
-        phrases
-      </span>
-      <span className="tape-hint tape-hint-touch">
-        tap the tape to seek · tap a note to edit
-      </span>
+      <Note as="span" className="tape-hint tape-hint-kbd hw-ink">
+        Drag the tape to seek · Space play · ⇧&lt; ⇧&gt; 5 s · ← → note · ↑ ↓
+        pitch · 0–9 phrase
+      </Note>
+      <Note as="span" className="tape-hint tape-hint-touch hw-ink">
+        Tap the tape to seek. Tap a note to edit it.
+      </Note>
     </div>
   );
+}
+
+// the controller's status line outside the loaded bench (a mic that
+// failed to start, a take that failed to load), so no error goes unseen
+function LooseStatus() {
+  const status = useTape((s) => s.status);
+  if (!status) return null;
+  return <Note className="tape-status hw-ink">{status}</Note>;
 }
 
 function Bottom({ ctl }: { ctl: Controller | null }) {
@@ -936,52 +995,34 @@ function Bottom({ ctl }: { ctl: Controller | null }) {
   const focused = useTape(
     (s) => s.phraseView === 'focus' && s.phrases.length > 1,
   );
+  const off = !canPrint || printState === 'queuing';
 
   return (
     <div className="tape-bottom">
-      <span className="status">{status}</span>
-      <span className="tape-bottom-actions">
+      <Note className="tape-status hw-ink">{status}</Note>
+      <div className="tape-print">
         {phraseCount > 1 && (
-          <button
-            type="button"
-            className="btn small icon"
-            disabled={!canPrint || printState === 'queuing'}
-            onClick={() => ctl?.printPhrases()}
-          >
-            <Printer size={14} /> Print phrases ({phraseCount})
-          </button>
+          <KeyGroup>
+            <PushKey disabled={off} onClick={() => ctl?.printPhrases()}>
+              Print phrases ({phraseCount})
+            </PushKey>
+          </KeyGroup>
         )}
-        <button
-          type="button"
-          className="btn icon primary"
-          disabled={!canPrint || printState === 'queuing'}
-          onClick={() => ctl?.print()}
-        >
-          <Printer size={15} />{' '}
-          {printState === 'queuing'
-            ? 'Queuing…'
-            : focused
-              ? 'Print phrase'
-              : 'Print take'}
-        </button>
-      </span>
+        <KeyGroup>
+          <PushKey variant="print" disabled={off} onClick={() => ctl?.print()}>
+            {printState === 'queuing'
+              ? 'Queuing…'
+              : focused
+                ? 'Print phrase'
+                : 'Print take'}
+          </PushKey>
+        </KeyGroup>
+      </div>
     </div>
   );
 }
 
 export function TapeTool() {
-  // A workbench needs width (the tape scrolls sideways): collapse the
-  // sidebar to its rail on entry, restore on exit — same as the Studio.
-  const { open, setOpen, isMobile } = useSidebar();
-  const sidebarWasOpen = useRef(open);
-  useEffect(() => {
-    if (isMobile) return;
-    const wasOpen = sidebarWasOpen.current;
-    setOpen(false);
-    return () => setOpen(wasOpen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const traceRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -1065,6 +1106,7 @@ export function TapeTool() {
   const decoding = useTape((s) => s.decoding);
   const hasTake = useTape((s) => s.hasTake);
   const hasAudio = useTape((s) => s.hasAudio);
+  const traceMode = useTape((s) => s.traceMode);
   const mode: TapeMode = micOn
     ? 'recording'
     : hasTake || hasAudio || decoding
@@ -1073,18 +1115,23 @@ export function TapeTool() {
 
   return (
     <div className="tape-tool" data-mode={mode}>
-      {mode !== 'recording' && <Controls ctl={ctl} mode={mode} />}
       <div className="tape-stage">
-        <TakeBanner />
+        <StageCaption />
         <TruncatedNote />
-        <div className="tape-frame">
+        {/* the paper strip: the sheet behind the roll gives it its
+            margins, shadow and torn end, from outside the canvases */}
+        <div className="tape-frame" data-trace={traceMode}>
+          <div className="tape-sheet" aria-hidden="true">
+            <div className="tape-sheet-paper" />
+          </div>
           <div className="tape-roll" ref={wrapRef}>
             <canvas ref={canvasRef} className="tape-paper" />
             <TraceCanvas elRef={traceRef} />
             <Playhead elRef={playheadRef} />
-            {mode === 'empty' && <EmptyNote ctl={ctl} />}
           </div>
+          {mode === 'empty' && <EmptyNote ctl={ctl} />}
         </div>
+        {mode !== 'loaded' && <LooseStatus />}
         {mode === 'recording' && <RecordingControls ctl={ctl} />}
         {mode === 'loaded' && (
           <>
@@ -1094,6 +1141,7 @@ export function TapeTool() {
           </>
         )}
       </div>
+      {mode !== 'recording' && <Controls ctl={ctl} mode={mode} />}
     </div>
   );
 }

@@ -1,212 +1,243 @@
-// Overview — the landing page. LATEST PRINT hero (receipt on a white
-// panel: receipts are paper, in both themes), the 4-cell stat strip (one
-// bordered container split by hairlines; queue number red only when
-// nonzero), the system line (online dot per the 90-second rule), and
-// RECENT: the three newest history rows. The history rows come from
-// jobs.list, the queue cell from jobs.queueSize (the same read as the
-// sidebar badge, shared per request: no listing of live jobs), printer
-// presence from printers.status (the same online rule as Printer), the
-// template count from templates.list, the plugin count from slips.list.
+// Home: today at a glance (design spec: pages, Home). Left, today's
+// receipts feed out of the printer's front edge at their true 576px,
+// newest first: a job the printer holds now is the slip still in the
+// printer, captioned "Printing"; the others carry a PRINTED stamp. Right,
+// the Printer module (name, LED and state, last seen, jobs waiting) and
+// the Slips module (each set-up slip with its next run and its switch).
+//
+// Reads, all in one go: jobs.list (the newest printed and printing jobs,
+// a bounded page), the printer (printers.overview and jobs.queueSize,
+// shared with the panel's printer line through React cache) and
+// slips.list. No poll: the page shows the state at load; a switch
+// refreshes it.
 
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
-import { queueSize } from '@/app/_lib/queue-data';
-import { ReceiptPreview } from '@/components/receipt-preview';
-import { jobsList } from '@/lib/ops/jobs.js';
-import { printersStatus } from '@/lib/ops/printers.js';
-import { slipsList } from '@/lib/ops/slips.js';
-import { templatesList } from '@/lib/ops/templates.js';
-import pkg from '@/package.json';
+import { type JobSummary, jobImageSrc } from '@/app/_lib/format';
+import { printerStateText, printerSummary } from '@/app/_lib/printer-data';
 import {
-  agoShort,
-  agoText,
-  HISTORY_STATUSES,
-  type JobSummary,
-  jobImageSrc,
-} from '../_lib/format';
+  jobSourceLabels,
+  runLabel,
+  type SlipPair,
+  sourceLabel,
+} from '@/app/_lib/slip-data';
+import {
+  ago,
+  clockLabel,
+  dateLabel,
+  dayKey,
+  viewerTimeZone,
+} from '@/app/_lib/time';
+import { Led } from '@/components/hardware/led';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
+import { Row, RowText } from '@/components/hardware/row';
+import { Stamp } from '@/components/hardware/stamp';
+import { Note } from '@/components/hardware/text';
+import { SlipSwitch } from '@/components/slip-switch';
+import { cn } from '@/components/utils';
+import { jobsList } from '@/lib/ops/jobs.js';
+import { slipsList } from '@/lib/ops/slips.js';
 
-function statusColor(status: string): string {
-  if (status === 'failed') return 'text-red';
-  if (status === 'canceled') return 'text-ink-faint';
-  return 'text-ink-muted';
-}
+export const metadata: Metadata = { title: 'Today' };
 
-export default async function OverviewPage() {
+// How many of the newest jobs to read, and how many slips the roll shows.
+// A busy day lists the rest in History.
+const LIST_LIMIT = 20;
+const ROLL_SLIPS = 3;
+// A receipt taller than this (in px at true size) is torn off here.
+const TEAR_AT = 1100;
+
+// When a job printed: a printer took it then (claimedAt). A job record
+// has no separate print time.
+const printedAt = (j: JobSummary) => j.claimedAt ?? j.createdAt;
+
+export default async function HomePage() {
   const caller = await getCaller();
   if (!caller?.ownerId) redirect('/login');
-  const [templates, slips, size, history, presence] = await Promise.all([
-    templatesList(caller),
-    slipsList(caller),
-    queueSize(caller),
-    // newest first: the hero and the three RECENT rows
-    jobsList(caller, { limit: 3, status: HISTORY_STATUSES }) as Promise<
-      JobSummary[]
-    >,
-    // a member reads the shared printer's heartbeat (primary owner's slot)
-    printersStatus(caller),
+  const [jobs, printer, pairs, tz] = await Promise.all([
+    jobsList(caller, {
+      limit: LIST_LIMIT,
+      status: ['inflight', 'done'],
+    }) as Promise<JobSummary[]>,
+    printerSummary(caller),
+    slipsList(caller) as Promise<SlipPair[]>,
+    viewerTimeZone(),
   ]);
 
-  // registered system slips (a module without a record has not been set
-  // up: the Slips pages register on view)
-  const plugins = slips.flatMap((p) => (p.record ? [p.record] : []));
-  const { queued, inflight: printing } = size;
-  const last = history[0];
+  const now = Date.now();
+  const today = dayKey(now, tz);
+  // Today's jobs, the one printing first, then the newest print first
+  const todays = jobs
+    .filter((j) => dayKey(printedAt(j), tz) === today)
+    .sort(
+      (a, b) =>
+        Number(b.status === 'inflight') - Number(a.status === 'inflight') ||
+        Date.parse(printedAt(b)) - Date.parse(printedAt(a)),
+    );
+  const roll = todays.slice(0, ROLL_SLIPS);
+  const more = todays.length - roll.length;
+  // Every job read was today's, so there can be more than were read
+  const capped = jobs.length === LIST_LIMIT && todays.length === jobs.length;
 
-  const queueSubParts = [];
-  if (printing) queueSubParts.push(`${printing} printing`);
-  if (queued) queueSubParts.push(`${queued} queued`);
-  const queueSub = queueSubParts.join(' · ') || 'nothing waiting';
-
-  const { lastSeenAt: lastSeen, online } = presence;
-
-  const stats = [
-    { label: 'Templates', value: templates.length, sub: 'in the store' },
-    {
-      label: 'Plugins',
-      value: plugins.filter((p: { enabled: boolean }) => p.enabled).length,
-      sub: `of ${plugins.length} registered`,
-    },
-    {
-      label: 'Queue',
-      value: queued + printing,
-      sub: queueSub,
-      red: queued + printing > 0,
-    },
-    {
-      label: 'Last print',
-      value: last ? agoShort(last.createdAt) : '—',
-      sub: last ? last.name || last.id : 'no prints yet',
-    },
-  ];
+  const labels = jobSourceLabels(pairs);
+  const slips = pairs.flatMap(({ module, record }) =>
+    record ? [{ module, record }] : [],
+  );
 
   return (
-    <div className="space-y-5">
-      {/* latest print */}
-      <section className="rounded-md border-[0.5px] border-border bg-raised p-4">
-        <div className="text-[13px] font-semibold text-ink">Latest print</div>
-        {last ? (
-          <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-start">
-            <ReceiptPreview
-              src={jobImageSrc(last)}
-              alt={last.name || last.id}
-              className="sm:w-[400px] sm:shrink-0"
-            />
-            <div className="min-w-0 pt-1">
-              <div className="truncate font-mono text-[13px] text-ink">
-                {last.name || last.id}
-              </div>
-              <div className="mt-0.5 text-xs text-ink-muted">
-                {last.source || '—'} · {last.status} {agoText(last.createdAt)}
-              </div>
-              <Link
-                href="/history"
-                className="mt-3 inline-block text-xs text-ink-muted hover:text-ink"
-              >
-                view in history →
+    <>
+      <PageTitle
+        aside={<span className="uppercase">{dateLabel(now, tz)}</span>}
+      >
+        Today
+      </PageTitle>
+
+      <div className="flex flex-wrap items-start gap-x-[52px] gap-y-12">
+        <section
+          aria-label="Today's prints"
+          className="min-w-0 flex-[999_1_624px] min-[876px]:pl-[18px]"
+        >
+          <PrinterEdge />
+          {roll.length ? (
+            <PaperRoll className="flex flex-col gap-11">
+              {roll.map((j, i) => {
+                const printing = j.status === 'inflight';
+                const source = sourceLabel(labels, j.source);
+                const tall = (j.height ?? 0) > TEAR_AT;
+                return (
+                  <figure key={j.id} className="m-0 flex flex-col gap-3">
+                    <PaperSlip
+                      src={jobImageSrc(j)}
+                      alt={j.name ? `${j.name} receipt` : 'Receipt'}
+                      width={j.width ?? 576}
+                      height={j.height}
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                      fed={i === 0}
+                      tear={i === 0 ? 'new' : 'old'}
+                      rotate={i % 2 ? -0.6 : undefined}
+                      shiftX={i % 2 ? 5 : undefined}
+                      streakOffset={i % 2 ? -400 : undefined}
+                      maxHeight={tall ? TEAR_AT + 30 : undefined}
+                    />
+                    {printing ? (
+                      <figcaption className="hw-caption">
+                        <span className="hw-caption-time hw-ink">
+                          {clockLabel(printedAt(j), tz)}
+                        </span>
+                        {source ? (
+                          <span className="hw-ink">{source}</span>
+                        ) : null}
+                        <span className="flex items-center gap-2 font-semibold text-red">
+                          <Led state="printing" />
+                          Printing
+                        </span>
+                      </figcaption>
+                    ) : (
+                      <figcaption className="hw-caption hw-ink">
+                        <span className="hw-caption-time">
+                          {clockLabel(printedAt(j), tz)}
+                        </span>
+                        {source || null}
+                        <Stamp state="printed" alt={i % 2 === 1} />
+                      </figcaption>
+                    )}
+                  </figure>
+                );
+              })}
+              {more > 0 ? (
+                <Link href="/history" className="hw-link self-start">
+                  {more}
+                  {capped ? '+' : ''} more today
+                </Link>
+              ) : null}
+            </PaperRoll>
+          ) : (
+            <p className="hw-ink m-0 pt-7 pl-1">Nothing printed today.</p>
+          )}
+        </section>
+
+        <aside
+          aria-label="Status"
+          className="flex min-w-[280px] flex-[1_1_300px] flex-col gap-[30px] max-[400px]:min-w-0"
+        >
+          <Module number="01" title="Printer" bodyClassName="gap-2">
+            {printer.name ? (
+              <>
+                <div className="text-[21px] font-bold leading-tight">
+                  {printer.name}
+                </div>
+                <div
+                  className={cn(
+                    'flex items-center gap-2.5 font-semibold',
+                    printer.state === 'printing' && 'text-red',
+                  )}
+                >
+                  <Led state={printer.state} />
+                  {printerStateText(printer.state)}
+                </div>
+                <Note>
+                  {printer.lastSeenAt ? (
+                    <>
+                      Last seen{' '}
+                      <span className="hw-mono">
+                        {ago(printer.lastSeenAt, now).value}
+                      </span>{' '}
+                      {ago(printer.lastSeenAt, now).unit} ago
+                    </>
+                  ) : (
+                    'Not seen yet'
+                  )}
+                </Note>
+              </>
+            ) : (
+              <>
+                <div className="text-[21px] font-bold leading-tight">
+                  No printer yet
+                </div>
+                <Link href="/printer" className="hw-link self-start">
+                  Add a printer
+                </Link>
+              </>
+            )}
+            {printer.queued > 0 ? (
+              <Link href="/queue" className="hw-link self-start text-red">
+                {printer.queued} waiting
               </Link>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-ink-faint">Nothing printed yet.</p>
-        )}
-      </section>
+            ) : null}
+          </Module>
 
-      {/* stat strip: one container split by hairlines */}
-      <section className="grid grid-cols-2 rounded-md border-[0.5px] border-border bg-raised sm:grid-cols-4">
-        {stats.map((s, i) => (
-          <div
-            key={s.label}
-            className={`p-4 ${i > 0 ? 'border-l-[0.5px] border-l-hairline max-sm:odd:border-l-0' : ''} ${i >= 2 ? 'max-sm:border-t-[0.5px] max-sm:border-t-hairline' : ''}`}
-          >
-            <div className="text-[13px] font-semibold text-ink">{s.label}</div>
-            <div
-              className={`mt-2 font-mono text-[28px] leading-none ${s.red ? 'text-red' : 'text-ink'}`}
-            >
-              {s.value}
-            </div>
-            <div className="mt-1.5 truncate text-xs text-ink-muted">
-              {s.sub}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {/* system line */}
-      <div className="flex flex-wrap items-center gap-6 px-1 text-xs text-ink-muted">
-        <span className="flex items-center gap-2">
-          <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${online ? 'bg-ink' : 'bg-ink-faint'}`}
-          />
-          {lastSeen
-            ? `printer seen ${agoText(lastSeen)}`
-            : 'no printer contact yet'}
-        </span>
-        <span className="ml-auto text-ink-faint">v{pkg.version}</span>
-      </div>
-
-      <div className="perf" />
-
-      {/* recent */}
-      <section>
-        <div className="flex items-baseline justify-between">
-          <div className="text-[13px] font-semibold text-ink">Recent</div>
-          <Link
-            href="/history"
-            className="text-xs text-ink-muted hover:text-ink"
-          >
-            view all →
-          </Link>
-        </div>
-        {history.length ? (
-          <div className="mt-2 rounded-md border-[0.5px] border-border bg-raised">
-            {history.map((j, i) => (
-              <div
-                key={j.id}
-                className={`flex items-start gap-4 px-4 py-4 sm:gap-6 sm:px-5 ${i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}`}
-              >
-                <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
-                  <img
-                    src={jobImageSrc(j)}
-                    alt=""
-                    loading="lazy"
-                    className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"
+          <Module number="02" title="Slips" flush>
+            {slips.map(({ module, record }) => {
+              const title = module.meta?.title || module.id;
+              return (
+                <Row key={module.id} tight off={!record.enabled}>
+                  <RowText
+                    title={title}
+                    sub={runLabel({ module, record }, now)}
                   />
-                </div>
-                <div className="min-w-0 grow">
-                  {/* the ledger line: name……………status · time share ONE
-                      baseline so the leader runs into the rail text */}
-                  <div className="flex min-w-0 items-baseline">
-                    <div className="truncate font-mono text-[13px] text-ink">
-                      {j.name || j.id}
-                    </div>
-                    <span className="leader" aria-hidden="true" />
-                    <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs sm:inline">
-                      <span className={statusColor(j.status)}>{j.status}</span>
-                      <span className="text-ink-faint">
-                        {' '}
-                        · {agoShort(j.createdAt)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-ink-muted">
-                    {j.source || '—'}
-                  </div>
-                  <div className="mt-2 whitespace-nowrap font-mono text-xs sm:hidden">
-                    <span className={statusColor(j.status)}>{j.status}</span>
-                    <span className="text-ink-faint">
-                      {' '}
-                      · {agoShort(j.createdAt)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-ink-faint">Nothing printed yet.</p>
-        )}
-      </section>
-    </div>
+                  <SlipSwitch
+                    id={module.id}
+                    title={title}
+                    enabled={record.enabled}
+                  />
+                </Row>
+              );
+            })}
+            {slips.length === 0 ? (
+              <Row>
+                <Note>No slips set up yet.</Note>
+              </Row>
+            ) : null}
+            <Link href="/slips" className="hw-link px-4 py-3.5 text-[15px]">
+              All slips
+            </Link>
+          </Module>
+        </aside>
+      </div>
+    </>
   );
 }

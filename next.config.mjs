@@ -48,6 +48,24 @@ const nextConfig = {
     '/api/jobs/reprint': ['./render/fonts/**'],
     '/api/slips/print-test': ['./render/fonts/**'],
   },
+  // The kit's sprites (public/hardware/*.png) are cached for good: a page
+  // load then sends no request for them, and each request counts against
+  // the CDN's monthly cap (docs/store-costs.md). Next serves public files
+  // with max-age=0 otherwise. Give a sprite a new file name whenever its
+  // pixels change, or browsers keep the old one.
+  async headers() {
+    return [
+      {
+        source: '/hardware/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
   // Old bookmarks: the dashboard used to live under /dashboard/*, and the
   // Slips page was briefly at /recipes. Send both to their current homes.
   async redirects() {

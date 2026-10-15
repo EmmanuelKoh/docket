@@ -299,7 +299,7 @@ describe('third-party files', () => {
     expect(notices).toContain('`components/tape-renderer.js`');
     expect(notices).toContain('`scripts/tape-glyphs/gen-glyphs.mjs`');
     expect(notices).toContain('SIL OPEN FONT LICENSE Version 1.1');
-    expect(notices).toContain('`components/ui/*.tsx`');
+    expect(notices).toContain('the `cn` helper in `components/utils.ts`');
     expect(notices).toContain('Copyright (c) 2023 shadcn');
   });
 

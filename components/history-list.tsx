@@ -1,212 +1,302 @@
 'use client';
 
-// History rows in one list container. Clicking a row expands an inset
-// panel (--page bg, indented past the thumbnail): PRINTED (the receipt
-// PNG at 200px), TEMPLATE (truncated source), DATA (the JSON), plus a
-// Reprint button for reprintable rows (raw jobs such as Tape prints have
-// no template to re-render). Detail loads on first expand from
-// /api/jobs/detail.
+// History rows: one list per day (the page puts each day in a module).
+// A row is a button that opens the record under it: the receipt at true
+// size on white paper with the job's stamp pressed on its foot, the
+// template and data it was rendered from (loaded on the first open from
+// /api/jobs/detail), and the red Reprint key. Only a template job can
+// print again: a receipt a tool made (raw bytes, such as a Tape print)
+// has no template, so its record names the tool to print it from. Styles
+// are in app/(dashboard)/history/history.css.
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
-import type { Stamp } from '@/app/_lib/format';
-import { Button } from '@/components/ui/button';
+import { ChevronDown } from 'lucide-react';
+import { useId, useState } from 'react';
+import type { HistoryStamp } from '@/app/_lib/format';
+import { PaperSlip } from '@/components/hardware/paper';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Row } from '@/components/hardware/row';
+import { Stamp } from '@/components/hardware/stamp';
+import { ErrorText, Note } from '@/components/hardware/text';
 
 export type HistoryRow = {
   id: string;
-  image: string; // the receipt PNG's src (app/_lib/format.ts jobImageSrc)
+  /** The receipt PNG's src (app/_lib/format.ts jobImageSrc) */
+  image: string;
+  /** Intrinsic size of the PNG, so the receipt reserves its space */
+  width: number;
+  height?: number;
   name: string;
-  sub: string;
-  statusText: string;
-  statusColor: string;
-  stamp: Stamp; // how the job ended, pressed onto the expanded receipt
-  railTime: string;
+  /** Where the job came from, as captions name it ("Text messages"); '' if none */
+  source: string;
+  /** When it printed (or was made), "17:30" in the viewer's time zone */
+  time: string;
+  /** How the job ended */
+  stamp: HistoryStamp | null;
+  /** "2 failed attempts", or '' */
+  attempts: string;
   reprintable: boolean;
 };
 
-type Detail = { template: string; dataJson: string };
+type Detail =
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'ready'; template: string; dataJson: string };
 
-// The rubber stamp pressed onto the expanded receipt: how the job ended
-// (app/_lib/format.ts historyStamp).
-export function HistoryStamp({ stamp }: { stamp: Stamp }) {
-  return (
-    <span
-      className={`stamp bite absolute top-2 right-2 ${stamp.red ? 'stamp-red' : ''}`}
-    >
-      {stamp.text}
-    </span>
-  );
-}
+type Reprint = { busy: boolean; text: string; error: boolean };
+
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function HistoryList({ rows }: { rows: HistoryRow[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [details, setDetails] = useState<Record<string, Detail | null>>({});
-  const [reprintStatus, setReprintStatus] = useState<Record<string, string>>(
-    {},
-  );
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [details, setDetails] = useState<Record<string, Detail>>({});
+  const [reprints, setReprints] = useState<Record<string, Reprint>>({});
 
-  async function toggle(id: string) {
-    const next = openId === id ? null : id;
-    setOpenId(next);
-    if (next && details[next] === undefined) {
-      setDetails((d) => ({ ...d, [next]: null })); // loading
-      try {
-        const res = await fetch(
-          `/api/jobs/detail?job=${encodeURIComponent(next)}`,
-        );
-        const data = res.ok ? await res.json() : null;
-        setDetails((d) => ({ ...d, [next]: data }));
-      } catch {
-        setDetails((d) => ({ ...d, [next]: null }));
-      }
+  async function loadDetail(id: string) {
+    setDetails((d) => ({ ...d, [id]: { state: 'loading' } }));
+    try {
+      const res = await fetch(`/api/jobs/detail?job=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setDetails((d) => ({
+        ...d,
+        [id]: {
+          state: 'ready',
+          template: data.template ?? '',
+          dataJson: data.dataJson ?? '',
+        },
+      }));
+    } catch {
+      setDetails((d) => ({ ...d, [id]: { state: 'error' } }));
+    }
+  }
+
+  function toggle(row: HistoryRow) {
+    const next = !open[row.id];
+    setOpen((o) => ({ ...o, [row.id]: next }));
+    // A tool's receipt has no template or data to show
+    const detail = details[row.id];
+    if (next && row.reprintable && (!detail || detail.state === 'error')) {
+      loadDetail(row.id);
     }
   }
 
   async function reprint(id: string) {
-    setReprintStatus((s) => ({ ...s, [id]: 'queueing…' }));
+    setReprints((r) => ({
+      ...r,
+      [id]: { busy: true, text: '', error: false },
+    }));
+    let result: Reprint;
     try {
       const res = await fetch(
         `/api/jobs/reprint?job=${encodeURIComponent(id)}`,
         { method: 'POST' },
       );
-      const data = await res.json();
-      setReprintStatus((s) => ({
-        ...s,
-        [id]: res.ok ? 'queued' : data.error || 'reprint failed',
-      }));
+      const data = await res.json().catch(() => ({}));
+      result = res.ok
+        ? { busy: false, text: 'Sent to the printer.', error: false }
+        : {
+            busy: false,
+            text: data.error ? sentence(data.error) : 'Not sent. Try again.',
+            error: true,
+          };
     } catch {
-      setReprintStatus((s) => ({ ...s, [id]: 'reprint failed' }));
+      result = { busy: false, text: 'No connection. Try again.', error: true };
     }
-  }
-
-  if (!rows.length) {
-    return (
-      <div className="rounded-md border-[0.5px] border-border bg-raised px-5 py-8 text-center text-sm text-ink-faint">
-        Nothing here yet.
-      </div>
-    );
+    setReprints((r) => ({ ...r, [id]: result }));
   }
 
   return (
-    <div className="rounded-md border-[0.5px] border-border bg-raised">
-      {rows.map((row, i) => {
-        const open = openId === row.id;
-        const detail = details[row.id];
-        const status = reprintStatus[row.id];
-        return (
-          <div
-            key={row.id}
-            className={i > 0 ? 'border-t-[0.5px] border-t-hairline' : ''}
-          >
-            {/* Phones: thumbnail shrinks one step (96x64) and status·time
-                moves under the name; the fixed rail exists from sm up. */}
-            <button
-              type="button"
-              onClick={() => toggle(row.id)}
-              className="flex w-full items-start gap-4 px-4 py-4 text-left sm:gap-6 sm:px-5"
-            >
-              <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
-                <img
-                  src={row.image}
-                  alt=""
-                  loading="lazy"
-                  className="h-16 w-24 object-contain sm:h-[86px] sm:w-[130px]"
-                />
-              </div>
-              <div className="min-w-0 grow pt-0.5">
-                {/* the ledger line: name……………status · time share ONE
-                    baseline so the leader runs into the rail text */}
-                <div className="flex min-w-0 items-baseline">
-                  <div className="truncate font-mono text-[13px] text-ink">
-                    {row.name}
-                  </div>
-                  <span className="leader" aria-hidden="true" />
-                  <span className="hidden shrink-0 whitespace-nowrap font-mono text-xs sm:inline">
-                    <span className={row.statusColor}>{row.statusText}</span>
-                    <span className="text-ink-faint"> · {row.railTime}</span>
-                  </span>
-                </div>
-                <div className="mt-0.5 text-xs text-ink-muted">{row.sub}</div>
-                <div className="mt-2 whitespace-nowrap font-mono text-xs sm:hidden">
-                  <span className={row.statusColor}>{row.statusText}</span>
-                  <span className="text-ink-faint"> · {row.railTime}</span>
-                </div>
-              </div>
-              <span className="pt-0.5 text-ink-faint">
-                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </span>
-            </button>
+    <ul className="history-rows">
+      {rows.map((row, i) => (
+        <HistoryItem
+          key={row.id}
+          row={row}
+          alt={i % 2 === 1}
+          open={!!open[row.id]}
+          detail={details[row.id]}
+          reprint={reprints[row.id]}
+          onToggle={() => toggle(row)}
+          onReprint={() => reprint(row.id)}
+        />
+      ))}
+    </ul>
+  );
+}
 
-            {open ? (
-              <div className="bg-page px-5 py-4 sm:pl-[162px]">
-                <div className="grid gap-5 sm:grid-cols-[auto_1fr_1fr]">
-                  <div>
-                    <div className="text-[13px] font-semibold text-ink">
-                      Printed
-                    </div>
-                    {/* the terminal state is STAMPED on the record —
-                        rotated, ink-starved; red only for failure */}
-                    <div className="relative mt-2 inline-block rounded-[2px] border-[0.5px] border-border bg-white p-1">
-                      <img
-                        src={row.image}
-                        alt={row.name}
-                        className="w-[200px]"
-                      />
-                      <HistoryStamp stamp={row.stamp} />
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-semibold text-ink">
-                      Template
-                    </div>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
-                      {detail === undefined || detail === null
-                        ? detail === null && open
-                          ? 'loading…'
-                          : ''
-                        : detail.template}
-                    </pre>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-semibold text-ink">
-                      Data
-                    </div>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-ink-muted">
-                      {detail?.dataJson || ''}
-                    </pre>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-end gap-3">
-                  {row.reprintable ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-auto px-3 py-1.5 text-xs"
-                      onClick={() => reprint(row.id)}
+function HistoryItem({
+  row,
+  alt,
+  open,
+  detail,
+  reprint,
+  onToggle,
+  onReprint,
+}: {
+  row: HistoryRow;
+  alt: boolean;
+  open: boolean;
+  detail?: Detail;
+  reprint?: Reprint;
+  onToggle: () => void;
+  onReprint: () => void;
+}) {
+  const id = useId();
+  const nameId = `${id}-name`;
+  const sourceId = `${id}-source`;
+  const stampId = `${id}-stamp`;
+  const timeId = `${id}-time`;
+  const recordId = `${id}-record`;
+  // The button reads as "Budget, Reprint, Printed, 17:30"; the thumbnail's
+  // alt text would only repeat the name
+  const labelledBy = [
+    nameId,
+    row.source ? sourceId : '',
+    row.stamp ? stampId : '',
+    timeId,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <Row as="li" className="history-item">
+      <button
+        type="button"
+        className="history-toggle"
+        aria-expanded={open}
+        aria-controls={open ? recordId : undefined}
+        aria-labelledby={labelledBy}
+        onClick={onToggle}
+      >
+        <span className="hw-thumb history-thumb">
+          <img
+            src={row.image}
+            alt={`${row.name} receipt`}
+            width={row.width}
+            height={row.height}
+            loading="lazy"
+            decoding="async"
+          />
+        </span>
+        <span className="history-text">
+          <span className="history-name" id={nameId}>
+            {row.name}
+          </span>
+          {row.source ? (
+            <span className="hw-row-sub" id={sourceId}>
+              {row.source}
+            </span>
+          ) : null}
+          {row.attempts ? (
+            <span className="hw-note">{row.attempts}</span>
+          ) : null}
+        </span>
+        <span className="history-rail">
+          {row.stamp ? (
+            <Stamp id={stampId} state={row.stamp} alt={alt} />
+          ) : null}
+          <span className="hw-mono history-time" id={timeId}>
+            {row.time}
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="history-chevron"
+          size={18}
+          strokeWidth={2}
+        />
+      </button>
+
+      {open ? (
+        <div id={recordId} className="history-record">
+          <div className="history-record-grid">
+            <div className="history-slip">
+              <PaperSlip
+                src={row.image}
+                alt={`${row.name} receipt, full size`}
+                width={row.width}
+                height={row.height}
+                tear="solo"
+              >
+                {row.stamp ? (
+                  <Stamp
+                    state={row.stamp}
+                    alt={alt}
+                    paper
+                    className="history-paper-stamp"
+                  />
+                ) : null}
+              </PaperSlip>
+            </div>
+
+            <div className="history-actions">
+              {row.reprintable ? (
+                <>
+                  <KeyGroup>
+                    <PushKey
+                      variant="print"
+                      onClick={onReprint}
+                      disabled={reprint?.busy}
                     >
                       Reprint
-                    </Button>
-                  ) : null}
-                  {status ? (
-                    <span
-                      className={`font-mono text-xs ${status.includes('failed') ? 'text-red' : 'text-ink-muted'}`}
-                    >
-                      {status}
-                    </span>
-                  ) : null}
-                  {/* the record signs off with its id as a false barcode */}
-                  <span className="ml-auto hidden flex-col items-end gap-1 sm:flex">
-                    <span className="barcode" aria-hidden="true" />
-                    <span className="font-mono text-[10.5px] tracking-[0.3em] text-ink-muted">
-                      {row.id.toUpperCase()}
-                    </span>
+                    </PushKey>
+                  </KeyGroup>
+                  <span
+                    role="status"
+                    className={reprint?.error ? 'hw-error' : 'hw-note'}
+                  >
+                    {reprint?.text}
                   </span>
-                </div>
-              </div>
-            ) : null}
+                </>
+              ) : (
+                <Note>
+                  Print it again from {row.source || 'the tool that made it'}.
+                </Note>
+              )}
+            </div>
+
+            {row.reprintable ? <Inputs detail={detail} /> : null}
           </div>
-        );
-      })}
+        </div>
+      ) : null}
+    </Row>
+  );
+}
+
+// What the receipt was rendered from, in a read-only mono window: the
+// template's source or the data (both clipped by jobs.detail). Two keys
+// choose which, as in the Studio.
+function Inputs({ detail }: { detail?: Detail }) {
+  const [tab, setTab] = useState<'template' | 'data'>('template');
+  if (detail?.state !== 'ready') {
+    return (
+      <div className="history-inputs">
+        {detail?.state === 'error' ? (
+          <ErrorText>
+            Template and data not loaded. Close the record and open it again.
+          </ErrorText>
+        ) : (
+          <Note>Loading the template and data…</Note>
+        )}
+      </div>
+    );
+  }
+  const text = (tab === 'template' ? detail.template : detail.dataJson).trim();
+  return (
+    <div className="history-inputs">
+      <KeyGroup>
+        {(['template', 'data'] as const).map((t) => (
+          <PushKey
+            key={t}
+            size="compact"
+            down={tab === t}
+            aria-pressed={tab === t}
+            onClick={() => setTab(t)}
+          >
+            {t === 'template' ? 'Template' : 'Data'}
+          </PushKey>
+        ))}
+      </KeyGroup>
+      <pre className="history-readout">{text || 'None'}</pre>
     </div>
   );
 }

@@ -1,0 +1,677 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T09:09:09.672Z",
+  "title": "Design System: DOCKET",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Graph Paper Stock",
+        "canonical": "#e8e6e1",
+        "oklch": "oklch(92.5% 0.007 88.6)",
+        "dark": "#262522",
+        "cssVar": "--ground",
+        "tonalRamp": [
+          "oklch(15% 0.007 88.6)",
+          "oklch(26% 0.007 88.6)",
+          "oklch(37% 0.007 88.6)",
+          "oklch(48% 0.007 88.6)",
+          "oklch(60% 0.007 88.6)",
+          "oklch(71% 0.007 88.6)",
+          "oklch(83% 0.007 88.6)",
+          "oklch(95% 0.007 88.6)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Painted Panel",
+        "canonical": "#f0efeb",
+        "oklch": "oklch(95.2% 0.005 95.1)",
+        "dark": "#2f2e2b",
+        "cssVar": "--panel",
+        "tonalRamp": [
+          "oklch(15% 0.005 95.1)",
+          "oklch(26% 0.005 95.1)",
+          "oklch(37% 0.005 95.1)",
+          "oklch(48% 0.005 95.1)",
+          "oklch(60% 0.005 95.1)",
+          "oklch(71% 0.005 95.1)",
+          "oklch(83% 0.005 95.1)",
+          "oklch(95% 0.005 95.1)"
+        ]
+      },
+      "key": {
+        "role": "neutral",
+        "displayName": "Matte Key",
+        "canonical": "#ebe7de",
+        "oklch": "oklch(92.9% 0.013 86.8)",
+        "dark": "#4b4a46",
+        "cssVar": "--key",
+        "tonalRamp": [
+          "oklch(15% 0.013 86.8)",
+          "oklch(26% 0.013 86.8)",
+          "oklch(37% 0.013 86.8)",
+          "oklch(48% 0.013 86.8)",
+          "oklch(60% 0.013 86.8)",
+          "oklch(71% 0.013 86.8)",
+          "oklch(83% 0.013 86.8)",
+          "oklch(95% 0.013 86.8)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Thermal Paper",
+        "canonical": "#fefefe",
+        "oklch": "oklch(99.7% 0.000 89.9)",
+        "dark": "#fefefe",
+        "cssVar": "--paper",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(26% 0.000 89.9)",
+          "oklch(37% 0.000 89.9)",
+          "oklch(48% 0.000 89.9)",
+          "oklch(60% 0.000 89.9)",
+          "oklch(71% 0.000 89.9)",
+          "oklch(83% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Label Plate Black",
+        "canonical": "#262523",
+        "oklch": "oklch(26.5% 0.004 84.6)",
+        "dark": "#151413",
+        "cssVar": "--plate",
+        "tonalRamp": [
+          "oklch(15% 0.004 84.6)",
+          "oklch(26% 0.004 84.6)",
+          "oklch(37% 0.004 84.6)",
+          "oklch(48% 0.004 84.6)",
+          "oklch(60% 0.004 84.6)",
+          "oklch(71% 0.004 84.6)",
+          "oklch(83% 0.004 84.6)",
+          "oklch(95% 0.004 84.6)"
+        ]
+      },
+      "plate-ink": {
+        "role": "neutral",
+        "displayName": "Silkscreen",
+        "canonical": "#dedbd4",
+        "oklch": "oklch(89.2% 0.010 87.5)",
+        "dark": "#e2ded4",
+        "cssVar": "--plate-ink",
+        "tonalRamp": [
+          "oklch(15% 0.010 87.5)",
+          "oklch(26% 0.010 87.5)",
+          "oklch(37% 0.010 87.5)",
+          "oklch(48% 0.010 87.5)",
+          "oklch(60% 0.010 87.5)",
+          "oklch(71% 0.010 87.5)",
+          "oklch(83% 0.010 87.5)",
+          "oklch(95% 0.010 87.5)"
+        ]
+      },
+      "cutout": {
+        "role": "neutral",
+        "displayName": "Cutout Black",
+        "canonical": "#151311",
+        "oklch": "oklch(18.8% 0.005 67.5)",
+        "dark": "#090807",
+        "cssVar": "--cutout",
+        "tonalRamp": [
+          "oklch(15% 0.005 67.5)",
+          "oklch(26% 0.005 67.5)",
+          "oklch(37% 0.005 67.5)",
+          "oklch(48% 0.005 67.5)",
+          "oklch(60% 0.005 67.5)",
+          "oklch(71% 0.005 67.5)",
+          "oklch(83% 0.005 67.5)",
+          "oklch(95% 0.005 67.5)"
+        ]
+      },
+      "printed-ink": {
+        "role": "neutral",
+        "displayName": "Printed Ink",
+        "canonical": "#262420",
+        "oklch": "oklch(26.1% 0.008 84.6)",
+        "dark": "#e2ded4",
+        "cssVar": "--printed-ink",
+        "tonalRamp": [
+          "oklch(15% 0.008 84.6)",
+          "oklch(26% 0.008 84.6)",
+          "oklch(37% 0.008 84.6)",
+          "oklch(48% 0.008 84.6)",
+          "oklch(60% 0.008 84.6)",
+          "oklch(71% 0.008 84.6)",
+          "oklch(83% 0.008 84.6)",
+          "oklch(95% 0.008 84.6)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#161616",
+        "oklch": "oklch(20.0% 0.000 89.9)",
+        "dark": "#ece9e2",
+        "cssVar": "--ink",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(26% 0.000 89.9)",
+          "oklch(37% 0.000 89.9)",
+          "oklch(48% 0.000 89.9)",
+          "oklch(60% 0.000 89.9)",
+          "oklch(71% 0.000 89.9)",
+          "oklch(83% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#4a4741",
+        "oklch": "oklch(39.9% 0.011 84.6)",
+        "dark": "#b5b1a7",
+        "cssVar": "--ink-muted",
+        "tonalRamp": [
+          "oklch(15% 0.011 84.6)",
+          "oklch(26% 0.011 84.6)",
+          "oklch(37% 0.011 84.6)",
+          "oklch(48% 0.011 84.6)",
+          "oklch(60% 0.011 84.6)",
+          "oklch(71% 0.011 84.6)",
+          "oklch(83% 0.011 84.6)",
+          "oklch(95% 0.011 84.6)"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#5d5a53",
+        "oklch": "oklch(46.8% 0.012 87.5)",
+        "dark": "#a29e94",
+        "cssVar": "--ink-faint",
+        "tonalRamp": [
+          "oklch(15% 0.012 87.5)",
+          "oklch(26% 0.012 87.5)",
+          "oklch(37% 0.012 87.5)",
+          "oklch(48% 0.012 87.5)",
+          "oklch(60% 0.012 87.5)",
+          "oklch(71% 0.012 87.5)",
+          "oklch(83% 0.012 87.5)",
+          "oklch(95% 0.012 87.5)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d8d5ce",
+        "oklch": "oklch(87.3% 0.010 87.5)",
+        "dark": "#44433f",
+        "cssVar": "--hairline",
+        "tonalRamp": [
+          "oklch(15% 0.010 87.5)",
+          "oklch(26% 0.010 87.5)",
+          "oklch(37% 0.010 87.5)",
+          "oklch(48% 0.010 87.5)",
+          "oklch(60% 0.010 87.5)",
+          "oklch(71% 0.010 87.5)",
+          "oklch(83% 0.010 87.5)",
+          "oklch(95% 0.010 87.5)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "#bdb9b0",
+        "oklch": "oklch(78.6% 0.013 86.8)",
+        "dark": "#4f4d48",
+        "cssVar": "--border",
+        "tonalRamp": [
+          "oklch(15% 0.013 86.8)",
+          "oklch(26% 0.013 86.8)",
+          "oklch(37% 0.013 86.8)",
+          "oklch(48% 0.013 86.8)",
+          "oklch(60% 0.013 86.8)",
+          "oklch(71% 0.013 86.8)",
+          "oklch(83% 0.013 86.8)",
+          "oklch(95% 0.013 86.8)"
+        ]
+      },
+      "dash": {
+        "role": "neutral",
+        "displayName": "Dashed Rule",
+        "canonical": "#a9a69e",
+        "oklch": "oklch(72.5% 0.012 89.8)",
+        "dark": "#5a5854",
+        "cssVar": "--dash",
+        "tonalRamp": [
+          "oklch(15% 0.012 89.8)",
+          "oklch(26% 0.012 89.8)",
+          "oklch(37% 0.012 89.8)",
+          "oklch(48% 0.012 89.8)",
+          "oklch(60% 0.012 89.8)",
+          "oklch(71% 0.012 89.8)",
+          "oklch(83% 0.012 89.8)",
+          "oklch(95% 0.012 89.8)"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field White",
+        "canonical": "#f8f7f4",
+        "oklch": "oklch(97.6% 0.004 91.4)",
+        "dark": "#1b1a18",
+        "cssVar": "--field",
+        "tonalRamp": [
+          "oklch(15% 0.004 91.4)",
+          "oklch(26% 0.004 91.4)",
+          "oklch(37% 0.004 91.4)",
+          "oklch(48% 0.004 91.4)",
+          "oklch(60% 0.004 91.4)",
+          "oklch(71% 0.004 91.4)",
+          "oklch(83% 0.004 91.4)",
+          "oklch(95% 0.004 91.4)"
+        ]
+      },
+      "field-edge": {
+        "role": "neutral",
+        "displayName": "Field Edge",
+        "canonical": "#2a2926",
+        "oklch": "oklch(28.1% 0.006 91.6)",
+        "dark": "#0d0c0b",
+        "cssVar": "--field-edge",
+        "tonalRamp": [
+          "oklch(15% 0.006 91.6)",
+          "oklch(26% 0.006 91.6)",
+          "oklch(37% 0.006 91.6)",
+          "oklch(48% 0.006 91.6)",
+          "oklch(60% 0.006 91.6)",
+          "oklch(71% 0.006 91.6)",
+          "oklch(83% 0.006 91.6)",
+          "oklch(95% 0.006 91.6)"
+        ]
+      },
+      "legend-disabled": {
+        "role": "neutral",
+        "displayName": "Worn Legend",
+        "canonical": "#a29d92",
+        "oklch": "oklch(69.7% 0.017 86.4)",
+        "dark": "#85817a",
+        "cssVar": "--legend-disabled",
+        "tonalRamp": [
+          "oklch(15% 0.017 86.4)",
+          "oklch(26% 0.017 86.4)",
+          "oklch(37% 0.017 86.4)",
+          "oklch(48% 0.017 86.4)",
+          "oklch(60% 0.017 86.4)",
+          "oklch(71% 0.017 86.4)",
+          "oklch(83% 0.017 86.4)",
+          "oklch(95% 0.017 86.4)"
+        ]
+      },
+      "red": {
+        "role": "primary",
+        "displayName": "Register Red",
+        "canonical": "#b3261e",
+        "oklch": "oklch(50.1% 0.178 28.7)",
+        "dark": "#f27462",
+        "cssVar": "--red",
+        "tonalRamp": [
+          "oklch(15% 0.178 28.7)",
+          "oklch(26% 0.178 28.7)",
+          "oklch(37% 0.178 28.7)",
+          "oklch(48% 0.178 28.7)",
+          "oklch(60% 0.178 28.7)",
+          "oklch(71% 0.178 28.7)",
+          "oklch(83% 0.178 28.7)",
+          "oklch(95% 0.178 28.7)"
+        ]
+      },
+      "key-red": {
+        "role": "primary",
+        "displayName": "Print Key Red",
+        "canonical": "#b5422f",
+        "oklch": "oklch(53.6% 0.153 31.8)",
+        "dark": "#a93f2d",
+        "cssVar": "--key-red",
+        "tonalRamp": [
+          "oklch(15% 0.153 31.8)",
+          "oklch(26% 0.153 31.8)",
+          "oklch(37% 0.153 31.8)",
+          "oklch(48% 0.153 31.8)",
+          "oklch(60% 0.153 31.8)",
+          "oklch(71% 0.153 31.8)",
+          "oklch(83% 0.153 31.8)",
+          "oklch(95% 0.153 31.8)"
+        ]
+      },
+      "flag": {
+        "role": "primary",
+        "displayName": "Flag Red",
+        "canonical": "#d8483a",
+        "oklch": "oklch(60.2% 0.183 29.1)",
+        "dark": "#d6473a",
+        "cssVar": "--flag",
+        "tonalRamp": [
+          "oklch(15% 0.183 29.1)",
+          "oklch(26% 0.183 29.1)",
+          "oklch(37% 0.183 29.1)",
+          "oklch(48% 0.183 29.1)",
+          "oklch(60% 0.183 29.1)",
+          "oklch(71% 0.183 29.1)",
+          "oklch(83% 0.183 29.1)",
+          "oklch(95% 0.183 29.1)"
+        ]
+      },
+      "led-green": {
+        "role": "secondary",
+        "displayName": "Lit LED Green",
+        "canonical": "#9be41f",
+        "oklch": "oklch(83.9% 0.217 129.6)",
+        "dark": "#9be41f",
+        "cssVar": "--led-green",
+        "tonalRamp": [
+          "oklch(15% 0.217 129.6)",
+          "oklch(26% 0.217 129.6)",
+          "oklch(37% 0.217 129.6)",
+          "oklch(48% 0.217 129.6)",
+          "oklch(60% 0.217 129.6)",
+          "oklch(71% 0.217 129.6)",
+          "oklch(83% 0.217 129.6)",
+          "oklch(95% 0.217 129.6)"
+        ]
+      },
+      "switch-on": {
+        "role": "tertiary",
+        "displayName": "Switch Orange",
+        "canonical": "#cf6d2f",
+        "oklch": "oklch(63.8% 0.144 49.6)",
+        "dark": "#cf6d2f",
+        "cssVar": "--switch-on",
+        "tonalRamp": [
+          "oklch(15% 0.144 49.6)",
+          "oklch(26% 0.144 49.6)",
+          "oklch(37% 0.144 49.6)",
+          "oklch(48% 0.144 49.6)",
+          "oklch(60% 0.144 49.6)",
+          "oklch(71% 0.144 49.6)",
+          "oklch(83% 0.144 49.6)",
+          "oklch(95% 0.144 49.6)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles, printed in ink on the ground. 48px at 640px and below."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "\"DOCKET\" at the top of the panel."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The main object in a module, such as the printer name."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text and field values."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Secondary text; the minimum size for text that is not a legend."
+      },
+      "key-legend": {
+        "displayName": "Key legend",
+        "purpose": "Lever key and push key legends, uppercase."
+      },
+      "plate": {
+        "displayName": "Plate",
+        "purpose": "Module plates: number at the left, name at the right, uppercase."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Small printed labels and switch legends, uppercase."
+      },
+      "mono-data": {
+        "displayName": "Mono data",
+        "purpose": "Times, codes and schedule lines."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "Rubber stamps: Printed, Canceled, Failed."
+      }
+    },
+    "shadows": [
+      {
+        "name": "module",
+        "value": "0 0 0.5px 1px rgba(30, 28, 24, 0.13), 0 1px 0.5px rgba(30, 28, 24, 0.22), 0 2px 3px rgba(30, 28, 24, 0.1), 0 12px 20px -8px rgba(30, 28, 24, 0.16)",
+        "purpose": "A painted module on the ground (--hw-module-shadow)."
+      },
+      {
+        "name": "panel-edge",
+        "value": "1px 0 0 rgba(30, 28, 24, 0.18)",
+        "purpose": "Right edge of the navigation panel; 0 1px 0 when it lies across the top."
+      },
+      {
+        "name": "plate",
+        "value": "inset 0 -1px 0 #0e0d0c",
+        "purpose": "Lower lip of a label plate."
+      },
+      {
+        "name": "field",
+        "value": "inset 0 1px 0 rgba(0, 0, 0, 0.14), 0 1px 0 rgba(255, 255, 255, 0.8)",
+        "purpose": "Text input recess."
+      },
+      {
+        "name": "keys-cutout",
+        "value": "0 0 0 1px rgba(30, 26, 20, 0.32), 0 -1px 0.5px 1px rgba(30, 26, 20, 0.08), 0 1px 0.5px 1px rgba(255, 255, 255, 0.7)",
+        "purpose": "The dark recess that holds push keys."
+      },
+      {
+        "name": "thumbnail",
+        "value": "0 0 0 1px rgba(30, 28, 24, 0.12), 0 1px 2px rgba(30, 28, 24, 0.12)",
+        "purpose": "A small receipt in a row."
+      },
+      {
+        "name": "paper",
+        "value": "drop-shadow(0 0 0.4px rgba(34, 31, 26, 0.2)) drop-shadow(0 1px 1px rgba(34, 31, 26, 0.12)) drop-shadow(0 3px 5px rgba(34, 31, 26, 0.08))",
+        "purpose": "A receipt slip (filter, --hw-paper-shadow)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "lever-key-dip",
+        "value": "transform 0.09s ease-out; rotateY(calc(var(--d) * 9deg))",
+        "purpose": "A lever key dips at its free end; hover 0.3, held or pressed 1."
+      },
+      {
+        "name": "push-key-press",
+        "value": "transform 0.06s ease-out; translateY(calc(var(--d) * 1px))",
+        "purpose": "A push key sinks straight down; hover 0.2, pressed or held 1."
+      },
+      {
+        "name": "switch-cap",
+        "value": "left 0.12s ease-out",
+        "purpose": "The slide switch cap travels between OFF and ON."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition: none",
+        "purpose": "All three transitions stop under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xs",
+        "value": "400px",
+        "purpose": "The version plate hides."
+      },
+      {
+        "name": "phone",
+        "value": "640px",
+        "purpose": "Titles 48px, 16px gutters, list rows wrap."
+      },
+      {
+        "name": "photo-one-column",
+        "value": "720px",
+        "purpose": "The Photo tool goes to one column."
+      },
+      {
+        "name": "panel-across",
+        "value": "875px",
+        "purpose": "The panel lies across the top; lever keys scroll sideways."
+      },
+      {
+        "name": "short-window",
+        "value": "(min-width: 876px) and (max-height: 720px)",
+        "purpose": "The column panel tightens; keys stay 44px."
+      }
+    ],
+    "theming": {
+      "attribute": "html[data-theme=\"dark\"]",
+      "storageKey": "docket-theme",
+      "note": "colorMeta.*.dark holds the dark value of each token. Paper stays #fefefe."
+    },
+    "sourceFiles": [
+      "app/globals.css",
+      "app/hardware.css",
+      "components/hardware/paper.css",
+      "components/hardware/",
+      "app/layout.tsx"
+    ],
+    "behaviorSpec": "docs/design-spec.md holds per-page behavior; DESIGN.md holds tokens and components."
+  },
+  "components": [
+    {
+      "name": "Push Key",
+      "kind": "button",
+      "refersTo": "push-key",
+      "description": "Matte key in a shared dark cutout; sinks 1px when pressed.",
+      "html": "<span class=\"ds-keys\"><button class=\"ds-push\">Test print</button><button class=\"ds-push\">Edit</button></span>",
+      "css": ".ds-keys{display:inline-flex;gap:2px;padding:2px;border-radius:4px;background:linear-gradient(#0e0d0c,#191715 55%,#34302b);box-shadow:0 0 0 1px rgba(30,26,20,.32),0 1px .5px 1px rgba(255,255,255,.7)}.ds-push{--d:0;display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border:0;border-radius:2px;background:var(--key,#ebe7de);color:#34312b;font-family:\"Hanken Grotesk\",Arial,sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.11em;text-transform:uppercase;cursor:pointer;transform:translateY(calc(var(--d)*1px));transition:transform .06s ease-out;box-shadow:inset 0 -2.5px 0 rgba(60,50,34,.16),inset 0 1px 0 rgba(255,255,255,.5)}.ds-push:hover{--d:.2}.ds-push:active{--d:1;box-shadow:inset 0 -.5px 0 rgba(60,50,34,.16),inset 0 2px 3px rgba(60,50,34,.18)}.ds-push:focus-visible{outline:2px solid var(--ink,#161616);outline-offset:4px}"
+    },
+    {
+      "name": "Print Key",
+      "kind": "button",
+      "refersTo": "push-key-print",
+      "description": "The one red key on a screen; it commits a print.",
+      "html": "<span class=\"ds-keys\"><button class=\"ds-print\">Print</button></span>",
+      "css": ".ds-keys{display:inline-flex;padding:2px;border-radius:4px;background:linear-gradient(#0e0d0c,#191715 55%,#34302b)}.ds-print{--d:0;min-height:46px;padding:0 18px;border:0;border-radius:2px;background:var(--key-red,#b5422f);color:#f3e7de;font-family:\"Hanken Grotesk\",Arial,sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.11em;text-transform:uppercase;cursor:pointer;transform:translateY(calc(var(--d)*1px));transition:transform .06s ease-out;box-shadow:inset 0 -2.5px 0 rgba(50,10,4,.18),inset 0 1px 0 rgba(255,226,214,.18)}.ds-print:hover{--d:.2}.ds-print:active{--d:1}.ds-print:focus-visible{outline:2px solid var(--ink,#161616);outline-offset:4px}"
+    },
+    {
+      "name": "Lever Key Bank",
+      "kind": "nav",
+      "refersTo": "lever-key",
+      "description": "Navigation: long keys in a black plate; the current key is held down with a red flag.",
+      "html": "<nav class=\"ds-bank\"><a class=\"ds-lever\" aria-current=\"page\" href=\"#\"><span class=\"ds-flag\"></span><span class=\"ds-face\">Home</span></a><a class=\"ds-lever\" href=\"#\"><span class=\"ds-flag\"></span><span class=\"ds-face\">Slips</span></a><a class=\"ds-lever\" href=\"#\"><span class=\"ds-flag\"></span><span class=\"ds-face\">Studio</span></a></nav>",
+      "css": ".ds-bank{width:236px;padding:8px 8px 8px 0;border-radius:4px;background:var(--plate,#262523)}.ds-lever{--d:0;display:flex;text-decoration:none;color:#34312b;perspective:520px}.ds-lever+.ds-lever{margin-top:2px}.ds-flag{flex:none;width:20px;position:relative}.ds-flag::after{content:\"\";position:absolute;left:8px;top:50%;width:5px;height:16px;margin-top:-8px;border-radius:1px;background:#1a1716}.ds-lever[aria-current] .ds-flag::after{background:var(--flag,#d8483a)}.ds-face{flex:1;display:flex;align-items:center;min-height:50px;padding:0 14px 0 16px;border-radius:0 4px 4px 0;background:var(--key,#ebe7de);font-family:\"Hanken Grotesk\",Arial,sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.12em;text-transform:uppercase;transform-origin:0 50%;transform:rotateY(calc(var(--d)*9deg));transition:transform .09s ease-out}.ds-lever:hover .ds-face{--d:.3}.ds-lever[aria-current] .ds-face,.ds-lever:active .ds-face{--d:1}.ds-lever:focus-visible{outline:none}.ds-lever:focus-visible .ds-face{outline:2px solid var(--ink,#161616);outline-offset:-5px}"
+    },
+    {
+      "name": "Module",
+      "kind": "card",
+      "refersTo": "module",
+      "description": "Painted panel with a numbered black label plate as its heading.",
+      "html": "<section class=\"ds-module\"><h2 class=\"ds-plate\"><span>01</span><span>Printer</span></h2><div class=\"ds-body\"><div class=\"ds-title\">Kitchen printer</div><p class=\"ds-note\">Last seen 5 s ago</p></div></section>",
+      "css": ".ds-module{width:320px;border-radius:2px;background:var(--panel,#f0efeb);color:var(--ink,#161616);box-shadow:0 0 .5px 1px rgba(30,28,24,.13),0 1px .5px rgba(30,28,24,.22),0 2px 3px rgba(30,28,24,.1),0 12px 20px -8px rgba(30,28,24,.16)}.ds-plate{margin:0;display:flex;justify-content:space-between;padding:8px 14px;border-radius:2px 2px 0 0;background:var(--plate,#262523);color:var(--plate-ink,#dedbd4);font-family:\"Martian Mono\",ui-monospace,monospace;font-stretch:82%;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;box-shadow:inset 0 -1px 0 #0e0d0c}.ds-body{display:flex;flex-direction:column;gap:12px;padding:18px 16px 20px;font-family:\"Hanken Grotesk\",Arial,sans-serif}.ds-title{font-size:21px;font-weight:700}.ds-note{margin:0;font-size:14px;color:var(--ink-muted,#4a4741)}"
+    },
+    {
+      "name": "Row with Slide Switch",
+      "kind": "custom",
+      "refersTo": "row-tight",
+      "description": "A slip row: title, mono schedule line, and the OFF/ON slide switch.",
+      "html": "<div class=\"ds-row\"><div class=\"ds-text\"><span class=\"ds-rt\">Morning brief</span><span class=\"ds-sub\">Daily 06:30</span></div><button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\"><span>OFF</span><span class=\"ds-track\"><span class=\"ds-cap\"></span></span><span>ON</span></button></div>",
+      "css": ".ds-row{width:320px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 14px 6px 16px;background:var(--panel,#f0efeb);border-bottom:1px dashed var(--dash,#a9a69e);font-family:\"Hanken Grotesk\",Arial,sans-serif;color:var(--ink,#161616)}.ds-text{display:flex;flex-direction:column}.ds-rt{font-weight:600}.ds-sub{font-family:\"Martian Mono\",monospace;font-stretch:82%;font-size:14px;text-transform:uppercase;color:var(--ink-muted,#4a4741)}.ds-switch{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0;border:0;background:none;cursor:pointer;font-family:\"Martian Mono\",monospace;font-stretch:80%;font-size:12px;font-weight:600;letter-spacing:.06em;color:#2b2925}.ds-track{position:relative;display:block;width:52px;height:22px;border-radius:4px;background:linear-gradient(90deg,#1c1b19 50%,var(--switch-on,#cf6d2f) 50% 62%,#1c1b19 62%)}.ds-switch[aria-checked=\"false\"] .ds-track{background:#1c1b19}.ds-cap{position:absolute;top:0;left:1px;width:27px;height:22px;border-radius:2px;background:repeating-linear-gradient(90deg,#2a2826 0 3px,#4a4743 3px 5px);transition:left .12s ease-out}.ds-switch[aria-checked=\"true\"] .ds-cap{left:25px}.ds-switch:focus-visible .ds-track{outline:2px solid var(--ink,#161616);outline-offset:2px}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Mono text input with a label above, 6px apart.",
+      "html": "<label class=\"ds-group\"><span class=\"ds-label\">Email</span><input class=\"ds-field\" placeholder=\"you@example.com\"></label>",
+      "css": ".ds-group{display:flex;flex-direction:column;gap:6px;width:320px;font-family:\"Hanken Grotesk\",Arial,sans-serif}.ds-label{font-size:14px;font-weight:600;color:var(--ink,#161616)}.ds-field{min-height:46px;padding:0 12px;border:1px solid var(--field-edge,#2a2926);border-radius:2px;background:var(--field,#f8f7f4);box-shadow:inset 0 1px 0 rgba(0,0,0,.14),0 1px 0 rgba(255,255,255,.8);font-family:\"Martian Mono\",monospace;font-stretch:82%;font-size:16px;color:var(--ink,#161616)}.ds-field::placeholder{color:var(--ink-faint,#5d5a53)}.ds-field:focus-visible{outline:2px solid var(--ink,#161616);outline-offset:2px;background:#fff}"
+    },
+    {
+      "name": "LED",
+      "kind": "custom",
+      "refersTo": "led",
+      "description": "A 3mm LED in a black collar: lime when the printer is online.",
+      "html": "<span class=\"ds-led-row\"><span class=\"ds-led ds-on\"></span>Online</span>",
+      "css": ".ds-led-row{display:inline-flex;align-items:center;gap:10px;font-family:\"Hanken Grotesk\",Arial,sans-serif;font-size:16px;color:var(--ink,#161616)}.ds-led{position:relative;display:inline-block;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 50% 30%,#3a3835,#0d0c0b 70%)}.ds-led::before{content:\"\";position:absolute;inset:2.6px;border-radius:50%;background:radial-gradient(circle at 50% 70%,#7d8f5a,#3f4a2c)}.ds-led.ds-on::before{background:radial-gradient(circle at 50% 45%,#f4ffd8,var(--led-green,#9be41f) 55%,#6aa50c)}"
+    },
+    {
+      "name": "Rubber Stamp",
+      "kind": "chip",
+      "refersTo": "stamp",
+      "description": "Outcome stamp on a caption or row: Printed, Canceled, Failed.",
+      "html": "<span class=\"ds-stamp\">Printed</span> <span class=\"ds-stamp ds-fail\">Failed</span>",
+      "css": ".ds-stamp{display:inline-block;border:1.5px solid currentColor;border-radius:1.5px;padding:2px 7px 1px;font-family:\"Big Shoulders\",\"Arial Narrow\",sans-serif;font-variation-settings:\"opsz\" 72;font-weight:734;font-size:14px;letter-spacing:.12em;line-height:1.1;text-transform:uppercase;color:#35343a;transform:rotate(-3deg);mix-blend-mode:multiply;opacity:.92}.ds-fail{color:#9c1f18}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Printer's Own Control Deck",
+    "overview": "Each page is a set of hardware parts on a printed ground. The ground is warm grey graph paper in light and a dark cutting mat in dark. On it sit painted panels with black label plates, a bank of matte lever keys with a red flag window, matte push keys in a shared dark cutout, an LED in a black collar, a ribbed slide switch, rubber stamps, and the real receipts at true size under the printer's front edge.\n\nThe parts get their depth from their material: soft shadows, a hammer finish on panels, mottle and grain on keys, and sprites rendered offline for the switch, the LED collar and the printer edge (`public/hardware/`). Text printed on the ground multiplies into the stock and wears a little. Legends on hardware parts print in capitals. Motion is short mechanical travel: a key dips, a cap slides, and nothing fades or springs.\n\nThe kit is `app/hardware.css` (every class has the `hw-` prefix) and `components/hardware/paper.css` (printer edge, roll, slip, torn edges), with React parts in `components/hardware/`. The dark theme is the black edition of the same machine, set by `data-theme=\"dark\"` on `<html>`.",
+    "keyCharacteristics": [
+      "A printed graph-paper ground, never a flat fill.",
+      "Panels with black mono label plates, numbered 01, 02, 03 in page order.",
+      "Receipts at true size (576px image) on white paper in both themes.",
+      "Uppercase tracked legends on every hardware part.",
+      "Three accents with fixed jobs: red, green, orange."
+    ],
+    "rules": [
+      {
+        "name": "The Fixed Jobs Rule",
+        "body": "Red marks only the current page, printing, failures and errors, waiting jobs, the one print key, live audio in Tape and the Tape selection halo. Green is only the online LED. Orange is only the ON mark of a switch. The full list is in `docs/design-spec.md`, accent rules.",
+        "section": "colors"
+      },
+      {
+        "name": "The On Is Not Red Rule",
+        "body": "A slip that is on shows the switch position and its orange mark. A working slip is normal, not an alert.",
+        "section": "colors"
+      },
+      {
+        "name": "The White Paper Rule",
+        "body": "Paper, thumbnails and stamps pressed on paper keep the light values in both themes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Capitals By CSS Rule",
+        "body": "Write legends, plates, titles and stamps in sentence case in the source. CSS sets the capitals. Unit symbols inside a legend keep their case (\"2 h\", \"274 px\").",
+        "section": "typography"
+      },
+      {
+        "name": "The 12px Floor Rule",
+        "body": "12px is only for mono legends in capitals. All other text is 14px or larger.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lit From Above Rule",
+        "body": "All light falls from the top. A gradient on a part models that light on its material and is never decoration.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Soft Shadow Rule",
+        "body": "Shadows are soft and close. Hard offset shadows are not part of this world.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the `hw-` kit classes and the `components/hardware/` parts before you write new CSS.",
+      "Do put every theme-dependent value in a custom property on `:root` and override it under `html[data-theme=\"dark\"]`.",
+      "Do print text on the ground with the ink treatment and text on a panel plain.",
+      "Do number module plates 01, 02, 03 in page order and set hardware legends in uppercase tracked type.",
+      "Do keep receipt images at 576px wide and pixel-exact.",
+      "Do keep keys and switches 44px or taller.",
+      "Do remove masks and blends under `forced-colors: active`, and remove transitions under `prefers-reduced-motion: reduce`."
+    ],
+    "donts": [
+      "Don't use stat cards, a sidebar of icon links, pills or chips in the interface.",
+      "Don't use hard offset shadows or gradients that do not model light on a material.",
+      "Don't make a key red unless it commits a print, and don't make On red.",
+      "Don't use fades or springs; motion is short mechanical travel.",
+      "Don't add a button that repeats the default action of an object that is already clickable.",
+      "Don't set text that is not a mono legend below 14px."
+    ]
+  }
+}

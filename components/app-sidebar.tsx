@@ -1,104 +1,98 @@
 'use client';
 
-// The app sidebar — collapsible to an icon rail (byos_next's shell
-// pattern), styled by the docket spec: quiet ink-muted items, the active
-// item gains ink text plus a 1.5px register-red bar at its left edge (the
-// vertical cousin of the legacy nav's red underline). The queue item
-// carries a count badge, red only when nonzero (red-usage rule 4): the
-// layout passes it in as a server-rendered slot that streams in on its
-// own (app/(dashboard)/queue-badge.tsx).
+// The panel: the dashboard's main navigation (design spec: shell). On a
+// wide screen it is a column at the left: the DOCKET wordmark with the
+// version, the bank of lever keys, then the Dark switch, Sign out and the
+// printer line at the foot. At 875px and below it lies across the top:
+// wordmark and Dark switch, the keys as one row that scrolls sideways,
+// then the printer line and Sign out. The key for the current page stays
+// down with its red flag lit (KeyBank reads the URL). The layout passes
+// the printer line in as a slot that streams in on its own
+// (app/(dashboard)/printer-status.tsx).
 
-import {
-  AudioLines,
-  Camera,
-  History,
-  House,
-  Layers,
-  Printer,
-  ReceiptText,
-  Users,
-} from 'lucide-react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-} from '@/components/ui/sidebar';
+import { useEffect, useRef } from 'react';
+import { type BankKey, KeyBank } from '@/components/hardware/key-bank';
+import { ThemeSwitch } from '@/components/theme-switch';
 
-const NAV = [
-  { title: 'Overview', url: '/', icon: House },
-  { title: 'Slips', url: '/slips', icon: ReceiptText },
-  { title: 'Photo', url: '/photo', icon: Camera },
-  { title: 'Tape', url: '/tape', icon: AudioLines },
-  { title: 'Queue', url: '/queue', icon: Layers },
-  { title: 'History', url: '/history', icon: History },
-  { title: 'Printer', url: '/printer', icon: Printer },
+const KEYS: readonly BankKey[] = [
+  { href: '/', label: 'Home' },
+  { href: '/slips', label: 'Slips' },
+  { href: '/studio', label: 'Studio' },
+  { href: '/photo', label: 'Photo' },
+  { href: '/tape', label: 'Tape' },
+  { href: '/history', label: 'History' },
+  { href: '/printer', label: 'Printer' },
+];
+const ADMIN_KEYS: readonly BankKey[] = [
+  ...KEYS,
+  { href: '/users', label: 'Users' },
 ];
 
-const ACTIVE_BAR =
-  'relative data-[active=true]:text-ink ' +
-  "data-[active=true]:before:absolute data-[active=true]:before:content-[''] " +
-  'data-[active=true]:before:left-0 data-[active=true]:before:top-1.5 ' +
-  'data-[active=true]:before:bottom-1.5 data-[active=true]:before:w-[1.5px] ' +
-  'data-[active=true]:before:bg-red';
-
 export function AppSidebar({
-  queueBadge = null,
+  status = null,
   isAdmin = false,
+  version,
 }: {
-  queueBadge?: React.ReactNode;
+  /** The printer line: LED, name and state. */
+  status?: React.ReactNode;
   isAdmin?: boolean;
+  /** Shown beside the wordmark, such as "v0.1.0". */
+  version?: string;
 }) {
   const pathname = usePathname();
-  const nav = isAdmin
-    ? [...NAV, { title: 'Users', url: '/users', icon: Users }]
-    : NAV;
+  const bankRef = useRef<HTMLDivElement>(null);
+
+  // When the keys scroll sideways (narrow screens), bring the current
+  // key into view: on a phone, History or Printer starts out of sight.
+  // It runs again on each page change (pathname).
+  useEffect(() => {
+    const row = bankRef.current?.querySelector<HTMLElement>('.hw-keybank');
+    const key = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !key || row.scrollWidth <= row.clientWidth) return;
+    const left = key.offsetLeft - (row.clientWidth - key.offsetWidth) / 2;
+    row.scrollTo({ left: Math.max(0, left) });
+  }, [pathname]);
+
+  // A key that takes focus while only partly in view scrolls fully into
+  // view. The browser scrolls only a key that is out of sight, so a
+  // half-hidden key would keep half its focus ring under the plate rim.
+  useEffect(() => {
+    const bank = bankRef.current;
+    if (!bank) return;
+    const onFocus = (e: FocusEvent) => {
+      (e.target as HTMLElement)
+        .closest('.hw-key')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    };
+    bank.addEventListener('focusin', onFocus);
+    return () => bank.removeEventListener('focusin', onFocus);
+  }, []);
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <Link
-          href="/"
-          className="px-2 py-1.5 font-mono text-sm font-medium tracking-[0.14em] text-ink group-data-[collapsible=icon]:hidden"
-        >
-          DOCKET
-        </Link>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {nav.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      pathname === item.url ||
-                      (item.url !== '/' && pathname.startsWith(`${item.url}/`))
-                    }
-                    tooltip={item.title}
-                    className={ACTIVE_BAR}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="text-ink-faint" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {item.url === '/queue' ? queueBadge : null}
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+    <nav aria-label="Main" className="hw-panel hw-side">
+      <div className="hw-side-brand">
+        <span className="hw-wordmark">DOCKET</span>
+        {version ? (
+          <span className="hw-side-version hw-mono">{version}</span>
+        ) : null}
+      </div>
+      <div className="hw-side-bank" ref={bankRef}>
+        <KeyBank keys={isAdmin ? ADMIN_KEYS : KEYS} />
+      </div>
+      <div className="hw-side-tools">
+        <div className="hw-side-theme">
+          <span className="hw-label" aria-hidden="true">
+            Dark
+          </span>
+          <ThemeSwitch />
+        </div>
+        {/* A plain link: a prefetch must never sign anyone out */}
+        <a href="/logout" className="hw-link hw-side-signout">
+          Sign out
+        </a>
+      </div>
+      <div className="hw-side-status">{status}</div>
+    </nav>
   );
 }

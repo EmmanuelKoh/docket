@@ -1,14 +1,21 @@
 'use client';
 
-// Invite signup form: name, email (locked when the invite is pinned to
-// one), password. Submits through Better Auth's client; the extra
-// inviteToken field rides along in the body for the server's before-hook.
+// The sign-up form of an invite: name, email (read-only when the invite
+// is for one address) and password. It submits through Better Auth's
+// client; the inviteToken field goes in the body for the server's
+// before-hook. A refused sign-up shows a red line under the key.
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Field } from '@/components/hardware/field';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
 import { authClient } from '@/lib/auth-client';
+
+// "Password too short" -> "Password too short."
+const sentence = (s: string) => {
+  const t = s.charAt(0).toUpperCase() + s.slice(1);
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+};
 
 export function InviteForm({
   token,
@@ -18,21 +25,27 @@ export function InviteForm({
   email: string | null;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function signUp(form: FormData) {
     setBusy(true);
-    setError(null);
-    const { error: err } = await authClient.signUp.email({
-      name: String(form.get('name') || ''),
-      email: email || String(form.get('email') || ''),
-      password: String(form.get('password') || ''),
-      // Extra field read by the invite gate on the server.
-      ...({ inviteToken: token } as Record<string, string>),
-    });
-    if (err) {
-      setError(err.message || 'signup failed');
+    setError('');
+    try {
+      const { error: err } = await authClient.signUp.email({
+        name: String(form.get('name') || ''),
+        email: email || String(form.get('email') || ''),
+        password: String(form.get('password') || ''),
+        // Extra field read by the invite gate on the server.
+        ...({ inviteToken: token } as Record<string, string>),
+      });
+      if (err) {
+        setError(sentence(err.message || 'No account made. Try again'));
+        setBusy(false);
+        return;
+      }
+    } catch {
+      setError('No connection. Try again.');
       setBusy(false);
       return;
     }
@@ -42,31 +55,42 @@ export function InviteForm({
 
   return (
     <form
-      className="mt-5 space-y-3"
+      className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         signUp(new FormData(e.currentTarget));
       }}
     >
-      <Input name="name" placeholder="name" autoFocus aria-label="Name" />
-      <Input
+      <Field label="Name" name="name" autoComplete="name" autoFocus required />
+      <Field
+        label="Email"
         type="email"
         name="email"
-        placeholder="email"
+        autoComplete="email"
         defaultValue={email || ''}
         readOnly={!!email}
-        aria-label="Email"
+        required
+        spellCheck={false}
       />
-      <Input
+      <Field
+        label="Password"
         type="password"
         name="password"
-        placeholder="password (8+ characters)"
-        aria-label="Password"
+        autoComplete="new-password"
+        hint="At least 8 characters"
+        minLength={8}
+        required
       />
-      <Button type="submit" className="w-full" disabled={busy}>
-        {busy ? 'Creating account…' : 'Create account'}
-      </Button>
-      {error ? <p className="text-xs text-red">{error}</p> : null}
+      <KeyGroup className="mt-2 flex">
+        <PushKey type="submit" className="flex-1" disabled={busy}>
+          {busy ? 'Creating account…' : 'Create account'}
+        </PushKey>
+      </KeyGroup>
+      {error ? (
+        <p role="alert" className="hw-error">
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 }

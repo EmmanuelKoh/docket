@@ -19,29 +19,19 @@ export function agoText(iso: string | null | undefined): string {
   return a === 'now' ? 'just now' : `${a} ago`;
 }
 
-export function hhmmss(iso: string): string {
-  try {
-    return new Date(iso).toTimeString().slice(0, 8);
-  } catch {
-    return '';
-  }
-}
-
 export const HISTORY_STATUSES = ['done', 'failed', 'canceled'];
 
-// The rubber stamp on a History record's receipt: how the job ended. Red
-// only for a failure (docs/design-spec.md, red rules).
-export type Stamp = { text: string; red: boolean };
-const STAMPS: Record<string, string> = {
-  done: 'PRINTED',
-  canceled: 'CANCELED',
-  failed: 'FAILED',
+// The rubber stamp on a History record: how the job ended, as the kit's
+// Stamp state (components/hardware/stamp.tsx). Only FAILED is red (docs/
+// design-spec.md, red rules). A job that has not ended has no stamp.
+export type HistoryStamp = 'printed' | 'canceled' | 'failed';
+const STAMPS: Record<string, HistoryStamp> = {
+  done: 'printed',
+  canceled: 'canceled',
+  failed: 'failed',
 };
-export function historyStamp(status: string): Stamp {
-  return {
-    text: STAMPS[status] ?? status.toUpperCase(),
-    red: status === 'failed',
-  };
+export function historyStamp(status: string): HistoryStamp | null {
+  return STAMPS[status] ?? null;
 }
 
 // A job's failed print attempts for its sub line in Queue and History;
@@ -71,6 +61,9 @@ export type JobSummary = {
   // 'raw' jobs carry caller-rendered bytes (Tape) and cannot be reprinted
   kind: 'template' | 'raw';
   hasTemplate: boolean;
+  // intrinsic size of the preview PNG in px (width 576 for a receipt)
+  width?: number;
+  height?: number;
   // the preview PNG's public URL (hosted), or null: see jobImageSrc
   imageUrl: string | null;
   // failed print attempts (nacks); only when listed with attempts: true

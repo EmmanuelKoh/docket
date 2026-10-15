@@ -1,43 +1,71 @@
-// History — "N jobs · newest first", filter control right, one list
-// container with expandable rows (components/history-list.tsx), and
-// centered "← newer  1 / N  older →" pagination. Filtering and paging are
-// searchParams, like the legacy page's query string.
+// History: every job that ended, newest first (design spec: pages,
+// History). The title has the count at the right and the filter keys
+// (All, Printed, Failed, Canceled). Jobs are grouped by the day they
+// printed in the viewer's time zone, one module per day, numbered from
+// the newest day. Each row opens its record (components/history-list.tsx).
+// Filtering and paging are search params (?filter=, ?page=), 20 rows per
+// page. No poll: the page shows the state at load.
+//
+// Reads, all in one go: jobs.list (every ended job, with attempts) and
+// slips.list (to name each job's source).
 
-import Link from 'next/link';
+import './history.css';
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
-import { HistoryList, type HistoryRow } from '@/components/history-list';
-import { jobsList } from '@/lib/ops/jobs.js';
 import {
-  agoShort,
   failedAttempts,
   HISTORY_STATUSES,
   historyStamp,
   type JobSummary,
   jobImageSrc,
-} from '../../_lib/format';
+} from '@/app/_lib/format';
+import {
+  jobSourceLabels,
+  type SlipPair,
+  sourceLabel,
+} from '@/app/_lib/slip-data';
+import { clockLabel, dayKey, dayLabel, viewerTimeZone } from '@/app/_lib/time';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { HistoryList, type HistoryRow } from '@/components/history-list';
+import { jobsList } from '@/lib/ops/jobs.js';
+import { slipsList } from '@/lib/ops/slips.js';
+
+export const metadata: Metadata = { title: 'History' };
 
 const PER_PAGE = 20;
-const FILTERS = ['all', ...HISTORY_STATUSES];
 
-function statusColor(status: string): string {
-  if (status === 'failed') return 'text-red';
-  if (status === 'canceled') return 'text-ink-faint';
-  return 'text-ink-muted';
-}
+// The filter keys and what an empty list says under each
+const FILTERS = [
+  { value: 'all', label: 'All', empty: 'Nothing printed yet.' },
+  { value: 'done', label: 'Printed', empty: 'Nothing printed yet.' },
+  { value: 'failed', label: 'Failed', empty: 'No failed jobs.' },
+  { value: 'canceled', label: 'Canceled', empty: 'No canceled jobs.' },
+];
 
-function historyRow(j: JobSummary): HistoryRow {
+// When a job printed: a printer took it then (claimedAt). A job no
+// printer took (canceled while it waited) shows when it was made.
+const printedAt = (j: JobSummary) => j.claimedAt ?? j.createdAt;
+
+const plateNumber = (n: number) => String(n).padStart(2, '0');
+
+function historyRow(
+  j: JobSummary,
+  labels: Map<string, string>,
+  tz: string,
+): HistoryRow {
   return {
     id: j.id,
     image: jobImageSrc(j),
+    width: j.width ?? 576,
+    height: j.height,
     name: j.name || j.id,
-    sub: [j.source || '—', failedAttempts(j.attempts)]
-      .filter(Boolean)
-      .join(' · '),
-    statusText: j.status,
-    statusColor: statusColor(j.status),
+    source: sourceLabel(labels, j.source),
+    time: clockLabel(printedAt(j), tz),
     stamp: historyStamp(j.status),
-    railTime: agoShort(j.createdAt),
+    attempts: failedAttempts(j.attempts),
     // the Reprint route refuses the rest; raw rows the old deployment
     // inserted after the migration still say 'template' but lack one
     reprintable: j.kind === 'template' && j.hasTemplate,
@@ -56,75 +84,136 @@ export default async function HistoryPage({
     ? (params.filter as string)
     : 'all';
 
-  const all: JobSummary[] = await jobsList(caller, {
-    limit: 1000,
-    status: filter === 'all' ? HISTORY_STATUSES : [filter],
-    attempts: true,
-  });
+  const [jobs, pairs, tz] = await Promise.all([
+    jobsList(caller, {
+      limit: 1000,
+      status: filter === 'all' ? HISTORY_STATUSES : [filter],
+      attempts: true,
+    }) as Promise<JobSummary[]>,
+    slipsList(caller) as Promise<SlipPair[]>,
+    viewerTimeZone(),
+  ]);
+  const labels = jobSourceLabels(pairs);
+  const now = Date.now();
+
+  // Newest print first. Days are numbered from the newest, across pages,
+  // so a day split over two pages keeps its number.
+  const all = [...jobs].sort(
+    (a, b) => Date.parse(printedAt(b)) - Date.parse(printedAt(a)),
+  );
+  const dayOf = new Map<string, string>();
+  const dayNumbers = new Map<string, number>();
+  for (const j of all) {
+    const key = dayKey(printedAt(j), tz);
+    dayOf.set(j.id, key);
+    if (!dayNumbers.has(key)) dayNumbers.set(key, dayNumbers.size + 1);
+  }
+
   const pages = Math.max(1, Math.ceil(all.length / PER_PAGE));
   const page = Math.min(
     Math.max(1, parseInt(params.page || '1', 10) || 1),
     pages,
   );
-  const rows = all
-    .slice((page - 1) * PER_PAGE, page * PER_PAGE)
-    .map(historyRow);
+  const days: {
+    key: string;
+    label: string;
+    number: number;
+    rows: HistoryRow[];
+  }[] = [];
+  for (const j of all.slice((page - 1) * PER_PAGE, page * PER_PAGE)) {
+    const key = dayOf.get(j.id) as string;
+    let day = days.at(-1);
+    if (day?.key !== key) {
+      day = {
+        key,
+        label: dayLabel(printedAt(j), tz, now),
+        number: dayNumbers.get(key) as number,
+        rows: [],
+      };
+      days.push(day);
+    }
+    day.rows.push(historyRow(j, labels, tz));
+  }
 
   const pageHref = (p: number) =>
     `/history?${new URLSearchParams({
       ...(filter !== 'all' ? { filter } : {}),
       ...(p > 1 ? { page: String(p) } : {}),
     }).toString()}`.replace(/\?$/, '');
+  const current = FILTERS.find((f) => f.value === filter) ?? FILTERS[0];
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-base font-medium text-ink">History</h1>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            {all.length} job{all.length === 1 ? '' : 's'} · newest first
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          {FILTERS.map((f) => (
-            <Link
-              key={f}
-              href={f === 'all' ? '/history' : `/history?filter=${f}`}
-              className={
-                f === filter
-                  ? 'border-b border-dotted border-ink-faint text-ink'
-                  : 'text-ink-muted hover:text-ink'
-              }
+    <>
+      <PageTitle
+        className="history-head"
+        aside={
+          <span className="uppercase">
+            {all.length} {all.length === 1 ? 'receipt' : 'receipts'}
+          </span>
+        }
+        actions={
+          <nav aria-label="Filter">
+            <KeyGroup className="history-filter">
+              {FILTERS.map((f) => (
+                <PushKey
+                  key={f.value}
+                  href={
+                    f.value === 'all'
+                      ? '/history'
+                      : `/history?filter=${f.value}`
+                  }
+                  down={f.value === filter}
+                >
+                  {f.label}
+                </PushKey>
+              ))}
+            </KeyGroup>
+          </nav>
+        }
+      >
+        History
+      </PageTitle>
+
+      {days.length ? (
+        <div className="flex flex-col gap-[30px]">
+          {days.map((day) => (
+            <Module
+              key={day.key}
+              number={plateNumber(day.number)}
+              title={day.label}
+              flush
             >
-              {f}
-            </Link>
+              <HistoryList rows={day.rows} />
+            </Module>
           ))}
         </div>
-      </div>
-
-      <HistoryList rows={rows} />
+      ) : (
+        <p className="hw-ink m-0">{current.empty}</p>
+      )}
 
       {pages > 1 ? (
-        <div className="flex items-center justify-center gap-4 text-xs text-ink-muted">
-          {page > 1 ? (
-            <Link href={pageHref(page - 1)} className="hover:text-ink">
-              ← newer
-            </Link>
-          ) : (
-            <span className="text-ink-faint">← newer</span>
-          )}
-          <span className="font-mono">
-            {page} / {pages}
+        <nav
+          aria-label="Pages"
+          className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3"
+        >
+          <KeyGroup>
+            <PushKey href={pageHref(page - 1)} disabled={page <= 1}>
+              Newer
+            </PushKey>
+            <PushKey href={pageHref(page + 1)} disabled={page >= pages}>
+              Older
+            </PushKey>
+          </KeyGroup>
+          <span className="hw-mono hw-ink text-[15px]">
+            <span aria-hidden="true">
+              {page} / {pages}
+            </span>
+            <span className="sr-only">
+              Page {page} of {pages}
+            </span>
           </span>
-          {page < pages ? (
-            <Link href={pageHref(page + 1)} className="hover:text-ink">
-              older →
-            </Link>
-          ) : (
-            <span className="text-ink-faint">older →</span>
-          )}
-        </div>
+        </nav>
       ) : null}
-    </div>
+    </>
   );
 }
