@@ -24,6 +24,8 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.{js,mjs,ts}'],
     environment: 'node',
+    // Refuses every network request except to this machine.
+    setupFiles: ['tests/setup/no-network.ts'],
     // The first in-memory PGlite open per file (WASM load plus migrations)
     // can take longer than the 5s default when files run in parallel.
     testTimeout: 30_000,

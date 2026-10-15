@@ -6,8 +6,8 @@
 // output, the private repo-root jobs/ folder (not app/jobs/), every .env
 // file but .env.example and the Vercel CLI link stay out of git. Every
 // vendored font, model and binary has its license beside it and an entry
-// in THIRD_PARTY_NOTICES.md, and the README's first-deploy steps name
-// scripts and settings that exist. package.json pins no Node version, so
+// in THIRD_PARTY_NOTICES.md, and the first-deploy steps in docs/deploy.md
+// name scripts and settings that exist. package.json pins no Node version, so
 // Vercel keeps the one its project settings name.
 
 import { spawnSync } from 'node:child_process';
@@ -317,16 +317,17 @@ describe('third-party files', () => {
   });
 });
 
-describe('README first deploy', () => {
+describe('first deploy (docs/deploy.md)', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const deploy = fs.readFileSync(path.join(ROOT, 'docs', 'deploy.md'), 'utf8');
 
   it('names the scripts and firmware settings that exist', () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'),
     );
-    expect(readme).toContain('npm run db:migrate');
+    expect(deploy).toContain('npm run db:migrate');
     expect(pkg.scripts['db:migrate']).toBeTruthy();
-    expect(readme).toContain('node scripts/create-user.js');
+    expect(deploy).toContain('node scripts/create-user.js');
     expect(fs.existsSync(path.join(ROOT, 'scripts', 'create-user.js'))).toBe(
       true,
     );
@@ -335,7 +336,7 @@ describe('README first deploy', () => {
       'utf8',
     );
     for (const name of ['SECRET_SERVER_URL', 'SECRET_DEVICE_TOKEN']) {
-      expect(readme).toContain(`\`${name}\``);
+      expect(deploy).toContain(`\`${name}\``);
       expect(secrets).toMatch(new RegExp(`#define ${name}\\b`));
     }
   });
@@ -356,13 +357,13 @@ describe('README first deploy', () => {
     );
     // vite needs 22.12 or later.
     expect(readme).toContain('Node 22.12 or later');
-    expect(readme).toContain('Node.js Version to 22.x');
+    expect(deploy).toContain('Node.js Version to 22.x');
     expect(
       fs.readFileSync(path.join(ROOT, 'CONTRIBUTING.md'), 'utf8'),
     ).toContain('Node 22.12 or later');
   });
 
   it('asks for a Blob store with public access', () => {
-    expect(readme).toMatch(/Blob store with public access/);
+    expect(deploy).toMatch(/Blob store with public access/);
   });
 });
