@@ -2,7 +2,7 @@
 
 How the code is put together and where a change goes. `CONTRIBUTING.md`
 has the step-by-step recipes. This document covers the contracts behind
-them.
+them, and ends with a map of the project layout.
 
 ## Layers
 
@@ -162,6 +162,38 @@ the view models in `app/_lib/` (`queue-data.ts`, `slip-data.ts`), which
 shape op results for display. Scripts call ops with `systemCaller`
 (`scripts/show-plugin.js`).
 
+## The dashboard
+
+The dashboard is a Next.js app (React, Tailwind, a small shadcn kit in
+`components/ui/`), styled per `docs/design-spec.md`.
+
+**Accounts.** Email and password (Better Auth on Postgres). Signup is by
+invite: an admin mints invite links on the Users page, and each link
+creates one account. A new account gets the starter templates at
+sign-up. Each account has its own templates, plugins, history and
+printers. Session checks read a signed cookie cache, so a page view costs
+no database read. Pages and JSON routes need the session, and every read
+and write is scoped to the signed-in owner.
+
+| Page | What it does |
+|------|--------------|
+| Overview | The latest print, counts (templates, plugins, queue, last print), printer contact, the three newest jobs |
+| Slips | Every plugin and stored template as a card with its rendered preview. A slip's page has Print test, and for a plugin the enable toggle, schedule and config |
+| Studio (`/studio`) | Template editor with a live preview from the real renderer, Save, Delete and Print. Reached from a slip or "New template" |
+| Photo | Upload or shoot a picture, adjust it against a live dithered preview, print it with an optional caption |
+| Tape | Duduk transcription to printed tape. While you record, only the pitch trace draws; the take transcribes after Stop. Saved takes, editing, phrases and per-phrase printing |
+| Queue | Waiting and printing jobs in print order. Cancel a waiting job, or requeue one stuck printing |
+| History | Done, failed and canceled jobs. A row expands to its template and data. Reprint renders the stored template again |
+| Printer | Printer status, and the devices: pair, share, leave, revoke |
+| Users | Admins only: accounts and invite links |
+
+**Polling.** The Queue page and the Studio's recent-jobs strip re-fetch
+every 3 seconds while you use the page
+(`components/hooks/use-eased-poll.ts`). After two idle minutes they slow
+to every 30 seconds, and after thirty minutes they stop until you click or
+type. The Printer page refreshes every 3 seconds while a pairing is
+waiting for the printer. Hidden tabs do not poll.
+
 ## The device service and the device wire
 
 The device routes (`app/{pair,next,ack,nack,tick}/route.ts`) call plain
@@ -172,9 +204,17 @@ only shape the responses.
 
 The firmware (`firmware/docket-agent/docket-agent.ino`) polls `GET /next`
 every 5 seconds and POSTs `/tick` every 30 seconds. The only other timers
-are dashboard pages polling while they are open: the Queue list and the
-Studio's recent-jobs strip (`components/hooks/use-eased-poll.ts`), and the
-Printer page while a pairing is pending.
+are dashboard pages polling while they are open (see "The dashboard").
+
+The firmware and the laptop agents speak this wire:
+
+| Method | Path | Answer |
+|--------|------|--------|
+| `POST` | `/pair` | `{hardwareId}`: a code to print. `{hardwareId, code}`: 204 until the owner claims the code, then `{token}` once. No auth |
+| `GET` | `/next` | 200 with the next job in print order (ESC/POS bytes, an explicit `Content-Length` and `X-Job-Id: owner~job-N`), or 204 |
+| `POST` | `/ack?job=ID` | `{acked, found}`. `{gone: true}` if the job's owner no longer uses this printer |
+| `POST` | `/nack?job=ID` | `{requeued, found}`, or `{gone: true}`. Back of the queue from the third failed attempt |
+| `POST` | `/tick` | Runs the owners' due plugins: `{results: [{id, status}]}`, or `{results: [], idle: true}` |
 
 What the firmware reads, frozen by `tests/device-wire.test.ts`:
 
@@ -221,6 +261,20 @@ with work. `runDue` runs each owner's due plugins. Presence (the
 dashboard's "online") is one heartbeat per device, written to the primary
 owner's slot at most once a minute per warm instance
 (`lib/device-presence.js`).
+
+### Pairing and sharing
+
+`/next`, `/ack`, `/nack` and `/tick` need a Bearer token. A real printer
+gets its own token by pairing: the unpaired device POSTs `/pair`, prints a
+short code, and the owner enters the code on the Printer page. A printer
+paired to an account can be claimed again only by that account, until its
+owner revokes it. Tokens are stored as sha256 hashes. Verification runs on
+a per-instance memory cache and a Redis mirror, so polling never queries
+Postgres. An owner can share a printer: they mint a single-use share code,
+and the other account enters it on its own Printer page. The device then
+serves each member's queue and plugins, and each account keeps its own
+records. Locally, the laptop agents send `DEVICE_TOKEN`, which resolves to
+`OWNER_ID`.
 
 ### The cost rule
 
@@ -289,17 +343,18 @@ POST /nack -> nackJob   -> count the attempt, requeue front or back -> row queue
 composes it with the record. `STORE_DRIVER` picks the driver:
 
 - `redis` (hosted, `lib/queue/redis.js`): a list of waiting ids and a
-  sorted set of leases per owner. A claim is one Lua script that first
-  puts expired leases back at the front. A lease lasts `LEASE_SECONDS`
-  (120). This driver owns the Blob queue flag: enqueue and requeue set it,
-  an empty claim clears it, `hint` reads it. No feature code can forget
-  it.
+  sorted set of leases per owner. A claim is one Lua script, so two polls
+  never receive the same job, and it first puts expired leases back at
+  the front. A lease lasts `LEASE_SECONDS` (120). This driver owns the
+  Blob queue flag: enqueue and requeue set it, an empty claim clears it,
+  `hint` reads it. No feature code can forget it.
 - `postgres` (local, `lib/queue/postgres.js`): the job rows are the queue.
   `inflight` has no expiry. `hint` always answers "unknown".
 
-A nack counts a failed attempt. The first two put the job back at the
-front, and from the third (`STUCK_AFTER_NACKS`) it goes to the back so the
-jobs behind it print.
+A nack counts a failed attempt and requeues the job at once. The first two
+put the job back at the front, and from the third (`STUCK_AFTER_NACKS`) it
+goes to the back so the jobs behind it print. The Queue and History pages
+show the failed attempts.
 
 ### The artifact seam
 
@@ -392,11 +447,11 @@ exports:
 
 `ctx` (`lib/plugin-context.js`) is the whole surface a module gets:
 
-- `createJob({ template, data, name, source })`
+- `createJob({ template, data, name, source })`: render and queue a job.
 - `getTemplate(name)`: the owner's stored template, or null. It never
   seeds.
 - `llm.generateObject({ schema, prompt })` (see "The LLM seam")
-- `log(msg)`
+- `log(msg)`: a prefixed console log.
 
 Generic code never branches on a module id
 (`tests/plugin-contract.test.ts`).
@@ -419,9 +474,10 @@ account's plugins start on its first Slips visit.
 
 **Records.** A plugin's config truth (enabled, schedule, config) lives in
 the Postgres `plugin_config` table. Its runtime record (state, last run,
-`nextDueAt`, the due-index) lives in Redis, or `plugins.json` in
-`DATA_DIR` locally. Registration restores a lost runtime record's settings
-from Postgres; only the runtime state is gone.
+`nextDueAt`, the sorted due-index in `lib/plugin-registry.js`) lives in
+Redis, or `plugins.json` in `DATA_DIR` locally. Registration restores a
+lost runtime record's settings from Postgres; only the runtime state is
+gone.
 
 **Ticks.** `runDue` claims the due plugins in one atomic step with a
 90-second lease, so two ticks never run the same plugin. A run that
@@ -629,3 +685,89 @@ query on that table. PGlite applies migrations on first use.
   `tests/repo-hygiene.test.ts` keeps `reference/` to the template sets
   seeding reads and `.env.example` in step with the variables the code
   reads.
+
+## Project layout
+
+```
+config.js                  Environment config (reads .env)
+next.config.mjs            Next.js config (externals, file tracing, redirects)
+middleware.ts              Sends signed-out page visits to /login (cookie presence only)
+render/
+  render-core.js           Liquid -> Satori -> resvg -> dither -> ESC/POS
+  fonts/                   Vendored DejaVu TTFs
+db/
+  schema.js                Drizzle schema (every Postgres table)
+  migrations/              Generated SQL (npm run db:generate / db:migrate)
+app/                       The Next.js app: pages and route adapters
+  (dashboard)/             Overview, Slips, Studio, Photo, Tape, Queue, History,
+                           Printer, Users
+  login/ invite/ logout/   Sign in, invite acceptance, sign out
+  api/auth/                Better Auth endpoints
+  pair/ next/ ack/ nack/ tick/   Device endpoints
+  ingest/                  POST /ingest (messages.deliver)
+  templates/ preview/ jobs/      Studio and Photo JSON routes
+  api/                     Dashboard JSON routes
+  _lib/                    Caller from the session, OpError to HTTP, view models
+components/                React components (shadcn kit in ui/, the Tape tool in tape/)
+lib/
+  ops/                     Operations: every product action as (caller, input) -> output
+    define.js caller.js    defineOperation, OpError, the Caller values
+    identity.js            Device tokens and module credentials to callers
+    device-service.js      The device wire's domain side (/pair, /next, /ack, /nack, /tick)
+    accounts.js jobs.js messages.js printers.js slips.js tape.js templates.js
+  queue/                   Print queue: redis.js (hosted, lease) or postgres.js (local rows)
+  artifacts/               Payloads by key: blob.js (Vercel Blob) or local.js (DATA_DIR files)
+  llm/                     generateObject from a Zod schema; gemini.js is the provider
+  job-store.js             Job records (Postgres) over the queue and artifacts
+  store.js                 Templates (Postgres)
+  tape-store.js            Tape takes (Postgres metadata, payloads as artifacts)
+  accounts.js              Account list and invite links
+  auth-server.js auth-client.ts  Better Auth server instance and browser client
+  devices.js               Pairing, sharing, device-token checks
+  device-presence.js       Throttled "printer seen" writes and the online rule
+  plugin-registry.js       Plugin records, due-index, tick flag, credential mirror
+  plugin-setup.js          Plugin registration, credentials, template seeding
+  plugin-context.js        ctx for plugin modules
+  schedule.js              Schedule math (every/at, timezone-aware)
+  change-signal.js         Blob queue and tick flags
+  kv.js                    Small expiring values (claims, mirrors): Redis or data/kv.json
+  state-store.js           Small runtime state: Redis or data/ files
+  db.js redis.js           Postgres (Neon or PGlite) and Upstash clients
+  stores/                  json and redis drivers for plugins, state and kv
+plugins/
+  index.js                 Installed plugin modules
+  espn-worldcup.js         World Cup kickoff, goal and full-time slips
+  morning-brief.js         Daily brief (calendar, weather, focus)
+  message-ingest.js        Forwarded messages to task slips
+reference/
+  *-templates.json         Starter and plugin template sets, seeded per owner
+agent/
+  printer-agent.js         Laptop printer agent (polls /next, prints over TCP or to files, acks)
+  heartbeat.js             Laptop heartbeat (POSTs /tick)
+transport/
+  print-net.js             TCP sender (printToNetwork)
+  print-file.js            Dry-run sink: job bytes to <dir>/<job id>.bin
+public/
+  dither-worker.js         Photo viewfinder dither (Web Worker)
+  pcm-worklet.js pitch-worker.js  Tape audio capture and pitch detection
+  basic-pitch/             Tape transcription model
+  tf-wasm/                 tfjs WebAssembly fallback for the Tape transcriber
+firmware/
+  docket-agent/            ESP32 sketch: pairing, /next, /ack, /nack, /tick
+android-forwarder/         Android app: SMS/RCS -> POST /ingest
+scripts/
+  create-user.js           Create an account without an invite (hidden password prompt)
+  print-calibration.js     Grayscale wedges through the real pipeline
+  show-plugin.js toggle-plugin.js  Inspect or switch a plugin record
+  sync-task-template.mjs   Re-apply reference/task-templates.json to one owner
+  seed-starters.js         One-off: starter templates for accounts that have none
+  tape-eval/               Tape transcription passes and corpus scorer (npm run tape:eval)
+  test-tape-doc.mjs        Take document checks (npm run tape:doc)
+tests/                     Vitest suite (npm test)
+docs/                      Guides and references (README.md lists each one)
+data/                      Local runtime state (gitignored)
+```
+
+The tape-eval fixtures are the maintainer's recordings and stay
+gitignored. The harness and the truth-file format are public, so you can
+bring your own clips.

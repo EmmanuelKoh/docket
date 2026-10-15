@@ -6,8 +6,14 @@
 // length of the filled-in HTML. A template past a limit fails fast with an
 // error that names the limit, both where jobs render (renderToEscpos) and
 // where the Studio previews (POST /preview, answered 400). Every reference
-// template stays far inside each limit: it renders under limits 20 to
-// 1,000 times tighter.
+// template stays far inside each limit: it renders under counted limits
+// 20 to 1,000 times tighter, in less CPU time than a tenth of renderLimit.
+//
+// Every time check here is CPU time, not wall time. A busy machine
+// stretches wall time many times over, because this thread waits for a
+// core. Under two parallel runs of the whole suite (measured 2026-10-14),
+// CPU time grew at most 5 times. Each counted-limit budget stays far
+// above the CPU time measured there.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +50,17 @@ afterAll(() => {
 
 const ROOT = path.resolve(__dirname, '..');
 
+// CPU time this thread has used, in ms. Node 22.12 has no
+// process.threadCpuUsage; process.cpuUsage counts the whole process, which
+// in Vitest's default forks pool runs one test file at a time.
+function cpuMs() {
+  const { user, system } =
+    typeof process.threadCpuUsage === 'function'
+      ? process.threadCpuUsage()
+      : process.cpuUsage();
+  return (user + system) / 1000;
+}
+
 type RefTemplate = {
   name: string;
   template: string;
@@ -63,29 +80,33 @@ const wrap = (body: string) =>
 const double = (v: string, seed: string, n: number) =>
   `{% assign ${v} = "${seed}" %}{% for i in (1..${n}) %}{% assign ${v} = ${v} | append: ${v} %}{% endfor %}`;
 
-// Each one trips exactly one limit. budgetMs is how long failing may take.
+// Each one trips exactly one limit. cpuBudgetMs is the CPU time that
+// failing may take. Without the limit, each one runs for seconds to
+// minutes.
 const PATHOLOGICAL = [
   {
     limit: 'parseLimit',
     template: wrap('x'.repeat(LIQUID_LIMITS.parseLimit)),
     message: /^template is longer than 100,000 characters/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'renderLimit',
     // 9 million iterations: under the memory limit, past the time limit.
+    // renderLimit is wall time, and a thread that waits for a core uses no
+    // CPU time, so tripping it takes at most about renderLimit of CPU time.
     template: wrap(
       '{% for a in (1..3000) %}{% for b in (1..3000) %}x{% endfor %}{% endfor %}',
     ),
     message: /^template took longer than 1,000 ms to fill, line:1, col:\d+/,
-    budgetMs: LIQUID_LIMITS.renderLimit + 1500,
+    cpuBudgetMs: LIQUID_LIMITS.renderLimit + 1500,
   },
   {
     limit: 'memoryLimit',
     template: wrap('{% for i in (1..1000000000) %}x{% endfor %}'),
     message:
       /^template built more than 10,000,000 items \(loop ranges, captures, filter results and per-item property lookups\), line:1, col:\d+/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'memoryLimit',
@@ -94,7 +115,7 @@ const PATHOLOGICAL = [
       '{% assign s = "xxxxxxxxxx" %}{% for i in (1..30) %}{% assign s = s | append: s %}{% endfor %}{{ s | size }}',
     ),
     message: /^template built more than 10,000,000 items/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'memoryLimit',
@@ -105,7 +126,7 @@ const PATHOLOGICAL = [
     ),
     message:
       /^template built more than 10,000,000 items \(loop ranges, captures, filter results and per-item property lookups\), line:1, col:\d+/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'memoryLimit',
@@ -118,7 +139,7 @@ const PATHOLOGICAL = [
     ),
     message:
       /^template built more than 10,000,000 items \(loop ranges, captures, filter results and per-item property lookups\), line:1, col:\d+/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'memoryLimit',
@@ -127,17 +148,19 @@ const PATHOLOGICAL = [
       `${double('s', 'x,', 11)}{% assign arr = s | split: "," %}{{ arr | where_exp: "i", "${'i.a.'.repeat(20_000)}b" | size }}`,
     ),
     message: /^template built more than 10,000,000 items/,
-    budgetMs: 200,
+    cpuBudgetMs: 200,
   },
   {
     limit: 'output length',
-    // Under the memory limit (5,000 range items, one 3,300-character
-    // capture), but 16.5 million characters of output.
+    // Under the memory limit (116 range items, captures of 3,300 and
+    // 330,000 characters), but 5.28 million characters of output. The 116
+    // passes take under 1 ms, so renderLimit does not trip first on a busy
+    // machine.
     template: wrap(
-      `{% capture s %}${'<div style="display:flex">x</div>'.repeat(100)}{% endcapture %}{% for i in (1..5000) %}{{ s }}{% endfor %}`,
+      `{% capture s %}${'<div style="display:flex">x</div>'.repeat(100)}{% endcapture %}{% capture t %}{% for i in (1..100) %}{{ s }}{% endfor %}{% endcapture %}{% for i in (1..16) %}{{ t }}{% endfor %}`,
     ),
     message: /^template filled in to more than 5,000,000 characters/,
-    budgetMs: 500,
+    cpuBudgetMs: 200,
   },
 ];
 
@@ -152,13 +175,17 @@ describe('Liquid limits', () => {
   });
 
   it.each(REFERENCE)('%s renders far inside every limit', async (_, t) => {
+    // The counted limits, tightened. They count characters and allocation
+    // units, so the result is the same on any machine. renderLimit is
+    // wall time, so the CPU time check stands in for it.
     const tight = new Liquid({
       templates: Object.create(null),
       parseLimit: LIQUID_LIMITS.parseLimit / 20,
-      renderLimit: LIQUID_LIMITS.renderLimit / 10,
       memoryLimit: LIQUID_LIMITS.memoryLimit / 1000,
     });
+    const started = cpuMs();
     const out = await tight.parseAndRender(t.template, t.data);
+    expect(cpuMs() - started).toBeLessThan(LIQUID_LIMITS.renderLimit / 10);
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(FILL_OUTPUT_LIMIT / 1000);
   });
@@ -168,17 +195,17 @@ describe('Liquid limits', () => {
   )('renderToEscpos fails fast past %s, naming the limit', async (_, {
     template,
     message,
-    budgetMs,
+    cpuBudgetMs,
   }) => {
     // fill alone fails first, so a regression fails here instead of
     // handing Satori a runaway page (its layout blocks, and the run hangs).
     await expect(fill(template, {})).rejects.toThrow(message);
-    const started = performance.now();
+    const started = cpuMs();
     const err = await renderToEscpos(template, {}).then(
       () => null,
       (e: unknown) => e,
     );
-    expect(performance.now() - started).toBeLessThan(budgetMs);
+    expect(cpuMs() - started).toBeLessThan(cpuBudgetMs);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toMatch(message);
   });
@@ -188,10 +215,10 @@ describe('Liquid limits', () => {
   )('POST /preview answers 400 past %s, naming the limit', async (_, {
     template,
     message,
-    budgetMs,
+    cpuBudgetMs,
   }) => {
     await expect(fill(template, {})).rejects.toThrow(message);
-    const started = performance.now();
+    const started = cpuMs();
     const res = await previewRoute(
       new Request('http://docket.test/preview', {
         method: 'POST',
@@ -199,7 +226,7 @@ describe('Liquid limits', () => {
         body: JSON.stringify({ template, data: {} }),
       }),
     );
-    expect(performance.now() - started).toBeLessThan(budgetMs);
+    expect(cpuMs() - started).toBeLessThan(cpuBudgetMs);
     expect(res.status).toBe(400);
     expect(res.headers.get('content-type')).toMatch(/json/);
     const body = await res.json();

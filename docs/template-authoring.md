@@ -167,3 +167,37 @@ rounds of size adjustments after the first physical print.
 | bottom of receipt missing | content taller than 1600px |
 | an SVG image prints blank | it points outside itself (an `href`, `url()`, `@import` or entity that is not `#name` or `data:`), or it is gzip |
 | gray text looks moth-eaten | small type over gray; make text black and bigger |
+
+## Rendering from code
+
+Templates render entirely in Node, with no headless browser.
+
+Text receipts print as one `GS v 0` raster. Dithered images print as
+memorize-then-print chunks (`GS *` / `GS /`), rotated 180° with a flush cut
+(`render/render-core.js`, [rp850-field-notes.md](rp850-field-notes.md)).
+
+```js
+import { renderToEscpos } from './render/render-core.js';
+
+const template = `
+<div style="display:flex; flex-direction:column; width:576px; background:#fff; color:#000; padding:24px; font-family:Sans">
+  <h1>{{ title }}</h1>
+  <p>{{ body }}</p>
+</div>`;
+
+const { bytes, preview, width, height, encoding } = await renderToEscpos(template, {
+  title: 'Hello',
+  body: 'Printed from Node.',
+});
+// bytes:   ESC/POS data for the printer
+// preview: a PNG of exactly what will print (1-bit)
+```
+
+Send the bytes to a network printer:
+
+```js
+import { printToNetwork } from './transport/print-net.js';
+
+await printToNetwork(bytes);                     // PRINTER_IP and PRINTER_PORT
+await printToNetwork(bytes, '<printer-ip>', 9100);
+```
