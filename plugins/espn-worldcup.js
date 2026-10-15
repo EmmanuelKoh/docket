@@ -13,6 +13,7 @@
 // (template store, by name), and log.
 
 import { WATCH_TEAMS } from '../config.js';
+import { escapeStrings } from '../render/escape-html.js';
 
 export const id = 'espn-worldcup';
 
@@ -41,6 +42,11 @@ const SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.w
 
 // ---- job creation ----
 
+// Team, player, venue and competition names come from ESPN's feed, so
+// every string is escaped before the template sees it
+// (render/escape-html.js): a name like "<img src=...>" prints as those
+// characters. The WC templates output values as they are, so nothing is
+// escaped twice.
 async function createJob(ctx, templateName, data) {
   const tpl = await ctx.getTemplate(templateName);
   if (!tpl) {
@@ -48,7 +54,11 @@ async function createJob(ctx, templateName, data) {
     return;
   }
   try {
-    const result = await ctx.createJob({ template: tpl.template, data, name: templateName });
+    const result = await ctx.createJob({
+      template: tpl.template,
+      data: escapeStrings(data),
+      name: templateName,
+    });
     ctx.log(`>> ${templateName}: ${result.id} (${JSON.stringify(data).slice(0, 80)})`);
   } catch (err) {
     ctx.log(`! job failed: ${err.message}`);

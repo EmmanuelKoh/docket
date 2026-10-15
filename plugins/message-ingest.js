@@ -21,6 +21,7 @@
 //   ingestToken    the sender's credential (hooks.credentials below)
 
 import { z } from 'zod';
+import { escapeHtml } from '../render/escape-html.js';
 
 export const id = 'message-ingest';
 
@@ -191,6 +192,14 @@ function receivedParts(receivedAt, timeZone) {
   return { date, time };
 }
 
+// Anyone can text the owner, and the Task template places these values
+// in HTML, so every value taken from a message is escaped first: a
+// "<img src=...>" prints as those characters instead of making Satori
+// fetch the URL. Escaping here, not in the template, covers the Task
+// template every account already stores. The renderer turns the entities
+// back into characters in text (render/render-core.js).
+export { escapeHtml };
+
 // envelope v1 = { text, sender?, source?, receivedAt? }; text is non-blank
 // (the runner answers blank text itself). Returns the reply for the sender:
 // { task: false, confidence } or { task: true, printed, jobs }. A throw
@@ -256,15 +265,15 @@ export async function onMessage(envelope, { config, state, ctx }) {
     const title = t.title || text.slice(0, 80);
     const items = Array.isArray(t.items) ? t.items.filter(Boolean) : [];
     const data = {
-      title,
-      items,
+      title: escapeHtml(title),
+      items: items.map(escapeHtml),
       ordered: !!t.ordered,
-      sender: sender || 'unknown',
+      sender: escapeHtml(sender || 'unknown'),
       date,
       time,
-      due: t.due || '',
-      priority: t.priority || 'normal',
-      quote: t.quote || '',
+      due: escapeHtml(t.due || ''),
+      priority: escapeHtml(t.priority || 'normal'),
+      quote: escapeHtml(t.quote || ''),
     };
     const job = await ctx.createJob({
       template: tpl.template,

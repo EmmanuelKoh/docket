@@ -11,7 +11,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // macOS, Linux, and Vercel without a system font install. Override with FONT_DIR.
 const BUNDLED_FONT_DIR = path.join(__dirname, 'render', 'fonts');
 
-export const PRINTER_IP   = process.env.PRINTER_IP   || '192.168.1.87';
+// The laptop printer agent's target: a network printer's address, or
+// file:<dir> for the dry-run sink (each job's bytes go to <dir>/<job
+// id>.bin). No default: agent/printer-agent.js exits when it is unset.
+export const PRINTER_IP   = process.env.PRINTER_IP   || '';
 export const PRINTER_PORT = parseInt(process.env.PRINTER_PORT, 10) || 9100;
 export const PRINT_WIDTH  = parseInt(process.env.PRINT_WIDTH, 10)  || 576;
 export const FONT_DIR     = process.env.FONT_DIR     || BUNDLED_FONT_DIR;
@@ -46,25 +49,36 @@ export const DATABASE_URL = process.env.DATABASE_URL || '';
 export const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 export const PGLITE_DIR = process.env.PGLITE_DIR || path.join(DATA_DIR, 'pg');
 
+// Local-dev defaults (the dev-token below, the generated session secret
+// in lib/auth-secret.js) exist only outside production builds and off
+// Vercel, so a production deploy anywhere gets none of them.
+export const DEV_DEFAULTS = !(
+  process.env.VERCEL || process.env.NODE_ENV === 'production'
+);
+
 // Local-dev shared device secret for the laptop agents
 // (agent/heartbeat.js, agent/printer-agent.js) — real printers use
-// per-device pairing tokens (lib/devices.js). The 'dev-token' default
-// exists only outside production builds and off Vercel, so a production
-// deploy anywhere has no such door unless DEVICE_TOKEN is set; it maps to
-// the OWNER_ID owner below.
+// per-device pairing tokens (lib/devices.js). The 'dev-token' default is
+// a DEV_DEFAULTS one, so a production deploy has no such door unless
+// DEVICE_TOKEN is set; it maps to the OWNER_ID owner below.
 export const DEVICE_TOKEN =
-  process.env.DEVICE_TOKEN ||
-  (process.env.VERCEL || process.env.NODE_ENV === 'production'
-    ? ''
-    : 'dev-token');
+  process.env.DEVICE_TOKEN || (DEV_DEFAULTS ? 'dev-token' : '');
 
 // Better Auth (user accounts). The secret signs its session cookies —
 // falls back to SESSION_SECRET (the pre-accounts cookie secret, still in
-// hosted env) so deployments need no new var. BETTER_AUTH_URL pins the
+// hosted env) so deployments need no new var. With neither set, a local
+// run generates one (lib/auth-secret.js). BETTER_AUTH_URL pins the
 // canonical origin in production; unset locally, the origin is inferred
 // per request.
 export const BETTER_AUTH_SECRET =
   process.env.BETTER_AUTH_SECRET || process.env.SESSION_SECRET || '';
+// Better Auth also reads two names itself: AUTH_SECRET (its other name
+// for the secret) and BETTER_AUTH_SECRETS (versioned secrets for
+// rotation, "2:new,1:old"). Either one counts as a configured secret, so
+// a local run generates none and passes none over it (lib/auth-secret.js).
+export const AUTH_SECRET_IN_ENV = !!(
+  process.env.AUTH_SECRET || process.env.BETTER_AUTH_SECRETS
+);
 export const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || '';
 
 // Heartbeat — seconds between /tick POSTs from agent/heartbeat.js. Each tick

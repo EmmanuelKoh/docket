@@ -29,6 +29,24 @@
 //
 // node-ical loads inside fetchFeed, not at module load: plugins/index.js is
 // imported by /ingest and the Slips pages, which never parse a calendar.
+//
+// The feed addresses are owner input, so they are fetched under the image
+// guard's address rules (render/image-guard.js fetchPublic), not with a
+// plain fetch: http or https on the default port, no user or password,
+// every resolved address public (no loopback, private, link-local, CGNAT,
+// multicast, unspecified, unique-local, mapped or translated address) and
+// the connection pinned to those addresses, at most 3 redirects checked
+// the same way, 10 seconds, 5 MB. webcal:// and webcals:// mean https://.
+// A refused feed throws like a failed one, so it shows as lastError.
+//
+// Calendar text is outside input: anyone who can invite the owner to a
+// meeting chooses its title. Every string the template gets is escaped
+// (render/escape-html.js), so a title like "<img src=...>" prints as
+// those characters. The Daily Brief template outputs them as they are,
+// so nothing is escaped twice.
+
+import { escapeHtml } from '../render/escape-html.js';
+import { fetchPublic } from '../render/image-guard.js';
 
 export const id = 'morning-brief';
 
@@ -87,12 +105,40 @@ function tzParts(date, timeZone) {
 
 const dateKey = p => `${p.year}-${p.month}-${p.day}`;
 
+// node-ical gives a property with parameters (SUMMARY;LANGUAGE=en:...)
+// as { params, val } instead of a string.
+const icalText = v => (typeof v === 'string' ? v : typeof v?.val === 'string' ? v.val : '');
+
 // ---- calendar ----
 
-async function fetchFeed(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`calendar feed ${resp.status}`);
-  const text = await resp.text();
+export const FEED_LIMITS = { timeoutMs: 10_000, maxBytes: 5 * 1024 * 1024 };
+
+// The URL a feed address is fetched from: webcal:// and webcals:// are
+// https://. Throws when it is not a URL.
+export function feedUrl(address) {
+  const s = String(address).trim().replace(/^webcals?:\/\//i, 'https://');
+  try {
+    return new URL(s);
+  } catch {
+    throw new Error('calendar feed address is not a URL');
+  }
+}
+
+async function fetchFeed(address) {
+  const url = feedUrl(address);
+  let res;
+  try {
+    res = await fetchPublic(url, {
+      schemes: ['https:', 'http:'],
+      ...FEED_LIMITS,
+      headers: { accept: 'text/calendar, */*;q=0.5', 'user-agent': 'docket' },
+    });
+  } catch (err) {
+    // Same message as before the guard for an answer that is not 200.
+    if (err.status) throw new Error(`calendar feed ${err.status}`);
+    throw new Error(`calendar feed: ${err.message}`);
+  }
+  const text = res.body.toString('utf8').replace(/^\uFEFF/, '');
   if (!text.trimStart().startsWith('BEGIN:VCALENDAR')) {
     // The most common misconfiguration: a calendar's share/browser link
     // instead of the "Secret address in iCal format".
@@ -122,7 +168,7 @@ function todaysTimedEvents(parsed, tz, now, todayKey) {
       out.push({
         start: new Date(start),
         at: `${p.hour}:${p.minute}`,
-        title: ev.summary || 'busy',
+        title: icalText(ev.summary) || 'busy',
         durMs,
       });
     };
@@ -229,17 +275,18 @@ export async function run({ config, state, ctx }) {
     ? { value: `${Math.round(weather.tmax)}°`, label: `RAIN ${Math.round(weather.rain)}%` }
     : { value: '—', label: 'WEATHER' });
 
+  // Truncate first, then escape, so the cut never splits an entity.
   const data = {
-    day: p.weekday.toUpperCase(),
-    date: `${p.month} ${parseInt(p.day, 10)} ${p.year}`,
-    time: hm,
-    stats,
+    day: escapeHtml(p.weekday.toUpperCase()),
+    date: escapeHtml(`${p.month} ${parseInt(p.day, 10)} ${p.year}`),
+    time: escapeHtml(hm),
+    stats: stats.map(s => ({ value: escapeHtml(s.value), label: escapeHtml(s.label) })),
     schedule: events.slice(0, 10).map(e => ({
-      at: e.at,
-      title: e.title.length > 32 ? e.title.slice(0, 31) + '…' : e.title,
-      tag: fmtDuration(e.durMs),
+      at: escapeHtml(e.at),
+      title: escapeHtml(e.title.length > 32 ? e.title.slice(0, 31) + '…' : e.title),
+      tag: escapeHtml(fmtDuration(e.durMs)),
     })),
-    focus: cfg.focus || '',
+    focus: escapeHtml(cfg.focus || ''),
   };
 
   const printed = await createJob(ctx, 'Daily Brief', data);

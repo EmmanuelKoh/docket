@@ -12,12 +12,14 @@
 
 import fs from 'fs';
 import path from 'path';
-import { Liquid } from 'liquidjs';
+import { CaptureTag, Liquid, LiquidError } from 'liquidjs';
 import satori from 'satori';
 import { html } from 'satori-html';
 import { Resvg } from '@resvg/resvg-js';
 import { PNG } from 'pngjs';
 import { PRINT_WIDTH, FONT_DIR } from '../config.js';
+import { unescapeHtml } from './escape-html.js';
+import { BLANK_IMAGE, guardImages, isFragmentHref, safeDataUrl, urlsAreLocal } from './image-guard.js';
 
 const WIDTH = PRINT_WIDTH;
 const WIDTH_BYTES = WIDTH / 8;
@@ -28,7 +30,100 @@ const WIDTH_BYTES = WIDTH / 8;
 // regeneration do not bump it. Stored on each job as encoding.encoder.
 const ENCODER = 'render-core/1';
 
-const liquid = new Liquid();
+// Templates are account input, so Liquid never reads files: render,
+// include and layout look names up in this empty map and fail. Without
+// it they read from the working directory (package.json, a local .env).
+// The map has no prototype, so 'constructor' or 'toString' are not names.
+//
+// Account input also gets bounded Liquid work, so filling a template in
+// cannot hang a function or fill its memory. Measured 2026-10-13 on every
+// reference template with its sample data: at most 2,511 characters of
+// source, 0 memory units, 3,219 characters of output, and 5.1 ms for a
+// cold first render (0.3 ms warm).
+//   parseLimit   characters of source. Parsing is superlinear in tags:
+//                100,000 characters of {{a}} parse in about 0.2 s, a
+//                million in 18 s. Room for an inline data: image.
+//   renderLimit  wall time of one render, in ms. Liquid checks it
+//                between tags only, so one filter call is bounded by
+//                memoryLimit instead.
+//   memoryLimit  Liquid's allocation units: range sizes, the array and
+//                string lengths filters build, (CountedCapture below)
+//                the strings {% capture %} builds, and (PER_ITEM_FILTERS
+//                below) the property lookups a filter does per item.
+//                10 million covers a filter over the largest request
+//                body (about 4.5 MB). At the limit, the slowest measured
+//                filter work (per-item property lookups) took 0.3 s.
+// FILL_OUTPUT_LIMIT caps the filled-in HTML, which Liquid does not count:
+// a 5,000-pass loop over a 3,300-character string outputs 16.5 million
+// characters in 25 ms. 5 million characters is above the largest
+// legitimate output, a Photo print's data: URI, which the ~4.5 MB request
+// cap bounds.
+// tests/liquid-limits.test.ts holds the reference templates to a small
+// fraction of each limit.
+//
+// Not bounded here: Satori's layout time, and the memory resvg uses to
+// decode an image. Layout grows with the text and elements the HTML
+// holds, not its length: 147,456 characters of plain text, from a
+// 150-character template inside every limit, was still laying out after
+// 30 s. A 17.5 KB PNG that declares 12000x12000 pixels took the render to
+// 830 MB. Both are open decisions.
+const LIQUID_LIMITS = Object.freeze({
+  parseLimit: 100_000,
+  renderLimit: 1_000,
+  memoryLimit: 10_000_000,
+});
+const FILL_OUTPUT_LIMIT = 5_000_000;
+const liquid = new Liquid({ templates: Object.create(null), ...LIQUID_LIMITS });
+
+// Liquid does not count what {% capture %} builds, so a template could
+// double a capture 23 times to 300 million characters in a millisecond.
+// This capture counts its result against memoryLimit, as append does.
+class CountedCapture extends CaptureTag {
+  *render(ctx) {
+    yield* super.render(ctx);
+    const value = ctx.bottom()[this.variable];
+    ctx.memoryLimit.use(typeof value === 'string' ? value.length : 0);
+  }
+}
+liquid.registerTag('capture', CountedCapture);
+
+// renderLimit is only checked between tags, never inside one filter call.
+// Filters that read a property on every item walk the whole property path
+// for each item, and Liquid charges only the item count (sum charges
+// nothing). A 1-million-character path ("a.a.a...") mapped over 2,048
+// items ran for minutes inside every limit. These filters charge
+// items x (1 + the property's length) x a weight against memoryLimit
+// before they run. The _exp filters run their expression once per item
+// and are charged the same way for the expression. The weight evens out
+// the cost per unit: the filters that parse the property as an
+// expression (where, group_by, has, find and the _exp filters) measured
+// about 8 times slower per unit than sort, map and sum. Each entry: which
+// argument holds the property or expression, and the weight.
+const PER_ITEM_FILTERS = {
+  sort: [0, 1], sort_natural: [0, 1], map: [0, 1], sum: [0, 1],
+  where: [0, 8], reject: [0, 8], group_by: [0, 8], has: [0, 8], find: [0, 8], find_index: [0, 8],
+  where_exp: [1, 8], reject_exp: [1, 8], group_by_exp: [1, 8], has_exp: [1, 8], find_exp: [1, 8], find_index_exp: [1, 8],
+};
+const itemCount = v => (Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : 1);
+for (const [name, [argIndex, weight]] of Object.entries(PER_ITEM_FILTERS)) {
+  const builtin = liquid.filters[name];
+  if (typeof builtin !== 'function') throw new Error(`liquidjs has no built-in filter ${name} to count`);
+  liquid.registerFilter(name, function (input, ...args) {
+    const arg = args[argIndex];
+    this.context.memoryLimit.use(itemCount(input) * (1 + (arg == null ? 0 : String(arg).length)) * weight);
+    return builtin.call(this, input, ...args);
+  });
+}
+
+// Liquid's own messages name no limit, and the parse-length one is not a
+// LiquidError, so the Studio preview would answer 500 instead of showing
+// it. fill() rethrows all three as LiquidErrors that name the limit.
+const LIMIT_MESSAGES = [
+  ['parse length limit exceeded', `template is longer than ${LIQUID_LIMITS.parseLimit.toLocaleString('en-US')} characters`],
+  ['template render limit exceeded', `template took longer than ${LIQUID_LIMITS.renderLimit.toLocaleString('en-US')} ms to fill`],
+  ['memory alloc limit exceeded', `template built more than ${LIQUID_LIMITS.memoryLimit.toLocaleString('en-US')} items (loop ranges, captures, filter results and per-item property lookups)`],
+];
+
 const fonts = [
   { name: 'Sans', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSans.ttf')), weight: 400, style: 'normal' },
   { name: 'Sans', data: fs.readFileSync(path.join(FONT_DIR, 'DejaVuSans-Bold.ttf')), weight: 700, style: 'normal' },
@@ -38,12 +133,127 @@ const fonts = [
 
 // 1) Liquid template + data -> HTML
 async function fill(template, data) {
-  return liquid.parseAndRender(template, data);
+  let markup;
+  try {
+    markup = await liquid.parseAndRender(template, data);
+  } catch (err) {
+    const message = typeof err?.message === 'string' ? err.message : '';
+    const hit = LIMIT_MESSAGES.find(([liquidMessage]) => message.startsWith(liquidMessage));
+    if (!hit) throw err;
+    // Keeps Liquid's ", line:1, col:25" position where it gave one.
+    throw new LiquidError(hit[1] + message.slice(hit[0].length), err.token);
+  }
+  if (markup.length > FILL_OUTPUT_LIMIT) {
+    throw new LiquidError(`template filled in to more than ${FILL_OUTPUT_LIMIT.toLocaleString('en-US')} characters`);
+  }
+  return markup;
 }
 
-// 2) HTML -> RGBA pixels via Satori + resvg
+// Escaped text (data escaped before it reached the template, as
+// plugins/message-ingest.js does, or Liquid's escape filter) reaches
+// Satori with its entities as typed, so "&amp;" would print as five
+// characters. Decode the escaped forms of & < > " ' back to the
+// characters (render/escape-html.js), in text only and after parsing,
+// so they print as text and never become markup. Other entities stay as
+// typed.
+//
+// Never inside an <svg>. Satori writes an svg subtree out as raw markup
+// inside an XML attribute (a data: URL), and that attribute is
+// entity-decoded once more before the inner SVG is parsed: "&lt;rect/&gt;"
+// typed in an svg would become a live <rect>, decoded here or not. So in
+// an svg subtree, text is dropped (an SVG never draws bare text, and
+// Satori would also lay it out as stray glyphs), attribute and inner
+// style values are escaped once for each of the two parses, and an
+// attribute or style name that is not a plain name is dropped. A value
+// then reaches the inner SVG as a value, never as markup.
+const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const xmlEscape = s => s.replace(/[&<>"']/g, c => XML_ESCAPES[c]);
+const sealValue = v => xmlEscape(xmlEscape(unescapeHtml(v)));
+const PLAIN_ATTR = /^[A-Za-z_][-A-Za-z0-9_:.]*$/;
+const PLAIN_STYLE = /^[A-Za-z][-A-Za-z0-9]*$/;
+
+// The root svg's own style is layout input to Satori, not markup, so it
+// stays as typed.
+//
+// resvg reads an href that is not a data: URL or a #fragment as a file
+// path on the server (feImage reads one even inside an inline svg). So on
+// every element an href (href, xlink:href, any prefix:href) keeps only a
+// #fragment or a data: URL that passes the image guard's check, in its
+// checked base64 form (render/image-guard.js safeDataUrl). Any other href
+// is dropped, or on <image> made a blank. An attribute or style value
+// with a url() that does not start with # or data: is dropped too. Both
+// are checked on the value resvg reads after the two parses
+// (unescapeHtml of the value as typed).
+const isHrefKey = key => {
+  const k = key.toLowerCase();
+  return k === 'href' || k === 'xlinkhref' || k.endsWith(':href');
+};
+function sealSvg(node, root) {
+  const props = node?.props;
+  if (!props || typeof props !== 'object') return;
+  const isImage = typeof node.type === 'string' && node.type.toLowerCase() === 'image';
+  for (const key of Object.keys(props)) {
+    if (key === 'children' || (root && key === 'style')) continue;
+    const value = props[key];
+    if (!PLAIN_ATTR.test(key)) delete props[key];
+    else if (isHrefKey(key)) {
+      const read = typeof value === 'string' ? unescapeHtml(value) : '';
+      const data = read.startsWith('data:') ? safeDataUrl(read) : null;
+      if (isFragmentHref(read)) props[key] = sealValue(value);
+      else if (data) props[key] = data;
+      else if (isImage) props[key] = BLANK_IMAGE;
+      else delete props[key];
+    }
+    else if (key === 'style' && value && typeof value === 'object') {
+      const sealed = {};
+      for (const [k, v] of Object.entries(value)) {
+        if (!PLAIN_STYLE.test(k)) continue;
+        if (typeof v !== 'string') sealed[k] = v;
+        else if (urlsAreLocal(unescapeHtml(v))) sealed[k] = sealValue(v);
+      }
+      props.style = sealed;
+    } else if (typeof value === 'string') {
+      if (urlsAreLocal(unescapeHtml(value))) props[key] = sealValue(value);
+      else delete props[key];
+    }
+  }
+  const kids = props.children;
+  if (typeof kids === 'string') props.children = [];
+  else if (Array.isArray(kids)) {
+    for (let i = 0; i < kids.length; i++) {
+      if (typeof kids[i] === 'string') kids[i] = undefined;
+      else if (kids[i]) sealSvg(kids[i], false);
+    }
+  }
+}
+
+// Children may be one string or a sparse array (satori-html leaves holes
+// where whitespace was); holes stay holes.
+function prepareTree(node) {
+  if (node?.type === 'svg') {
+    sealSvg(node, true);
+    return node;
+  }
+  const kids = node?.props?.children;
+  if (typeof kids === 'string') node.props.children = unescapeHtml(kids);
+  else if (Array.isArray(kids)) {
+    for (let i = 0; i < kids.length; i++) {
+      if (typeof kids[i] === 'string') kids[i] = unescapeHtml(kids[i]);
+      else if (kids[i]) prepareTree(kids[i]);
+    }
+  }
+  return node;
+}
+
+// HTML -> the element tree Satori lays out. Image sources are left as
+// typed here; toPixels guards them first.
+const toElement = markupHtml => prepareTree(html(markupHtml));
+
+// 2) HTML -> RGBA pixels via Satori + resvg. Every image source becomes
+// a data: URL first (render/image-guard.js), so Satori never fetches.
 async function toPixels(markupHtml, maxHeight = 1600) {
-  const svg = await satori(html(markupHtml), { width: WIDTH, height: maxHeight, fonts });
+  const tree = await guardImages(html(markupHtml));
+  const svg = await satori(prepareTree(tree), { width: WIDTH, height: maxHeight, fonts });
   const r = new Resvg(svg, { fitTo: { mode: 'width', value: WIDTH } }).render();
   return { rgba: r.pixels, width: r.width, height: r.height };
 }
@@ -282,4 +492,4 @@ function previewPng({ bits, width, height }) {
   return PNG.sync.write(png);
 }
 
-export { renderToEscpos, renderToPreview, fill, toPixels, dither, toEscpos, WIDTH, ENCODER };
+export { renderToEscpos, renderToPreview, fill, toElement, toPixels, dither, toEscpos, WIDTH, ENCODER, LIQUID_LIMITS, FILL_OUTPUT_LIMIT };

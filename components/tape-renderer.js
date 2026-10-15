@@ -174,8 +174,8 @@ export function noteLabel(midi, sharps) {
 // originFromTop is where the note line the glyph attaches to crosses the
 // bitmap (the font's baseline): sharp/natural center on it, the flat's
 // bowl wraps it, the G clef's curl winds around it, the breath comma
-// sits fully above it. Regenerate with scripts in the session notes if
-// the set ever grows. ----
+// sits fully above it. Regenerate with scripts/tape-glyphs/gen-glyphs.mjs
+// if the set ever grows. ----
 const GLYPH_SPACE_SRC = 40; // source px per staff space
 const GLYPHS_PACKED = {
   clef: {

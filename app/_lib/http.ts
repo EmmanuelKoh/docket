@@ -6,12 +6,23 @@ const STATUS: Record<string, number> = {
   not_found: 404,
   conflict: 409,
   too_large: 413,
+  busy: 429,
   unavailable: 502,
 };
 export function errorResponse(err: unknown): Response {
-  const e = err as { name?: string; code?: string; message?: string };
+  const e = err as {
+    name?: string;
+    code?: string;
+    message?: string;
+    retryAfter?: number;
+  };
   if (e?.name === 'OpError' && e.code && STATUS[e.code]) {
-    return Response.json({ error: e.message }, { status: STATUS[e.code] });
+    const headers: Record<string, string> =
+      e.code === 'busy' ? { 'Retry-After': String(e.retryAfter ?? 60) } : {};
+    return Response.json(
+      { error: e.message },
+      { status: STATUS[e.code], headers },
+    );
   }
   console.error(err);
   return Response.json(

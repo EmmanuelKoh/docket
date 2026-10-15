@@ -2,7 +2,8 @@
 // Blob and a counted PGlite): the ingest token resolves from its kv mirror
 // with no Postgres query, a mirror miss asks Postgres once and rewrites
 // the mirror, an edited token stops working at once, an unknown token is
-// refused from memory for a minute, and a resent message answers
+// refused from memory for a minute, a token no config could hold is
+// refused (401 on the route) with no call at all, and a resent message answers
 // { duplicate: true } from Redis alone, the claim being one SET NX EX 90
 // and "done" one SET EX 900. The json driver's side of both is in
 // tests/kv.test.ts and tests/ops/messages.test.ts.
@@ -14,7 +15,11 @@ import { generateObject } from '@/lib/llm/index.js';
 import { userCaller } from '@/lib/ops/caller.js';
 import { callerForCredential } from '@/lib/ops/identity.js';
 import { slipsSaveConfig } from '@/lib/ops/slips.js';
-import { getPlugin, mirrorCredential } from '@/lib/plugin-registry.js';
+import {
+  findOwnerByCredential,
+  getPlugin,
+  mirrorCredential,
+} from '@/lib/plugin-registry.js';
 import { ensureRegistered } from '@/lib/plugin-setup.js';
 import {
   calls,
@@ -151,12 +156,35 @@ describe('ingest token mirror', () => {
     }
   });
 
+  it('a token no config could hold costs no Redis or Postgres call', async () => {
+    for (const bad of [
+      '',
+      'has space',
+      'tab\there',
+      'line\nbreak',
+      'café-token',
+      'x'.repeat(129),
+    ]) {
+      const { result, log } = await metered(() => resolve(bad));
+      expect(result, JSON.stringify(bad)).toBeNull();
+      expect(log, JSON.stringify(bad)).toEqual([]);
+    }
+    // The longest shape a config can hold is still looked up.
+    const longest = `${randomUUID()}${'~'.repeat(92)}`;
+    expect(longest).toHaveLength(128);
+    expect((await metered(() => resolve(longest))).pg).toEqual(['pg select ']);
+  });
+
   it('remembers at most 1000 unknown tokens, dropping the oldest', async () => {
+    // The registry lookup itself: callerForCredential would stop at its
+    // per-instance budget (tests/token-flood.test.ts) long before 1000.
+    const find = (token: string) =>
+      findOwnerByCredential(MODULE, 'ingestToken', token);
     const run = randomUUID();
     const junk = (n: number) => `junk-${run}-${n}`;
-    for (let n = 0; n <= 1000; n++) await resolve(junk(n));
-    expect((await metered(() => resolve(junk(1)))).pg).toEqual([]);
-    expect((await metered(() => resolve(junk(0)))).pg).toEqual(['pg select ']);
+    for (let n = 0; n <= 1000; n++) await find(junk(n));
+    expect((await metered(() => find(junk(1)))).pg).toEqual([]);
+    expect((await metered(() => find(junk(0)))).pg).toEqual(['pg select ']);
   });
 
   it('a token minted after this instance refused it resolves at once', async () => {
@@ -182,6 +210,25 @@ describe('POST /ingest duplicate guard (hosted)', () => {
         body: JSON.stringify(body),
       }),
     );
+
+  it('a malformed token answers 401 with no store call', async () => {
+    const overlong = await metered(() =>
+      ingest('x'.repeat(129), { text: 'task: buy stamps' }),
+    );
+    expect(overlong.result.status).toBe(401);
+    expect(overlong.log).toEqual([]);
+
+    const spaced = await metered(() =>
+      POST(
+        new Request('http://docket.test/ingest?token=a%20b', {
+          method: 'POST',
+          body: JSON.stringify({ text: 'task: buy stamps' }),
+        }),
+      ),
+    );
+    expect(spaced.result.status).toBe(401);
+    expect(spaced.log).toEqual([]);
+  });
 
   it('a resent message answers 200 duplicate: true from Redis alone', async () => {
     const { owner, token } = await registered();

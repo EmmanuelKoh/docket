@@ -67,7 +67,15 @@ and the Printer page every 3s while a pairing is pending.
   memorize-then-print chunks (`GS *`/`GS /`), rotated 180° with a flush
   cut so the printer's top leader becomes bottom margin. Text receipts
   are one raster, byte-stable. The framing is stored as the job's
-  `encoding`. Loaded lazily, only by code that renders.
+  `encoding`. Loaded lazily, only by code that renders. Satori never
+  fetches: `render/image-guard.js` turns every image source into a data:
+  URL first (public https inlined, anything else blank) and keeps colors
+  out of image values (Satori pastes the color into `currentColor`), and
+  plugins escape outside text with `render/escape-html.js`. resvg reads
+  an svg href that is not `#name` or data: as a server file, so the
+  guard blanks an SVG image that points outside itself and render-core
+  drops such hrefs in inline svgs. Owner-typed addresses (calendar
+  feeds) are fetched through the guard's `fetchPublic`, never `fetch`.
 - `plugins/`: modules listed in `plugins/index.js`, with `run` on a
   schedule and/or `onMessage` for pushed messages (contract in
   `docs/architecture.md`). A schedule is `{ every: seconds }` or
@@ -230,7 +238,9 @@ bring-up.
   flashing** (see field notes), test, point back at production.
 - Deploys: push to main -> Vercel. Production stores are Upstash Redis +
   Blob (`STORE_DRIVER=redis` + tokens in Vercel env). Preview deployments
-  share production data (ownerId isolation is the escape hatch).
+  currently share production stores. Isolating them is tracked in GitHub
+  issue #33. Until then, keep Git Fork Protection on and treat previews
+  as production.
 
 ## Conventions for working here
 

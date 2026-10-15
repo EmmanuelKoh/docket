@@ -30,7 +30,9 @@ Two parts sit beside the stack:
 - `render/render-core.js` turns a template and data into printer bytes.
   The job store and the template ops import it lazily, inside the code
   that renders, so the device routes never load it
-  (`tests/lazy-render.test.ts`).
+  (`tests/lazy-render.test.ts`). Before Satori runs,
+  `render/image-guard.js` turns every image source into a data: URL, so
+  Satori never fetches (see "Rendering untrusted input").
 - `plugins/` holds modules that print on their own. They reach the
   stores only through `ctx` (see "Plugins").
 
@@ -124,6 +126,7 @@ dashboard adapter (`app/_lib/http.ts`) maps them to HTTP:
 | `not_found` | 404 |
 | `conflict` | 409 |
 | `too_large` | 413 |
+| `busy` | 429, with Retry-After |
 | `unavailable` | 502 |
 
 Any other error is a 500. An op that returns nothing answers `null`.
@@ -189,11 +192,24 @@ What the firmware reads, frozen by `tests/device-wire.test.ts`:
 - `POST /tick`: the firmware reads only the status. `agent/heartbeat.js`
   reads `results[].{id, status, error}`.
 - `POST /pair`: no auth. The firmware pulls `code` and `token` out of the
-  200 body with a substring search. 204 while the code is unclaimed.
-- 401 means a missing, unknown or revoked token, and nothing else. Ten
-  401s in a row make the firmware erase its token and pair again. A store
-  failure answers 5xx (`deviceErrorResponse` in `app/_lib/device-auth.ts`
-  maps `invalid` to 400, `forbidden` to 403 and anything else to 500).
+  200 body with a substring search. 204 while the code is unclaimed. A
+  `hardwareId` must be 6 to 64 letters, digits, `:`, `_` or `-`. Anything
+  else answers 400 before any write. The firmware sends `esp32-` and its
+  MAC as 12 hex digits.
+- 401 means a missing, unknown or revoked token, and nothing else. A token
+  not shaped like a minted one (43 base64url characters) answers 401
+  before any cache, Redis or Postgres read. The local-dev `DEVICE_TOKEN`
+  is matched before that check. Ten 401s in a row make the firmware erase
+  its token and pair again. A store failure answers 5xx
+  (`deviceErrorResponse` in `app/_lib/device-auth.ts` maps `invalid` to
+  400, `forbidden` to 403, `busy` to 503 and anything else to 500).
+- 503 with Retry-After means this instance has spent its budget of 30
+  unknown-token lookups a minute (`lib/ops/identity.js`). A token that
+  has resolved on the instance before is never refused this way, even
+  after its cache entry expires. The firmware backs off 15 seconds on
+  any 5xx, and a 5xx resets its count of 401s.
+- `/pair` deletes stale unclaimed device rows when it adds one: no
+  owner, created over a day ago, no live code, at most 100 at a time.
 
 `X-Job-Id` is `owner~job-N`. A device can serve several owners (shared
 printers), and their job ids can collide, so the id carries the owner.
@@ -300,6 +316,58 @@ Keys: `jobs/{owner}/{id}.png`, `.bin`, `.data.json`, and
 New rows also still write the `*_url` columns. Readers try the key, then
 the URL (`readFirst`), so rows from before keys keep working.
 
+## Rendering untrusted input
+
+Templates are account input. Plugin data can come from strangers: a
+forwarded text, a calendar invite, a sports feed. The renderer keeps
+both from reaching the network or turning into markup.
+
+- Plugins escape every outside string (`render/escape-html.js`) before
+  the template sees it. The renderer decodes the escaped characters in
+  text after parsing, so they print as typed.
+- Liquid reads no files. `render`, `include` and `layout` fail.
+- Liquid work is capped: 100,000 characters of source, about 1 second
+  to fill (checked between tags), 10 million memory units, and 5 million
+  characters of filled-in HTML. Memory units count loop ranges,
+  captures, filter results, and the property lookups a filter does per
+  item, so one filter call cannot outrun the time check. Satori's layout
+  time and the memory resvg uses to decode an image are not capped.
+- Inside an `<svg>`, text is dropped and attribute and style values are
+  escaped once for each of the two parses Satori puts them through. Data
+  in an svg never becomes svg markup. resvg reads an `href` that is not
+  a data: URL or a `#fragment` as a server file path (feImage does even
+  inside an image), so on every svg element an `href` keeps only a
+  `#fragment` or a data: URL that passes the check below. Any other
+  `href` is dropped (a blank on `<image>`), and so is an attribute or
+  style value with a `url()` that does not start with `#` or `data:`.
+- `render/image-guard.js` rewrites every image source (img src, image
+  href, CSS `url()`) before Satori runs. A data: URL is decoded and
+  checked, then passed on as base64, so resvg decodes exactly the bytes
+  checked. It is refused when the bytes are gzip, or are text holding an
+  entity declaration, an `@import`, an `href` that is not a `#fragment`
+  or a data: URL, or a `url()` that does not start with `#` or `data:`.
+  A data: `href` inside is checked the same way, up to 4 levels down.
+  The check ignores the media type, since resvg reads text bytes as an
+  SVG under several. An https URL is fetched under these rules: default
+  port, every resolved address public, the connection pinned to those
+  addresses, at most 3 redirects checked the same way, 5 seconds, 5 MB,
+  PNG, JPEG, GIF or SVG, and an SVG must pass the same check. It is then
+  inlined as a data: URL. Anything else, or any failure, becomes a
+  transparent pixel. A render fetches at most 20 remote images. A style
+  value is dropped if it holds a `url()` the guard cannot read or a data:
+  URL the check refuses, or if Satori would split it into a `url()` layer
+  that is not a checked data: URL.
+- Blocked addresses, for images and calendar feeds alike: loopback,
+  private, link-local, CGNAT, multicast, unspecified, reserved and
+  documentation ranges, unique-local and site-local IPv6, NAT64 and 6to4
+  forms of a blocked IPv4 address, IPv4-mapped forms of one, and the
+  whole IPv4-translated range (`::ffff:0:0:0/96`).
+- Satori pastes an element's color into any style value that names
+  `currentColor`, after the guard runs. So the guard drops a color that
+  is not a plain color, a background or mask value that names
+  `currentColor`, and a `tw` value with an arbitrary value, `current` or
+  `url(`.
+
 ## Plugins
 
 A plugin is a module listed in `PLUGINS` in `plugins/index.js`. It
@@ -332,6 +400,15 @@ exports:
 
 Generic code never branches on a module id
 (`tests/plugin-contract.test.ts`).
+
+An address an owner types into a config is fetched through
+`fetchPublic` in `render/image-guard.js`, under the image guard's address
+rules, never with a plain `fetch`. The morning brief fetches its
+calendar feeds this way: http or https on the default port (webcal://
+means https://), no user or password, every resolved address public, the
+connection pinned to those addresses, at most 3 redirects checked the
+same way, 10 seconds, 5 MB. A refused feed fails the run like any failed
+feed, so it shows as `lastError`.
 
 **Registration.** `slips.register` runs on Slips page views
 (`ensureRegistered` in `lib/plugin-setup.js`), once per owner per server
@@ -371,7 +448,11 @@ for `message-ingest` with the caller its `ingestToken` resolves to.
 The ingest token resolves through a kv mirror
 (`rp:_credentials:{moduleId}:{key}:{sha256}`), with a Postgres lookup on
 a miss. A token Postgres did not know is refused from memory for the next
-minute, per warm instance.
+minute, per warm instance. A token no config could hold (over 128
+characters, spaces or non-ASCII) is refused before any read. The Slips
+page refuses to save one. An instance looks up at most 30 tokens a minute
+that it has never resolved. Past that `/ingest` answers 429 with
+Retry-After.
 
 ## The LLM seam
 

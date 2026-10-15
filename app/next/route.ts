@@ -13,9 +13,9 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const caller = await deviceCaller(req); // store failure throws -> 500, as before
-  if (!caller) return unauthorized();
   try {
+    const caller = await deviceCaller(req);
+    if (!caller) return unauthorized();
     const job = await serveNext(caller);
     if (!job) return new Response(null, { status: 204 });
     // Content-Length is part of the device contract: the ESP32 firmware

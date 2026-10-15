@@ -86,8 +86,11 @@ function sendOnSocket(sock, bytes) {
  * 2. If no response, send ESC @ on a throwaway connection to wake it,
  *    pause, and re-probe.
  * 3. Retry up to MAX_WAKE_ATTEMPTS times.
+ *
+ * PRINTER_IP has no default: with no address, it throws before connecting.
  */
 export async function printToNetwork(bytes, ip = PRINTER_IP, port = PRINTER_PORT) {
+  if (!ip) throw new Error('no printer address: set PRINTER_IP');
   for (let i = 0; i < MAX_WAKE_ATTEMPTS; i++) {
     const { status, sock } = await probeKeepAlive(ip, port);
     if (status !== null && sock) {
