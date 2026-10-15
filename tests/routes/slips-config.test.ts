@@ -2,7 +2,8 @@
 // before slips.saveConfig sees it: the Slips form's flat fields (sched_every,
 // sched_at, sched_tz, cfg_<key>) become { schedule, config }, fields the
 // form leaves out keep their stored values, and the reply is the assembled
-// slip. Also the toggle route's read-then-flip, which the ops never see.
+// slip. Also the toggle route: the wanted state when the caller sends one,
+// else a read-then-flip, which the ops never see.
 
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -169,5 +170,30 @@ describe('POST /api/slips/toggle', () => {
 
     expect((await toggle()).body.slip.enabled).toBe(false);
     expect((await getPlugin(o, 'morning-brief'))?.enabled).toBe(false);
+  });
+
+  it('sets the wanted state, so a repeated click keeps the choice', async () => {
+    const o = await owner();
+    const set = (enabled: string) =>
+      post(
+        toggleRoute,
+        `/api/slips/toggle?id=morning-brief&enabled=${enabled}`,
+        o,
+      );
+    for (const _ of [1, 2]) {
+      const on = await set('true');
+      expect(on.status).toBe(200);
+      expect(on.body.slip.enabled).toBe(true);
+    }
+    expect((await getPlugin(o, 'morning-brief'))?.enabled).toBe(true);
+    // the next run of a slip with a daily time, in its own time zone
+    expect((await set('true')).body.slip.runLabel).toMatch(
+      /^(Today|Tomorrow) 06:30$/,
+    );
+    for (const _ of [1, 2]) {
+      expect((await set('false')).body.slip.enabled).toBe(false);
+    }
+    expect((await getPlugin(o, 'morning-brief'))?.enabled).toBe(false);
+    expect((await set('false')).body.slip.runLabel).toBe('Daily 06:30');
   });
 });

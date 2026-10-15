@@ -1,7 +1,9 @@
 // app/_lib/queue-data.ts — the queue view model. Shared by the Queue
-// page (initial render) and /api/queue (its poll), over jobs.list
-// filtered to the live statuses, with failed attempts, in print order.
-// Also the queue's size for the sidebar badge and Overview
+// page (initial render), /api/queue (its poll) and the cancel and
+// requeue routes, over jobs.list filtered to the live statuses, with
+// failed attempts, in print order. Times are formatted in the viewer's
+// time zone (pass viewerTimeZone() from app/_lib/time.ts). Also the
+// queue's size for the panel's printer line, Home and Printer
 // (jobs.queueSize), read once per request however many places show it.
 
 import { cache } from 'react';
@@ -12,21 +14,28 @@ import {
   jobsQueueSize,
   STUCK_AFTER_NACKS,
 } from '@/lib/ops/jobs.js';
-import { failedAttempts, hhmmss, type JobSummary, jobImageSrc } from './format';
+import { failedAttempts, type JobSummary, jobImageSrc } from './format';
+import { agoLabel, clockLabel, dayLabel } from './time';
 
-// Per request (React cache): the layout's badge and Overview's queue
-// cell share one read.
+// Per request (React cache): the panel's printer line and the page share
+// one read.
 export const queueSize = cache((caller: Caller) => jobsQueueSize(caller));
 
 export type QueueJob = {
   id: string;
   image: string; // the thumbnail's src (jobImageSrc)
+  /** intrinsic size of the preview PNG, to reserve the thumbnail's space */
+  width: number;
+  height: number | null;
   name: string;
+  /** the job's source id ('sms', 'studio'); '' when it has none */
   source: string;
+  /** "17:30" today, else "Yesterday 17:30" or "Tue 13 Oct 17:30" */
   createdTime: string;
   attemptsText: string; // '' when none failed
   inflight: boolean;
   statusText: string;
+  /** how long a printer has held it: "12 s"; '' when waiting */
   claimedAgo: string;
 };
 
@@ -36,23 +45,33 @@ export type QueueJob = {
 const atBack = (j: JobSummary) =>
   j.status === 'queued' && (j.attempts ?? 0) >= STUCK_AFTER_NACKS;
 
-function queueJobData(j: JobSummary): QueueJob {
+function createdLabel(iso: string, timeZone: string, now: number): string {
+  const day = dayLabel(iso, timeZone, now);
+  const time = clockLabel(iso, timeZone);
+  return day === 'Today' ? time : `${day} ${time}`;
+}
+
+function queueJobData(j: JobSummary, timeZone: string, now: number): QueueJob {
   return {
     id: j.id,
     image: jobImageSrc(j),
+    width: j.width ?? 576,
+    height: j.height ?? null,
     name: j.name || j.id,
-    source: j.source || '—',
-    createdTime: hhmmss(j.createdAt),
+    source: j.source || '',
+    createdTime: createdLabel(j.createdAt, timeZone, now),
     attemptsText: failedAttempts(j.attempts),
     inflight: j.status === 'inflight',
     statusText: j.status === 'inflight' ? 'printing' : 'queued',
-    claimedAgo: j.claimedAt
-      ? `${Math.max(0, Math.floor((Date.now() - new Date(j.claimedAt).getTime()) / 1000))}s`
-      : '',
+    claimedAgo:
+      j.status === 'inflight' && j.claimedAt ? agoLabel(j.claimedAt, now) : '',
   };
 }
 
-export async function queueData(caller: Caller | null): Promise<{
+export async function queueData(
+  caller: Caller | null,
+  timeZone = 'UTC',
+): Promise<{
   jobs: QueueJob[];
   count: number;
 }> {
@@ -78,8 +97,9 @@ export async function queueData(caller: Caller | null): Promise<{
     const at = (j: JobSummary) => place.get(j.id) ?? ids.length;
     waiting = [...waiting].sort((a, b) => at(a) - at(b));
   }
+  const now = Date.now();
   return {
-    jobs: [...printing, ...waiting].map(queueJobData),
+    jobs: [...printing, ...waiting].map((j) => queueJobData(j, timeZone, now)),
     count: live.length,
   };
 }

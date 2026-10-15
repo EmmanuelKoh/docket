@@ -11,16 +11,28 @@
 // /studio?template=Name / ?new=1 URL contract the slip pages use.
 
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { jobImageSrc } from '@/app/_lib/format';
+import { Field } from '@/components/hardware/field';
+import { Led } from '@/components/hardware/led';
+import { Module } from '@/components/hardware/module';
+import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Row } from '@/components/hardware/row';
+import { Stamp } from '@/components/hardware/stamp';
+import { ErrorText, Note } from '@/components/hardware/text';
 import { useEasedPoll } from '@/components/hooks/use-eased-poll';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useSidebar } from '@/components/ui/sidebar';
 
 type Template = { name: string; template: string; data?: unknown };
 type Job = {
   id: string;
+  name?: string;
   status: string;
   width?: number;
   height?: number;
@@ -84,21 +96,24 @@ function highlightJsonSrc(src: string): string {
   return out + escHtml(src.slice(last));
 }
 
-function timeAgo(iso: string): string {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 5) return 'now';
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+// `now` is when the list arrived (state, set after mount), so rendering
+// never reads the clock.
+function timeAgo(iso: string, now: number): string {
+  const s = Math.floor((now - new Date(iso).getTime()) / 1000);
+  if (s < 5) return 'Now';
+  if (s < 60) return `${s} s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)} m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
 }
+
+const subscribeNever = () => () => {};
+const isMacClient = () => /Mac/i.test(navigator.userAgent);
 
 // a failed fetch throws a browser TypeError ("Failed to fetch", "Load
 // failed"…) that varies by browser — show one stable phrase instead
 function fetchErrText(err: unknown): string {
-  return err instanceof TypeError
-    ? 'connection failed'
-    : (err as Error).message;
+  return err instanceof TypeError ? 'No connection' : (err as Error).message;
 }
 
 const DEFAULT_TPL =
@@ -107,11 +122,13 @@ const DEFAULT_TPL =
 // ---- the overlay code editor ----
 
 function CodeEditor({
+  label,
   value,
   onChange,
   highlight,
   placeholder,
 }: {
+  label: string;
   value: string;
   onChange: (v: string) => void;
   highlight: (src: string) => string;
@@ -153,6 +170,7 @@ function CodeEditor({
       />
       <textarea
         ref={taRef}
+        aria-label={label}
         wrap="off"
         spellCheck={false}
         placeholder={placeholder}
@@ -173,19 +191,6 @@ function CodeEditor({
 export function StudioEditor() {
   const searchParams = useSearchParams();
 
-  // The editors need width: entering the studio collapses the sidebar to
-  // its icon rail (desktop only) and leaving restores whatever the user
-  // had. The rail and the back link are the ways out.
-  const { open, setOpen, isMobile } = useSidebar();
-  const sidebarWasOpen = useRef(open);
-  useEffect(() => {
-    if (isMobile) return;
-    const wasOpen = sidebarWasOpen.current;
-    setOpen(false);
-    return () => setOpen(wasOpen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const [templates, setTemplates] = useState<Template[]>([]);
   const [currentName, setCurrentName] = useState('');
   const [tab, setTab] = useState<'template' | 'data'>('template');
@@ -194,7 +199,7 @@ export function StudioEditor() {
   const [jsonError, setJsonError] = useState('');
   const [status, setStatus] = useState<{ cls: string; text: string }>({
     cls: '',
-    text: 'ready',
+    text: 'Ready',
   });
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewSize, setPreviewSize] = useState<[number, number] | null>(null);
@@ -202,6 +207,7 @@ export function StudioEditor() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalName, setModalName] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobsAt, setJobsAt] = useState(0);
   const [printing, setPrinting] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -229,7 +235,7 @@ export function StudioEditor() {
       setJsonError('');
       return d;
     } catch (err) {
-      setJsonError(`JSON: ${(err as Error).message}`);
+      setJsonError(`Data: ${(err as Error).message}`);
       return null;
     }
   }, [dataSrc]);
@@ -273,7 +279,7 @@ export function StudioEditor() {
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!tplSrc.trim()) {
-        setStatus({ cls: '', text: 'ready' });
+        setStatus({ cls: '', text: 'Ready' });
         setPreviewUrl((old) => {
           if (old) URL.revokeObjectURL(old);
           return '';
@@ -286,14 +292,14 @@ export function StudioEditor() {
         try {
           data = JSON.parse(raw);
         } catch {
-          setStatus({ cls: 'error', text: 'fix JSON to preview' });
+          setStatus({ cls: 'error', text: 'Fix the data to see a preview' });
           return;
         }
       }
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
-      setStatus({ cls: '', text: 'rendering...' });
+      setStatus({ cls: '', text: 'Rendering' });
       try {
         const resp = await fetch('/preview', {
           method: 'POST',
@@ -304,8 +310,8 @@ export function StudioEditor() {
         if (!resp.ok) {
           const err = await resp
             .json()
-            .catch(() => ({ error: 'render failed' }));
-          setStatus({ cls: 'error', text: err.error || 'render failed' });
+            .catch(() => ({ error: 'Preview failed' }));
+          setStatus({ cls: 'error', text: err.error || 'Preview failed' });
           return;
         }
         const blob = await resp.blob();
@@ -317,7 +323,7 @@ export function StudioEditor() {
           return url;
         });
         setPreviewSize([w, h]);
-        setStatus({ cls: 'active', text: `${w} x ${h}px · 1-bit` });
+        setStatus({ cls: 'active', text: `${w} × ${h} px · 1-bit` });
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         setStatus({ cls: 'error', text: fetchErrText(err) });
@@ -333,6 +339,7 @@ export function StudioEditor() {
       if (!resp.ok) return;
       const list: Job[] = await resp.json();
       setJobs(list);
+      setJobsAt(Date.now());
       if (trackingJobId.current) {
         const tracked = list.find((j) => j.id === trackingJobId.current);
         if (tracked?.status === 'done') {
@@ -373,7 +380,7 @@ export function StudioEditor() {
   const save = useCallback(async () => {
     if (!currentName) return showToast('No template selected');
     const data = parseData();
-    if (data === null) return showToast('Fix JSON before saving');
+    if (data === null) return showToast('Fix the data before saving');
     const result = await apiSave(currentName, tplSrc, data);
     if (result) {
       setTemplates(result);
@@ -425,7 +432,7 @@ export function StudioEditor() {
   const print = useCallback(async () => {
     if (!tplSrc.trim()) return showToast('Nothing to print');
     const data = parseData();
-    if (data === null) return showToast('Fix JSON before printing');
+    if (data === null) return showToast('Fix the data before printing');
     setPrinting(true);
     try {
       const resp = await fetch('/jobs', {
@@ -441,13 +448,13 @@ export function StudioEditor() {
       const body = await resp.json();
       if (resp.ok) {
         trackingJobId.current = body.id;
-        showToast(`Queued · ${body.width}x${body.height}px`);
+        showToast('Sent to the printer');
         refreshJobs();
       } else {
-        showToast(body.error || 'Queue failed');
+        showToast(body.error || 'Not sent. Try again.');
       }
     } catch (err) {
-      showToast(`Queue failed: ${fetchErrText(err)}`);
+      showToast(`Not sent: ${fetchErrText(err)}`);
     } finally {
       setPrinting(false);
     }
@@ -469,213 +476,236 @@ export function StudioEditor() {
     return () => document.removeEventListener('keydown', onKey);
   }, [save, print]);
 
-  const isMac =
-    typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent);
-
-  const btnCls = 'h-auto px-2.5 py-1 text-xs font-normal';
+  // The server cannot know the keyboard: it renders Ctrl, and a Mac
+  // switches to ⌘ after hydration (no hydration mismatch).
+  const isMac = useSyncExternalStore(subscribeNever, isMacClient, () => false);
 
   return (
-    <div className="space-y-4">
-      {/* toolbar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-md border-[0.5px] border-border bg-raised px-4 py-3">
-        <select
+    <div className="flex flex-col gap-6">
+      {/* toolbar: the template, its keys, then the red print key */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <Field
+          as="select"
+          label="Template"
+          className="w-[260px] max-sm:w-full"
           value={currentName}
           onChange={(e) => loadTemplate(templates, e.target.value)}
-          className="min-w-[160px] rounded-md border-[0.5px] border-border bg-page px-2 py-1.5 font-mono text-xs text-ink outline-none focus:border-ink-faint"
         >
           {templates.map((t) => (
             <option key={t.name} value={t.name}>
               {t.name}
             </option>
           ))}
-        </select>
-        <Button
-          variant="outline"
-          size="sm"
-          className={btnCls}
-          onClick={() => {
-            setModalName('');
-            setModalOpen(true);
-          }}
-        >
-          New
-        </Button>
-        <Button size="sm" className={btnCls} onClick={save}>
-          Save
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className={btnCls}
-          onClick={doDelete}
-        >
-          Delete
-        </Button>
+        </Field>
+        <KeyGroup>
+          <PushKey
+            onClick={() => {
+              setModalName('');
+              setModalOpen(true);
+            }}
+          >
+            New
+          </PushKey>
+          <PushKey onClick={save}>Save</PushKey>
+          <PushKey onClick={doDelete}>Delete</PushKey>
+        </KeyGroup>
         <div className="grow" />
-        <Button
-          size="sm"
-          className={btnCls}
-          onClick={print}
-          disabled={printing}
-        >
-          {printing ? 'Queuing...' : 'Print'}
-        </Button>
-        <span className="text-xs text-ink-faint">
+        <Note className="hw-ink pb-3.5 max-lg:hidden">
           {isMac ? '⌘S save · ⌘P print' : 'Ctrl+S save · Ctrl+P print'}
-        </span>
+        </Note>
+        <KeyGroup>
+          <PushKey variant="print" onClick={print} disabled={printing}>
+            Print
+          </PushKey>
+        </KeyGroup>
       </div>
 
-      {/* editors get the wider column: template HTML lines are long */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        {/* editors */}
-        <div className="flex h-[70vh] min-h-[420px] flex-col overflow-hidden rounded-md border-[0.5px] border-border bg-raised">
-          <div className="flex border-b-[0.5px] border-b-hairline">
-            {(['template', 'data'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={`border-b-[1.5px] px-3.5 py-2 text-xs ${tab === t ? 'border-b-red text-ink' : 'border-b-transparent text-ink-faint hover:text-ink-muted'}`}
-              >
-                {t === 'template' ? 'Template' : 'Data (JSON)'}
-              </button>
-            ))}
+      {/* the code takes the rest of the width; the stage holds the paper
+          at its true 576px (648px with the printer edge's 12px overhang) */}
+      <div className="grid gap-6 min-[1200px]:grid-cols-[minmax(360px,1fr)_minmax(0,648px)]">
+        <Module
+          number="01"
+          title="Code"
+          flush
+          className="h-[70vh] min-h-[420px]"
+          bodyClassName="min-h-0 flex-1"
+        >
+          <div className="px-4 pt-3.5 pb-3">
+            <KeyGroup>
+              {(['template', 'data'] as const).map((t) => (
+                <PushKey
+                  key={t}
+                  size="compact"
+                  down={tab === t}
+                  aria-pressed={tab === t}
+                  onClick={() => setTab(t)}
+                >
+                  {t === 'template' ? 'Template' : 'Data'}
+                </PushKey>
+              ))}
+            </KeyGroup>
           </div>
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4">
             {tab === 'template' ? (
               <CodeEditor
+                label="Template"
                 value={tplSrc}
                 onChange={setTplSrc}
                 highlight={highlightTemplateSrc}
-                placeholder="Liquid + HTML template..."
+                placeholder="Liquid and HTML"
               />
             ) : (
               <CodeEditor
+                label="Data"
                 value={dataSrc}
                 onChange={setDataSrc}
                 highlight={highlightJsonSrc}
-                placeholder='{"key": "value"}'
+                placeholder='{"title": "Hello"}'
               />
             )}
-            {jsonError ? (
-              <div className="border-t-[0.5px] border-t-hairline px-3.5 py-1 text-xs text-red">
-                {jsonError}
-              </div>
-            ) : null}
+            {jsonError ? <ErrorText>{jsonError}</ErrorText> : null}
           </div>
-        </div>
+        </Module>
 
-        {/* stage */}
-        <div className="flex h-[70vh] min-h-[420px] flex-col overflow-hidden rounded-md border-[0.5px] border-border bg-raised">
-          <div className="flex items-center gap-2.5 border-b-[0.5px] border-b-hairline px-4 py-2.5 font-mono text-xs text-ink-muted">
+        <section
+          aria-label="Preview"
+          className="flex min-w-0 flex-col min-[1200px]:h-[70vh] min-[1200px]:min-h-[420px]"
+        >
+          <div className="flex min-h-[28px] items-center gap-2.5 px-3 pb-3">
+            <Led state={status.cls === 'error' ? 'error' : 'offline'} />
             <span
-              className={`h-1.5 w-1.5 rounded-full ${status.cls === 'error' ? 'bg-red' : status.cls === 'active' ? 'bg-ink' : 'bg-ink-faint'}`}
-            />
-            <span>{status.text}</span>
+              role="status"
+              className={
+                status.cls === 'error'
+                  ? 'hw-error hw-ink'
+                  : 'hw-mono hw-ink text-sm'
+              }
+            >
+              {status.text}
+            </span>
           </div>
-          <div className="flex flex-1 justify-center overflow-auto bg-page px-4 pt-6 pb-14">
-            <div className="h-fit w-full max-w-[400px] shrink-0 overflow-hidden rounded-sm border-[0.5px] border-border bg-white">
+          <div className="min-h-0 flex-1 px-3 pb-8 min-[1200px]:overflow-y-auto">
+            <PrinterEdge className="sticky top-0 -ml-3 w-[calc(100%+24px)]" />
+            <PaperRoll>
               {previewUrl ? (
-                <img
+                <PaperSlip
+                  exact
+                  fed
+                  tear="new"
                   src={previewUrl}
-                  alt="preview"
+                  alt="Preview of the receipt"
                   width={previewSize?.[0]}
                   height={previewSize?.[1]}
-                  className="mx-auto mt-[3.75%] block w-[92.3%]"
                 />
               ) : (
-                <div className="px-5 py-10 text-center text-xs text-ink-faint">
-                  Select a template or start typing to see a preview
-                </div>
+                <PaperSlip fed tear="new">
+                  <p className="m-0 py-14 text-center text-[#4a4741]">
+                    Choose a template or start typing to see it here.
+                  </p>
+                </PaperSlip>
               )}
-            </div>
+            </PaperRoll>
           </div>
-          {/* recent jobs */}
-          <div className="max-h-[150px] overflow-y-auto border-t-[0.5px] border-t-border">
-            <div className="sticky top-0 border-b-[0.5px] border-b-hairline bg-raised px-4 py-2 text-[13px] font-semibold text-ink">
-              Recent jobs
-            </div>
-            {jobs.length ? (
-              jobs.map((j) => (
-                <div
-                  key={j.id}
-                  className="flex items-center gap-2.5 border-b-[0.5px] border-b-hairline px-4 py-1.5 font-mono text-xs last:border-b-0"
-                >
-                  <img
-                    src={jobImageSrc(j)}
-                    loading="lazy"
-                    alt=""
-                    className="w-8 shrink-0 rounded-[2px] border-[0.5px] border-border bg-white [image-rendering:pixelated]"
-                  />
-                  <span className="min-w-[56px] text-ink">{j.id}</span>
-                  <span className="text-ink-faint">
-                    {j.width}x{j.height}
-                  </span>
-                  <span
-                    className={`min-w-[60px] ${j.status === 'inflight' || j.status === 'failed' ? 'text-red' : j.status === 'done' ? 'text-ink-faint' : 'text-ink-muted'}`}
-                  >
-                    {j.status === 'inflight' ? 'printing' : j.status}
-                  </span>
-                  <span className="ml-auto text-ink-faint">
-                    {timeAgo(j.createdAt)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="px-4 py-2 font-mono text-xs text-ink-faint">
-                No jobs yet. Hit Print to queue one.
-              </div>
-            )}
-          </div>
-        </div>
+        </section>
       </div>
 
-      {/* toast */}
-      {toast ? (
-        <div className="fixed top-3.5 left-1/2 z-50 -translate-x-1/2 rounded-md border-[0.5px] border-border bg-raised px-4 py-2 text-xs text-ink">
-          {toast}
+      {/* the newest prints: refreshed on the eased cadence */}
+      {/* all ten rows, no inner scroll: a box of whole rows cannot hold
+          rows whose thumbnails differ in height */}
+      <Module number="02" title="Recent prints" flush>
+        <div>
+          {jobs.length ? (
+            jobs.map((j, i) => (
+              <Row
+                key={j.id}
+                className="flex-wrap items-start justify-start gap-4"
+              >
+                <span className="hw-thumb max-h-[86px] w-[64px]">
+                  <img src={jobImageSrc(j)} loading="lazy" alt="" />
+                </span>
+                <span className="flex min-w-0 flex-[1_1_180px] flex-col">
+                  <span className="truncate font-semibold">
+                    {j.name || j.id}
+                  </span>
+                  <span className="hw-row-sub">
+                    {j.width} × {j.height} <span className="hw-unit">px</span>
+                  </span>
+                </span>
+                <span className="ml-auto flex shrink-0 items-center justify-end gap-x-4 pt-0.5">
+                  <JobState status={j.status} alt={i % 2 === 1} />
+                  <span className="hw-mono text-sm text-ink-muted">
+                    {timeAgo(j.createdAt, jobsAt)}
+                  </span>
+                </span>
+              </Row>
+            ))
+          ) : (
+            <Row>
+              <Note>No prints yet. Press Print to send one.</Note>
+            </Row>
+          )}
         </div>
-      ) : null}
+      </Module>
 
-      {/* new-template modal */}
+      {/* toast: a live region that is always there, so it is announced */}
+      <div
+        role="status"
+        className="pointer-events-none fixed top-4 left-1/2 z-50 -translate-x-1/2"
+      >
+        {toast ? (
+          <div className="hw-module hw-panel px-4 py-2.5 text-sm font-semibold">
+            {toast}
+          </div>
+        ) : null}
+      </div>
+
+      {/* new template */}
       {modalOpen ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35">
-          <div className="w-80 rounded-md border-[0.5px] border-border bg-raised p-5">
-            <h3 className="mb-3 text-[13px] font-medium text-ink">
-              New template
-            </h3>
-            <Input
-              autoFocus
-              value={modalName}
-              onChange={(e) => setModalName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') createTemplate();
-                if (e.key === 'Escape') setModalOpen(false);
-              }}
-              placeholder="Template name"
-              className="font-mono text-xs"
-            />
-            <div className="mt-3.5 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className={btnCls}
-                onClick={() => setModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className={btnCls}
-                onClick={createTemplate}
-              >
-                Create
-              </Button>
-            </div>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-template-title"
+            className="w-full max-w-[380px]"
+          >
+            <Module number="03" title="New template" id="new-template-title">
+              <Field
+                label="Name"
+                autoFocus
+                value={modalName}
+                onChange={(e) => setModalName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') createTemplate();
+                  if (e.key === 'Escape') setModalOpen(false);
+                }}
+                autoComplete="off"
+              />
+              <KeyGroup className="self-end">
+                <PushKey onClick={() => setModalOpen(false)}>Cancel</PushKey>
+                <PushKey onClick={createTemplate}>Create</PushKey>
+              </KeyGroup>
+            </Module>
           </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+// A recent print's state: a stamp once it ended, the red LED while a
+// printer holds it, red "Waiting" while it waits (red rules: printing,
+// failures, waiting jobs).
+function JobState({ status, alt }: { status: string; alt: boolean }) {
+  if (status === 'done') return <Stamp state="printed" alt={alt} />;
+  if (status === 'failed') return <Stamp state="failed" alt={alt} />;
+  if (status === 'canceled') return <Stamp state="canceled" alt={alt} />;
+  if (status === 'inflight') {
+    return (
+      <span className="flex items-center gap-2 font-semibold text-red">
+        <Led state="printing" />
+        Printing
+      </span>
+    );
+  }
+  return <span className="font-semibold text-red">Waiting</span>;
 }

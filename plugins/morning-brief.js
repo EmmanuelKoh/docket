@@ -50,7 +50,8 @@ import { fetchPublic } from '../render/image-guard.js';
 
 export const id = 'morning-brief';
 
-// Card copy for the dashboard's Recipes pages.
+// Card copy for the Slips pages. A slip with a daily time needs no
+// trigger: its next run shows instead.
 export const meta = {
   title: 'Morning brief',
   description: 'A daily slip with your calendar, weather, and a focus line.',
@@ -76,6 +77,7 @@ export const templates = ['Daily Brief'];
 // Friendly labels for the dashboard's per-field config editor.
 export const configLabels = {
   icsUrls: 'calendar feeds',
+  timezone: 'calendar time zone',
   temperatureUnit: 'unit',
 };
 

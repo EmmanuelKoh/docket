@@ -48,7 +48,7 @@ time zone on its slip page.
   meetings.
 - If the weather fails, the brief prints a dash in place of that value.
 
-## World Cup watcher (`espn-worldcup`)
+## World Cup (`espn-worldcup`)
 
 Watches live FIFA World Cup matches through the ESPN API, and prints a
 receipt for three events. One `run()` checks the scoreboard once. By
@@ -79,7 +79,7 @@ So nothing prints twice, across ticks or restarts. If a score goes down
 prints nothing. The `watch teams` setting (`watchTeams`) limits it to the
 listed team abbreviations. Empty means all teams.
 
-## Message ingest (`message-ingest`)
+## Text messages (`message-ingest`)
 
 Forward text messages to `POST /ingest`, and DOCKET prints the tasks in
 them on Task receipts. Gemini, Google's AI model, finds the tasks in each

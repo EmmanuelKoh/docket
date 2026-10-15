@@ -1,21 +1,34 @@
-/* Studio editor: the transparent-textarea-over-highlighted-pre trick from
-   the legacy studio. The textarea owns editing, selection, and scrolling;
-   the pre mirrors its content with color and follows its scroll position.
-   wrap="off" on the textarea keeps line geometry identical between the
-   two layers. Token colors are the only place the studio needs literal
-   colors beyond the docket tokens. */
+/* Studio editor: a transparent textarea over a highlighted pre. The
+   textarea owns editing, selection and scrolling; the pre mirrors its
+   content in colour and follows its scroll position. wrap="off" on the
+   textarea keeps the line geometry the same in both layers, and both
+   layers take the same font, stretch, size, line height, padding and tab
+   size, or the caret drifts from the text. The well is an inset field
+   window, like the kit's fields. Token colours keep red for its jobs
+   (printing, failures): Liquid is umber, not red. */
 
 .code-wrap {
   flex: 1;
   position: relative;
   min-height: 0;
   display: flex;
+  overflow: hidden;
+  border: 1px solid var(--hw-field-edge);
+  border-radius: 2px;
+  background-color: var(--hw-field);
+  box-shadow: var(--hw-field-shadow);
+}
+.code-wrap:focus-within {
+  outline: 2px solid var(--hw-focus);
+  outline-offset: 2px;
+  background-color: var(--hw-field-focus);
 }
 .code-wrap textarea,
 .code-wrap .code-hl {
   padding: 14px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-stretch: 82%;
+  font-size: 13px;
   line-height: 1.55;
   tab-size: 2;
 }
@@ -26,7 +39,7 @@
   outline: 0;
   background: transparent;
   color: transparent;
-  caret-color: var(--ink);
+  caret-color: var(--hw-field-text);
   display: block;
   width: 100%;
   position: relative;
@@ -35,10 +48,10 @@
   overflow: auto;
 }
 .code-wrap textarea::placeholder {
-  color: var(--ink-faint);
+  color: var(--hw-field-placeholder);
 }
 .code-wrap textarea::selection {
-  background: rgba(127, 127, 127, 0.25);
+  background: rgba(127, 127, 127, 0.28);
 }
 .code-wrap .code-hl {
   position: absolute;
@@ -47,38 +60,37 @@
   margin: 0;
   overflow: hidden;
   pointer-events: none;
-  background: var(--raised);
-  color: var(--ink-muted);
+  background: transparent;
+  color: var(--hw-note-ink);
   white-space: pre;
 }
-.tok-tag {
-  color: var(--ink);
+.tok-tag,
+.tok-key {
+  color: var(--hw-field-text);
 }
 .tok-liquid {
-  color: var(--red);
+  color: #7c4512;
+  background: rgba(124, 69, 18, 0.07);
 }
 .tok-comment {
-  color: var(--ink-faint);
+  color: var(--hw-label-ink);
   font-style: italic;
 }
 .tok-string {
-  color: #9c6b30;
+  color: #5f5a16;
+}
+.tok-num,
+.tok-lit {
+  color: #2f5c7a;
+}
+html[data-theme="dark"] .tok-liquid {
+  color: #e2a46a;
+  background: rgba(226, 164, 106, 0.08);
 }
 html[data-theme="dark"] .tok-string {
-  color: #c9975c;
+  color: #c9c07a;
 }
-.tok-num {
-  color: #3f6e8e;
-}
-html[data-theme="dark"] .tok-num {
-  color: #7aa7c7;
-}
-.tok-key {
-  color: var(--ink);
-}
-.tok-lit {
-  color: #3f6e8e;
-}
+html[data-theme="dark"] .tok-num,
 html[data-theme="dark"] .tok-lit {
-  color: #7aa7c7;
+  color: #8fb6d2;
 }

@@ -1,269 +1,426 @@
 'use client';
 
-// The Photo tool's markup, converted 1:1 from the retired
-// views/photo.liquid. This component renders once and never re-renders:
-// all interaction is owned by the imperative engine
+// The Photo tool's markup. This component renders once and never
+// re-renders: all interaction is owned by the imperative engine
 // (components/photo-engine.js), which is live-tested against the printer
-// and mounted via the effect below. Element ids, class names and data-*
-// attributes are the contract with the engine and with photo-tool.css —
-// change them together or not at all.
+// and mounted via the effect below. Element ids, data-* attributes and the
+// classes the engine toggles (.has-photo, .crop-mode, .camera, .pnl,
+// .pnl-on, .on, [hidden]) are the contract with the engine and with
+// app/(dashboard)/photo/photo-tool.css; keep them. The engine rewrites the
+// text of #printBtn and #toneChev, so neither holds child elements.
+//
+// The effect adds four things around the engine without changing it:
+// aria-pressed and aria-expanded follow the classes the engine sets, a
+// status line that is not a progress word prints in red (the engine
+// writes failures as plain text), the drop tray marks a file held over
+// it, and on a phone the adjustments open at once (the phone shows one
+// tool at a time through the dock, and Tailwind keeps a [hidden] element
+// hidden whatever the CSS says).
 
 import { useEffect } from 'react';
+import { Fader } from '@/components/hardware/fader';
+import { Field } from '@/components/hardware/field';
+import { Module } from '@/components/hardware/module';
+import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
 import { initPhotoTool } from '@/components/photo-engine.js';
 
+const CROPS = [
+  { a: '', label: 'Full' },
+  { a: '1', label: '1:1' },
+  { a: '1.3333', label: '4:3' },
+  { a: '1.5', label: '3:2' },
+];
+
+const TONES = [
+  { name: 'mid', label: 'Midtone', min: -100, max: 100 },
+  { name: 'shadow', label: 'Shadows', min: -100, max: 100 },
+  { name: 'bright', label: 'Brightness', min: -100, max: 100 },
+  { name: 'contrast', label: 'Contrast', min: -100, max: 100 },
+  { name: 'sharp', label: 'Sharpen', min: 0, max: 200 },
+];
+
+const DOCK = [
+  { panel: 'source', label: 'Photo' },
+  { panel: 'crop', label: 'Crop' },
+  { panel: 'levels', label: 'Levels' },
+  { panel: 'mid', label: 'Midtone' },
+  { panel: 'shadow', label: 'Shadows' },
+  { panel: 'bright', label: 'Brightness' },
+  { panel: 'contrast', label: 'Contrast' },
+  { panel: 'sharp', label: 'Sharpen' },
+];
+
+/** Status words the engine writes that are not failures. */
+const STATUS_OK = new Set(['', 'rendering…', 'queued']);
+
+/** Keeps the ARIA state of the engine's toggles in step with its classes. */
+function syncAria(root: HTMLElement) {
+  for (const key of root.querySelectorAll<HTMLButtonElement>(
+    '#cropPresets button, #capSize button, #capWeight button, #autoBtn, #toolDock button',
+  )) {
+    const pressed = String(key.classList.contains('on'));
+    if (key.getAttribute('aria-pressed') !== pressed) {
+      key.setAttribute('aria-pressed', pressed);
+    }
+  }
+  const body = root.querySelector<HTMLElement>('#toneBody');
+  const toggle = root.querySelector<HTMLElement>('#toneToggle');
+  if (body && toggle) {
+    const open = String(!body.hidden);
+    if (toggle.getAttribute('aria-expanded') !== open) {
+      toggle.setAttribute('aria-expanded', open);
+    }
+  }
+}
+
+// The engine's dispose stops the camera and timers but leaves its element
+// listeners, so a second init on the same markup binds every control twice
+// (a toggle then flips twice and Print posts two jobs). React's dev Strict
+// Mode runs an effect, its cleanup and the effect again on the same DOM,
+// so the engine is disposed one task later and kept when the same root
+// mounts again in between.
+let engine: {
+  root: HTMLElement;
+  dispose: () => void;
+  timer?: number;
+} | null = null;
+
+function mountEngine(root: HTMLElement) {
+  if (engine?.root === root) {
+    window.clearTimeout(engine.timer);
+    return;
+  }
+  engine?.dispose();
+  engine = { root, dispose: initPhotoTool() };
+}
+
+function releaseEngine() {
+  const held = engine;
+  if (!held) return;
+  held.timer = window.setTimeout(() => {
+    if (engine === held) {
+      held.dispose();
+      engine = null;
+    }
+  }, 0);
+}
+
 export function PhotoTool() {
-  useEffect(() => initPhotoTool(), []);
+  useEffect(() => {
+    const root = document.getElementById('photoTool');
+    const drop = document.getElementById('dropzone');
+    if (!root || !drop) return;
+    mountEngine(root);
+
+    const observer = new MutationObserver(() => syncAria(root));
+    observer.observe(root, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'hidden'],
+    });
+    syncAria(root);
+
+    const status = document.getElementById('photoStatus');
+    const markStatus = () => {
+      status?.classList.toggle(
+        'is-error',
+        !STATUS_OK.has(status.textContent ?? ''),
+      );
+    };
+    const statusWatch = new MutationObserver(markStatus);
+    if (status) {
+      statusWatch.observe(status, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
+    const over = () => drop.classList.add('is-over');
+    const leave = (e: DragEvent) => {
+      if (!drop.contains(e.relatedTarget as Node | null)) {
+        drop.classList.remove('is-over');
+      }
+    };
+    const dropped = () => drop.classList.remove('is-over');
+    drop.addEventListener('dragover', over);
+    drop.addEventListener('dragleave', leave);
+    drop.addEventListener('drop', dropped);
+
+    const phone = window.matchMedia('(max-width: 720px)');
+    const openOnPhone = () => {
+      if (phone.matches && document.getElementById('toneBody')?.hidden) {
+        document.getElementById('toneToggle')?.click();
+      }
+    };
+    openOnPhone();
+    phone.addEventListener('change', openOnPhone);
+
+    return () => {
+      phone.removeEventListener('change', openOnPhone);
+      drop.removeEventListener('dragover', over);
+      drop.removeEventListener('dragleave', leave);
+      drop.removeEventListener('drop', dropped);
+      statusWatch.disconnect();
+      observer.disconnect();
+      releaseEngine();
+    };
+  }, []);
 
   return (
     <div className="photo-tool" id="photoTool">
       <div className="photo-controls">
-        <label className="dropzone pnl" id="dropzone" data-panel="source">
-          <input type="file" id="photoInput" accept="image/*" hidden />
-          <span id="dropHint">
-            Choose a photo
-            <br />
-            <span className="sub">or drop one here</span>
-          </span>
-        </label>
-        <label
-          className="btn photo-take pnl bite-heavy"
-          id="takeBtn"
-          data-panel="source"
+        <Module
+          number="01"
+          title="Photo"
+          className="photo-mod photo-mod--source"
         >
-          <input
-            type="file"
-            id="cameraInput"
-            accept="image/*"
-            capture="environment"
-            hidden
-          />
-          Take a photo
-        </label>
-        <div className="photo-editor" id="photoEditor" hidden>
-          <video id="cameraFeed" autoPlay playsInline muted />
-          <canvas id="camDither" className="cam-dither" />
-          <canvas className="pnl" id="editCanvas" data-panel="crop" />
-          <div className="camera-tools">
-            <button
-              type="button"
-              className="shutter"
-              id="captureBtn"
-              title="Capture"
+          <label className="photo-drop pnl" id="dropzone" data-panel="source">
+            <input
+              type="file"
+              id="photoInput"
+              accept="image/*"
+              className="sr-only"
             />
-            <button
-              type="button"
-              className="camera-cancel"
-              id="cameraCancelBtn"
-            >
-              cancel
-            </button>
-          </div>
-          <div className="edit-tools pnl" data-panel="crop">
-            <div className="seg" id="cropPresets">
-              <button type="button" data-a="" className="on">
-                Full
-              </button>
-              <button type="button" data-a="1">
-                1:1
-              </button>
-              <button type="button" data-a="1.3333">
-                4:3
-              </button>
-              <button type="button" data-a="1.5">
-                3:2
-              </button>
-            </div>
-            <button type="button" className="btn small" id="rotateBtn">
-              Rotate 90°
-            </button>
-          </div>
-          <div className="tone-group">
-            <button type="button" className="tone-toggle" id="toneToggle">
-              <span className="label">Adjustments</span>
-              <span className="tone-val" id="toneSummary" />
-              <span className="tone-chev" id="toneChev">
-                &#9656;
-              </span>
-            </button>
-            <div className="tone-body" id="toneBody" hidden>
-              <div className="tone-head pnl" data-panel="levels">
-                <span className="label" id="levelsLabel">
-                  Levels
-                </span>
-                <button type="button" className="auto-toggle on" id="autoBtn">
-                  auto
-                </button>
-                <span className="tone-val" id="levelsVal">
-                  0 · 255
-                </span>
-              </div>
-              <canvas
-                className="hist-canvas pnl"
-                id="histCanvas"
-                data-panel="levels"
-              />
-              <div
-                className="level-track pnl"
-                id="levelTrack"
-                data-panel="levels"
+            <span className="photo-drop-hint" id="dropHint">
+              Choose a photo
+              <br />
+              <span className="sub">or drop one here</span>
+            </span>
+          </label>
+          <div className="photo-source-keys">
+            <KeyGroup>
+              <label
+                className="hw-push photo-take pnl"
+                id="takeBtn"
+                data-panel="source"
               >
-                <div className="level-handle black" id="handleBlack" />
-                <div className="level-handle white" id="handleWhite" />
-              </div>
-              <div className="tone-row pnl" data-panel="mid">
-                <span className="label" id="midLabel">
-                  Midtone
-                </span>
                 <input
-                  type="range"
-                  id="midSlider"
-                  min="-100"
-                  max="100"
-                  defaultValue="0"
+                  type="file"
+                  id="cameraInput"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
                 />
-                <span className="tone-val" id="midVal">
-                  0
+                <span className="hw-legend">Take a photo</span>
+              </label>
+            </KeyGroup>
+          </div>
+        </Module>
+
+        <Module number="02" title="Edit" className="photo-mod photo-mod--edit">
+          <div className="photo-editor" id="photoEditor" hidden>
+            <canvas
+              className="photo-crop pnl"
+              id="editCanvas"
+              data-panel="crop"
+              aria-label="Crop area"
+            />
+            <div className="edit-tools pnl" data-panel="crop">
+              <KeyGroup id="cropPresets" legend="Crop shape" legendHidden>
+                {CROPS.map((c) => (
+                  <PushKey
+                    key={c.label}
+                    data-a={c.a}
+                    className={c.a === '' ? 'on' : undefined}
+                    aria-pressed={c.a === ''}
+                  >
+                    {c.label}
+                  </PushKey>
+                ))}
+              </KeyGroup>
+              <KeyGroup>
+                <PushKey id="rotateBtn">Rotate</PushKey>
+              </KeyGroup>
+            </div>
+            <div className="tone-group">
+              <button
+                type="button"
+                className="tone-toggle"
+                id="toneToggle"
+                aria-controls="toneBody"
+                aria-expanded="false"
+              >
+                <span className="tone-title">Adjustments</span>
+                <span className="tone-summary" id="toneSummary" />
+                <span className="tone-chev" id="toneChev" aria-hidden="true">
+                  &#9656;
                 </span>
-              </div>
-              <div className="tone-row pnl" data-panel="shadow">
-                <span className="label" id="shadowLabel">
-                  Shadows
-                </span>
-                <input
-                  type="range"
-                  id="shadowSlider"
-                  min="-100"
-                  max="100"
-                  defaultValue="0"
+              </button>
+              <div className="tone-body" id="toneBody" hidden>
+                <div className="tone-head pnl" data-panel="levels">
+                  <span
+                    className="photo-legend"
+                    id="levelsLabel"
+                    title="Double-click to reset"
+                  >
+                    Levels
+                  </span>
+                  <KeyGroup>
+                    <PushKey
+                      size="compact"
+                      id="autoBtn"
+                      className="on"
+                      aria-pressed
+                    >
+                      Auto
+                    </PushKey>
+                  </KeyGroup>
+                  <span className="tone-val" id="levelsVal">
+                    0 · 255
+                  </span>
+                </div>
+                <canvas
+                  className="hist-canvas pnl"
+                  id="histCanvas"
+                  data-panel="levels"
                 />
-                <span className="tone-val" id="shadowVal">
-                  0
-                </span>
-              </div>
-              <div className="tone-row pnl" data-panel="bright">
-                <span className="label" id="brightLabel">
-                  Brightness
-                </span>
-                <input
-                  type="range"
-                  id="brightSlider"
-                  min="-100"
-                  max="100"
-                  defaultValue="0"
-                />
-                <span className="tone-val" id="brightVal">
-                  0
-                </span>
-              </div>
-              <div className="tone-row pnl" data-panel="contrast">
-                <span className="label" id="contrastLabel">
-                  Contrast
-                </span>
-                <input
-                  type="range"
-                  id="contrastSlider"
-                  min="-100"
-                  max="100"
-                  defaultValue="0"
-                />
-                <span className="tone-val" id="contrastVal">
-                  0
-                </span>
-              </div>
-              <div className="tone-row pnl" data-panel="sharp">
-                <span className="label" id="sharpLabel">
-                  Sharpen
-                </span>
-                <input
-                  type="range"
-                  id="sharpSlider"
-                  min="0"
-                  max="200"
-                  defaultValue="0"
-                />
-                <span className="tone-val" id="sharpVal">
-                  0
-                </span>
+                <div
+                  className="level-track pnl"
+                  id="levelTrack"
+                  data-panel="levels"
+                  aria-hidden="true"
+                >
+                  <div className="level-handle black" id="handleBlack" />
+                  <div className="level-handle white" id="handleWhite" />
+                </div>
+                {TONES.map((t) => (
+                  <div
+                    className="tone-row pnl"
+                    data-panel={t.name}
+                    key={t.name}
+                  >
+                    <label
+                      className="photo-legend"
+                      id={`${t.name}Label`}
+                      htmlFor={`${t.name}Slider`}
+                      title="Double-click to reset"
+                    >
+                      {t.label}
+                    </label>
+                    <Fader
+                      id={`${t.name}Slider`}
+                      min={t.min}
+                      max={t.max}
+                      centered={t.min < 0}
+                      defaultValue="0"
+                    />
+                    <span className="tone-val" id={`${t.name}Val`}>
+                      0
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-        <div className="photo-field">
-          <span className="label">Caption</span>
-          <input
-            className="editable"
+        </Module>
+
+        <KeyGroup
+          id="toolDock"
+          className="tool-dock"
+          legend="Tool"
+          legendHidden
+        >
+          {DOCK.map((d) => (
+            <PushKey
+              key={d.panel}
+              data-panel={d.panel}
+              className={d.panel === 'crop' ? 'on' : undefined}
+              aria-pressed={d.panel === 'crop'}
+            >
+              {d.label}
+            </PushKey>
+          ))}
+        </KeyGroup>
+
+        <Module
+          number="03"
+          title="Caption"
+          className="photo-mod photo-mod--caption"
+        >
+          <Field
+            label="Text"
             id="captionInput"
-            placeholder="optional"
+            placeholder="Optional"
             spellCheck={false}
+            autoComplete="off"
             maxLength={120}
           />
           <div className="caption-tools">
-            <div className="seg" id="capSize">
-              <button type="button" data-v="28">
+            <KeyGroup id="capSize" legend="Size">
+              <PushKey data-v="28" aria-label="Small" aria-pressed={false}>
                 S
-              </button>
-              <button type="button" data-v="36" className="on">
+              </PushKey>
+              <PushKey
+                data-v="36"
+                className="on"
+                aria-label="Medium"
+                aria-pressed
+              >
                 M
-              </button>
-              <button type="button" data-v="48">
+              </PushKey>
+              <PushKey data-v="48" aria-label="Large" aria-pressed={false}>
                 L
-              </button>
-            </div>
-            <div className="seg" id="capWeight">
-              <button type="button" data-v="400" className="on">
+              </PushKey>
+            </KeyGroup>
+            <KeyGroup id="capWeight" legend="Weight">
+              <PushKey data-v="400" className="on" aria-pressed>
                 Regular
-              </button>
-              <button type="button" data-v="700">
+              </PushKey>
+              <PushKey data-v="700" aria-pressed={false}>
                 Bold
-              </button>
-            </div>
+              </PushKey>
+            </KeyGroup>
           </div>
-        </div>
-        <div className="tool-dock" id="toolDock">
-          <button type="button" data-panel="source">
-            Photo
-          </button>
-          <button type="button" data-panel="crop" className="on">
-            Crop
-          </button>
-          <button type="button" data-panel="levels">
-            Levels
-          </button>
-          <button type="button" data-panel="mid">
-            Midtone
-          </button>
-          <button type="button" data-panel="shadow">
-            Shadows
-          </button>
-          <button type="button" data-panel="bright">
-            Brightness
-          </button>
-          <button type="button" data-panel="contrast">
-            Contrast
-          </button>
-          <button type="button" data-panel="sharp">
-            Sharpen
-          </button>
-        </div>
+        </Module>
       </div>
-      <div className="photo-stage">
-        <div className="photo-roll" id="photoRoll">
-          <div className="empty" id="photoEmpty">
-            Choose a photo to see the print preview
-          </div>
-        </div>
+
+      <section className="photo-stage" aria-label="Print preview">
         <div className="photo-actions">
-          <span className="status" id="photoStatus" />
-          <button
-            type="button"
-            className="btn bite-heavy"
-            id="printBtn"
-            disabled
-          >
-            Print
-          </button>
+          <span
+            className="photo-status hw-ink"
+            id="photoStatus"
+            role="status"
+          />
+          <span className="photo-camera-keys">
+            <KeyGroup>
+              <PushKey id="captureBtn">Capture</PushKey>
+              <PushKey id="cameraCancelBtn">Cancel</PushKey>
+            </KeyGroup>
+          </span>
+          <KeyGroup className="photo-print-keys">
+            <button
+              type="button"
+              className="hw-push hw-push--print photo-print"
+              id="printBtn"
+              disabled
+            >
+              Print
+            </button>
+          </KeyGroup>
         </div>
-      </div>
+        <div className="photo-feed">
+          <PrinterEdge className="photo-edge" />
+          <PaperRoll>
+            <PaperSlip exact fed tear="new">
+              <div className="photo-roll" id="photoRoll">
+                <p className="photo-empty" id="photoEmpty">
+                  Choose a photo to see the print preview.
+                </p>
+              </div>
+              <video
+                className="photo-cam-feed"
+                id="cameraFeed"
+                autoPlay
+                playsInline
+                muted
+              />
+              <canvas className="photo-cam" id="camDither" />
+            </PaperSlip>
+          </PaperRoll>
+        </div>
+      </section>
     </div>
   );
 }

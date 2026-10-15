@@ -1,680 +1,689 @@
-/* Photo tool styles, extracted verbatim from the retired public/docket.css
-   (the .photo-* block plus the generic classes the tool's markup uses:
-   .btn, .label, .editable, .status, .seg). The engine
-   (components/photo-engine.js) toggles the same class names the legacy
-   page used — do not rename classes here without updating it. Tokens come
-   from app/globals.css. */
+/* Photo tool: the E styles for components/photo-tool.tsx. Every rule is
+   scoped to the tool root (.photo-tool), so nothing here reaches another
+   page after a client-side navigation.
 
-/* materials, not outlines (design-spec — material & type): workbench
-   actions are REGISTER KEYS — raised fill, ink edge, a hard
-   second-strike offset (ink in both themes); hover lifts, press sinks
-   flat. The two COMMITTING actions (take, print) are KNOCKOUT blocks
-   below. Disabled is UNPRINTED: a dashed placeholder, no material. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  line-height: 1;
-  background: var(--raised);
-  color: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  cursor: pointer;
-  box-shadow: 2px 2px 0 var(--key-shadow);
-}
-.btn:hover {
-  background: var(--raised);
-  color: var(--ink);
-  box-shadow: 3px 3px 0 var(--key-shadow);
-  transform: translate(-1px, -1px);
-}
-.btn:active {
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-.btn.small {
-  padding: 6px 11px;
-  font-size: 13px;
-}
-.btn:disabled {
-  background: transparent;
-  border: 1px dashed var(--border);
-  color: var(--ink-faint);
-  cursor: default;
-  box-shadow: none;
-  transform: none;
-}
-.btn:disabled:hover {
-  background: transparent;
-  color: var(--ink-faint);
-  box-shadow: none;
-  transform: none;
-}
-/* the page's committing pair: capture and print — solid ink, the
-   double-strike hover, the bite (class in markup) */
-#takeBtn,
-#printBtn {
-  background: var(--ink);
-  border: 1px solid var(--ink);
-  color: var(--raised);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  box-shadow: none;
-}
-#takeBtn:hover,
-#printBtn:hover {
-  background: var(--ink);
-  color: var(--raised);
-  box-shadow: none;
-  transform: none;
-  text-shadow: 0.6px 0 currentColor;
-}
-#takeBtn:active,
-#printBtn:active {
-  transform: translateY(1px);
-}
-#printBtn:disabled,
-#printBtn:disabled:hover {
-  background: transparent;
-  border: 1px dashed var(--border);
-  color: var(--ink-faint);
-  font-weight: 400;
-  letter-spacing: normal;
-  text-shadow: none;
-  transform: none;
-}
+   The engine (components/photo-engine.js) owns the state classes:
+   .has-photo and .crop-mode on #photoTool, .camera on #photoEditor, .on on
+   keys, .pnl-on on the panels, [hidden] on #photoEditor and #toneBody.
+   Its pointer math reads element boxes, so keep these exactly:
+   - #levelTrack has no padding and no border; the handles are 10px wide
+     (the engine places them at calc(p% - 5px));
+   - #histCanvas is 40px tall (the engine draws it at 40px);
+   - #editCanvas, #levelTrack and #histCanvas take no transform, filter,
+     rotation or border (frames are box-shadow rings);
+   - #photoEditor has no side padding (its width sizes the crop canvas).
+   Tailwind keeps any [hidden] element hidden with !important, so CSS can
+   never show #toneBody; the component opens it on phones instead. */
 
-.label {
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.editable {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink);
-  background: none;
-  border: 0;
-  border-bottom: 1px dotted var(--ink-faint);
-  padding: 0 0 1px;
-  outline: none;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.status {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-/* ---- photo tool ---- */
+/* ---- Layout ---- */
 
 .photo-tool {
   display: flex;
-  gap: 32px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.photo-controls {
+.photo-tool .photo-controls {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 400px;
-  flex-shrink: 0;
-}
-.dropzone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  min-height: 110px;
-  border: 1px dashed var(--dash);
-  border-radius: 0;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--ink);
-  padding: 12px;
-}
-.dropzone:hover {
-  border-color: var(--ink-faint);
-}
-.dropzone .sub {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-/* once a photo exists the editor is the hero — the dropzone slims down */
-.photo-tool.has-photo .dropzone {
-  min-height: 0;
-  padding: 8px 12px;
+  gap: 20px;
+  min-width: 0;
 }
 
-.photo-take {
-  text-align: center;
+/* Two columns from 721px: the controls take what the paper leaves. The
+   stage is the slip's 624px plus 12px each side for the printer edge, so
+   the preview is at its true 576px once the column is that wide. */
+@media (min-width: 721px) {
+  .photo-tool {
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) minmax(0, 648px);
+    column-gap: 28px;
+    align-items: start;
+  }
 }
-.photo-take input {
+
+/* Before a photo: only the source module and the blank slip */
+.photo-tool .photo-mod--edit:has(#photoEditor[hidden]),
+.photo-tool:not(.has-photo) .photo-mod--caption {
   display: none;
 }
 
-/* the viewfinder shares the editor stage: camera mode shows the live
-   DITHERED feed (the <video> is only a hidden frame source for the
-   dither worker; mirroring happens in the frame capture) */
-.photo-editor video {
-  display: none;
-}
-.photo-editor .cam-dither {
-  display: block;
-  width: 100%;
-  border: 0.5px solid var(--border);
-  border-radius: 0;
-  background: #000;
-  /* NO image-rendering: pixelated — the canvas holds a 576-dot dither
-     shown smaller, smooth-scaled just like the rendered preview img, so
-     the two read as the same texture */
-}
-.photo-editor:not(.camera) .cam-dither,
-.photo-editor:not(.camera) .camera-tools {
-  display: none;
-}
-.photo-editor.camera canvas.pnl,
-.photo-editor.camera .edit-tools {
-  display: none;
-}
-.camera-tools {
+/* ---- Source: the drop tray and Take a photo ---- */
+
+/* A tray pressed into the panel: the panel's own paint and hammer finish,
+   sunk below the face, with the inset grammar of a field (an edge, a
+   shade line under the top wall, a lit lip below), only deeper. Printed
+   corner marks show where a photo goes. A file held over the tray lights
+   its floor and darkens the marks. */
+.photo-tool .photo-drop {
+  --photo-tray: color-mix(in srgb, var(--hw-panel) 94%, #3a332a);
+  --photo-tray-over: color-mix(in srgb, var(--hw-panel) 70%, #fff);
+  --photo-tray-edge: color-mix(in srgb, var(--hw-field-edge) 50%, var(--hw-panel));
+  --photo-tray-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.12),
+    inset 0 16px 16px -14px rgba(30, 28, 24, 0.36),
+    inset 8px 0 10px -9px rgba(30, 28, 24, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.5), 0 1px 0 rgba(255, 255, 255, 0.8);
+  --photo-mark: var(--hw-label-ink);
+  --photo-mark-len: 22px;
+  --photo-mark-inset: 14px;
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-}
-/* camera-app shutter: a ring with an inner disc that grows on hover */
-.shutter {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 2px solid var(--ink);
-  background: var(--ink);
-  background-clip: content-box;
-  padding: 4px;
+  min-height: 220px;
+  padding: 24px 20px;
+  border: 1px solid var(--photo-tray-edge);
+  border-radius: 3px;
+  background-color: var(--photo-tray);
+  box-shadow: var(--photo-tray-shadow);
+  text-align: center;
+  overflow-wrap: anywhere;
   cursor: pointer;
-}
-.shutter:hover {
-  padding: 3px;
-}
-.shutter:active {
-  padding: 6px;
-}
-.camera-cancel {
-  position: absolute;
-  right: 0;
-  background: none;
-  border: 0;
-  padding: 6px 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.camera-cancel:hover {
-  color: var(--ink);
 }
 
-.photo-editor {
+html[data-theme="dark"] .photo-tool .photo-drop {
+  --photo-tray: color-mix(in srgb, var(--hw-panel) 78%, #000);
+  --photo-tray-over: color-mix(in srgb, var(--hw-panel) 92%, #fff);
+  --photo-tray-edge: rgba(0, 0, 0, 0.55);
+  --photo-tray-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.5),
+    inset 0 16px 16px -14px rgba(0, 0, 0, 0.6),
+    inset 8px 0 10px -9px rgba(0, 0, 0, 0.3),
+    inset 0 -1px 0 rgba(255, 244, 226, 0.05), 0 1px 0 rgba(255, 244, 226, 0.07);
+}
+
+/* the panel's hammer finish carries on into the tray */
+.photo-tool .photo-drop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--hw-panel-finish);
+  opacity: var(--hw-panel-finish-opacity);
+  mix-blend-mode: var(--hw-panel-finish-blend);
+  pointer-events: none;
+}
+
+/* four corner marks printed on the floor, worn like the plate legends */
+.photo-tool .photo-drop::after {
+  --l: var(--photo-mark-len);
+  --t: 1.5px;
+  content: "";
+  position: absolute;
+  inset: var(--photo-mark-inset);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--photo-mark) 0 0) left top / var(--l) var(--t),
+    linear-gradient(var(--photo-mark) 0 0) left top / var(--t) var(--l),
+    linear-gradient(var(--photo-mark) 0 0) right top / var(--l) var(--t),
+    linear-gradient(var(--photo-mark) 0 0) right top / var(--t) var(--l),
+    linear-gradient(var(--photo-mark) 0 0) left bottom / var(--l) var(--t),
+    linear-gradient(var(--photo-mark) 0 0) left bottom / var(--t) var(--l),
+    linear-gradient(var(--photo-mark) 0 0) right bottom / var(--l) var(--t),
+    linear-gradient(var(--photo-mark) 0 0) right bottom / var(--t) var(--l);
+  background-repeat: no-repeat;
+  -webkit-mask:
+    linear-gradient(#000 0 0),
+    var(--hw-grain) repeat;
+  -webkit-mask-size: auto, 150px;
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0),
+    var(--hw-grain) repeat;
+  mask-size: auto, 150px;
+  mask-composite: exclude;
+}
+
+.photo-tool .photo-drop:hover {
+  --photo-mark: var(--hw-note-ink);
+}
+
+.photo-tool .photo-drop.is-over {
+  --photo-mark: var(--hw-panel-text);
+  background-color: var(--photo-tray-over);
+}
+
+.photo-tool .photo-drop:has(input:focus-visible) {
+  outline: 2px solid var(--hw-focus);
+  outline-offset: 2px;
+  --photo-mark: var(--hw-panel-text);
+}
+
+.photo-tool .photo-drop-hint {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* The engine writes "<file name><br><span class=sub>…</span>" here */
+.photo-tool .photo-drop-hint .sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--hw-note-ink);
+}
+
+/* Once a photo is in, the tray only names it */
+.photo-tool.has-photo .photo-drop {
+  --photo-mark-len: 12px;
+  --photo-mark-inset: 7px;
+  min-height: 0;
+  padding: 18px 20px;
+}
+
+.photo-tool .photo-source-keys {
+  display: flex;
+}
+
+/* A label styled as a key: its file input is visually hidden but still
+   takes keyboard focus, so the ring goes on the key */
+.photo-tool .photo-take:has(input:focus-visible) {
+  outline: 2px solid var(--hw-focus);
+  outline-offset: 4px;
+}
+
+/* The camera is live: Take a photo stays down */
+.photo-tool:has(#photoEditor.camera) #takeBtn {
+  --d: 1;
+}
+
+/* ---- Keys the engine holds down ---- */
+
+.photo-tool .hw-push.on {
+  --d: 1;
+}
+
+/* ---- Edit: crop canvas, crop keys, adjustments ---- */
+
+.photo-tool .photo-editor {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   align-items: center;
+  gap: 14px;
 }
-.photo-editor[hidden] {
-  display: none;
-}
-.photo-editor canvas {
+
+.photo-tool .photo-crop {
   display: block;
   max-width: 100%;
-  border: 0.5px solid var(--border);
-  border-radius: 0;
-  touch-action: none; /* the canvas owns drags — don't scroll the page */
+  touch-action: none; /* the canvas owns drags; the page does not scroll */
   cursor: crosshair;
+  box-shadow:
+    0 0 0 1px var(--hw-field-edge),
+    0 2px 4px rgba(30, 28, 24, 0.18);
 }
-.edit-tools {
+
+.photo-tool .edit-tools {
+  align-self: stretch;
   display: flex;
-  gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-/* segmented control: one choice lit, inverse mono like .toggle.on */
-.seg {
-  display: inline-flex;
-  border: 0.5px solid var(--border);
-  border-radius: 0;
-  overflow: hidden;
-}
-.seg button {
-  background: var(--raised);
-  color: var(--ink);
-  border: 0;
-  padding: 4px 10px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  cursor: pointer;
-}
-.seg button + button {
-  border-left: 0.5px solid var(--border);
-}
-.seg:hover {
-  border-color: var(--ink-faint);
-}
-.seg button.on {
-  background: var(--ink);
-  color: var(--page);
+/* The crop keys share the row with Rotate, or take a row of their own
+   when the column is narrow; either way they fill it edge to edge */
+.photo-tool #cropPresets {
+  flex: 1 1 250px;
+  display: flex;
 }
 
-/* ---- tone controls (levels histogram + sliders) ---- */
+.photo-tool #cropPresets .hw-keys {
+  flex: 1;
+}
 
-.tone-group {
+.photo-tool #cropPresets .hw-push {
+  flex: 1;
+  padding: 0 10px;
+}
+
+.photo-tool .tone-group {
+  align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 100%;
+  border-top: 1px dashed var(--hw-rule);
 }
-.tone-group .label {
+
+.photo-tool .tone-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.photo-tool .tone-toggle:focus-visible {
+  outline: 2px solid var(--hw-focus);
+  outline-offset: 2px;
+}
+
+.photo-tool .tone-title {
+  font-weight: 600;
+}
+
+/* "adjusted", written by the engine; capitalised here */
+.photo-tool .tone-summary {
+  display: inline-block;
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--hw-note-ink);
+}
+
+.photo-tool .tone-summary::first-letter {
+  text-transform: uppercase;
+}
+
+/* The engine writes a triangle glyph here; the chevron is drawn instead */
+.photo-tool .tone-chev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  overflow: hidden;
+  font-size: 0;
+  background-color: var(--hw-label-ink);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M4.5 1.5l4.5 4.5-4.5 4.5' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E")
+    center / 12px 12px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M4.5 1.5l4.5 4.5-4.5 4.5' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E")
+    center / 12px 12px no-repeat;
+  transition: transform 0.08s ease-out;
+}
+
+.photo-tool .tone-toggle:hover .tone-chev {
+  background-color: var(--hw-field-text);
+}
+
+.photo-tool .tone-group:has(#toneBody:not([hidden])) .tone-chev {
+  transform: rotate(90deg);
+}
+
+.photo-tool .tone-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 14px;
+}
+
+.photo-tool .tone-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.photo-tool .tone-head .tone-val {
+  margin-left: auto;
+}
+
+/* Control names; a double-click resets the control */
+.photo-tool .photo-legend {
+  font-size: 14px;
+  font-weight: 600;
+  cursor: default;
   user-select: none;
   -webkit-user-select: none;
-} /* labels reset on dblclick */
-.photo-editor.camera .tone-group {
-  display: none;
-}
-.tone-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: none;
-  border: 0;
-  border-top: 1px dashed var(--dash);
-  padding: 10px 0 2px;
-  cursor: pointer;
-  text-align: left;
-}
-.tone-toggle .label {
-  cursor: pointer;
-}
-.tone-toggle .tone-val {
-  margin-left: auto;
-}
-.tone-chev {
-  font-size: 10px;
-  color: var(--ink-faint);
-}
-.tone-toggle:hover .tone-chev {
-  color: var(--ink);
-}
-.tone-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tone-body[hidden] {
-  display: none;
-}
-.tone-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tone-head .tone-val {
-  margin-left: auto;
-}
-.tone-val {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-muted);
 }
 
-.auto-toggle {
+.photo-tool .tone-val {
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  background: var(--raised);
-  color: var(--ink-muted);
-  border: 0.5px solid var(--border);
-  border-radius: 0;
-  padding: 1px 7px;
-  cursor: pointer;
-}
-.auto-toggle:hover {
-  border-color: var(--ink-faint);
-}
-.auto-toggle.on {
-  background: var(--ink);
-  color: var(--page);
-  border-color: var(--ink);
+  font-stretch: 82%;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hw-note-ink);
 }
 
-.hist-canvas {
+/* Histogram: a readout window, 40px tall */
+.photo-tool .hist-canvas {
   display: block;
   width: 100%;
   height: 40px;
-  border: 0.5px solid var(--border);
-  border-radius: 0;
+  background-color: var(--hw-field);
+  box-shadow:
+    0 0 0 1px var(--hw-field-edge),
+    inset 0 1px 2px rgba(0, 0, 0, 0.12);
 }
-.level-track {
+
+/* Levels: the kit fader's slot with a black and a white cap (light in
+   both themes, as it stands for white). The track keeps no padding and no
+   border; the handles stay 10px wide. */
+.photo-tool .level-track {
   position: relative;
-  height: 14px;
+  height: 28px;
   cursor: ew-resize;
   touch-action: none;
 }
-.level-track::before {
+
+.photo-tool .level-track::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 50%;
-  border-top: 1px solid var(--border);
-}
-.level-handle {
-  position: absolute;
-  top: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 0;
-  pointer-events: none; /* the track owns the drag */
-}
-.level-handle.black {
-  background: var(--ink);
-}
-.level-handle.white {
-  background: var(--raised);
-  border: 1px solid var(--ink);
+  top: 11.5px;
+  height: 5px;
+  border-radius: 2.5px;
+  background: var(--hw-fader-slot);
+  box-shadow: var(--hw-fader-slot-shadow);
 }
 
-.tone-row {
+.photo-tool .level-handle {
+  position: absolute;
+  top: 4px;
+  width: 10px;
+  height: 20px;
+  border-radius: 2px;
+  pointer-events: none; /* the track owns the drag */
+  box-shadow: 0 1px 2px rgba(20, 18, 15, 0.35);
+}
+
+.photo-tool .level-handle.black {
+  left: -5px;
+  background:
+    var(--hw-fader-cap-mark),
+    var(--hw-switch-cap) center / 100% 100% no-repeat;
+}
+
+.photo-tool .level-handle.white {
+  left: calc(100% - 5px);
+  background:
+    linear-gradient(
+        90deg,
+        transparent calc(50% - 0.5px),
+        rgba(40, 34, 26, 0.7) calc(50% - 0.5px) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px)
+      )
+      center / 100% 58% no-repeat,
+    linear-gradient(
+      rgba(255, 255, 255, 0.55),
+      rgba(255, 255, 255, 0) 35%,
+      rgba(60, 50, 34, 0) 65%,
+      rgba(60, 50, 34, 0.25)
+    ),
+    #e9e5dc;
+  box-shadow:
+    0 0 0 1px rgba(30, 26, 20, 0.6),
+    0 1px 2px rgba(20, 18, 15, 0.35);
+}
+
+/* A tone row: its name, the kit fader (components/hardware/fader.tsx),
+   then the value */
+.photo-tool .tone-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.tone-row .label {
-  width: 88px;
-  flex-shrink: 0;
-}
-.tone-row .tone-val {
-  width: 34px;
-  text-align: right;
-  flex-shrink: 0;
-}
-.tone-row input[type="range"] {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 14px;
-  background: transparent;
-  margin: 0;
-  cursor: ew-resize;
-}
-.tone-row input[type="range"]::-webkit-slider-runnable-track {
-  height: 1px;
-  background: var(--border);
-}
-.tone-row input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 0;
-  background: var(--ink);
-  margin-top: -4.5px;
-}
-.tone-row input[type="range"]::-moz-range-track {
-  height: 1px;
-  background: var(--border);
-}
-.tone-row input[type="range"]::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border: 0;
-  border-radius: 0;
-  background: var(--ink);
+  gap: 12px;
+  min-height: 44px;
 }
 
-.photo-field {
+.photo-tool .tone-row .photo-legend {
+  flex: none;
+  width: 92px;
+}
+
+.photo-tool .tone-row .tone-val {
+  flex: none;
+  width: 40px;
+  text-align: right;
+}
+
+/* ---- Caption ---- */
+
+.photo-tool .caption-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+}
+
+.photo-tool #capSize .hw-push {
+  min-width: 48px;
+}
+
+/* ---- Phone dock: one tool at a time (phones only) ---- */
+
+.photo-tool .tool-dock {
+  display: none;
+}
+
+/* ---- Stage: the printer edge feeding the slip ---- */
+
+.photo-tool .photo-stage {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.photo-field .editable {
-  width: 100%;
-}
-.caption-tools {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-
-.photo-stage {
-  flex: 1;
   min-width: 0;
 }
-.photo-roll {
-  background: #ffffff;
-  border: 0.5px solid var(--border);
-  border-radius: 0;
-  max-width: 400px;
+
+/* Status on the ground at the left, the print key at the right; both
+   line up with the slip's edges */
+.photo-tool .photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 50px;
+  padding: 0 12px 14px;
 }
-/* physical paper: the printable 576 dots sit inside 80mm stock (624) with
-   ~3mm unprintable sides and ~3mm cut-edge top. Sizing the IMAGE at
-   576/624 = 92.3% with auto side margins keeps the ratios anchored to the
-   box itself (percentage padding on the box would resolve against the
-   PARENT's width and render ~double — a real CSS gotcha). */
-.photo-roll img {
+
+/* "rendering…", "queued" and errors, written by the engine */
+.photo-tool .photo-status {
+  flex: 1;
+  min-width: 0;
   display: block;
-  width: 92.3%;
-  margin: 3.75% auto 0;
-}
-.photo-roll .empty {
-  color: var(--ink-faint);
-}
-/* the commit action lives with the result it commits */
-.photo-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  max-width: 400px; /* centers under the roll */
-  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-/* ---- balanced two columns (desktop, both states) ---- */
-/* The left column (dropzone, or the editor once a photo loads) is a fixed
-   400px. Left on its own the right stage would stretch to fill the row and
-   the preview would hug its left edge, leaving a gap on the far right. So
-   size the stage to the preview and center the whole pair in the card, and
-   center the roll + Print within the stage so the button sits directly
-   under the preview. Below 720px the phone stack further down takes over. */
-@media (min-width: 721px) {
-  .photo-tool {
-    justify-content: center;
-  }
-  .photo-stage {
-    flex: 0 1 400px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
+.photo-tool .photo-status::first-letter {
+  text-transform: uppercase;
 }
 
-/* ---- empty state (no photo chosen yet) ---- */
-/* the engine adds .has-photo once an image loads; before that, keep the
-   two-up simple: dropzone + blank white paper, each the same height, with
-   its button below. Caption styling is premature with no photo, so it
-   stays hidden until the editor appears. */
-#photoTool:not(.has-photo) .photo-field {
+.photo-tool .photo-status.is-error {
+  color: var(--hw-error-ink);
+}
+
+/* The engine rewrites this key's text (Print, Queuing…), so the legend
+   look sits on the key itself and the width does not jump */
+.photo-tool .photo-print {
+  min-width: 132px;
+  text-shadow: 0 0 0.5px currentColor;
+}
+
+.photo-tool .photo-camera-keys {
   display: none;
 }
-#photoTool:not(.has-photo) .dropzone {
-  min-height: 280px;
+
+.photo-tool .photo-feed {
+  padding: 0 12px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hw-label-ink) transparent;
 }
-/* the preview stays white like paper (a blank slip), hint centered on it in
-   dark text since paper is white in both themes */
-#photoTool:not(.has-photo) .photo-roll {
-  width: 100%; /* fills the 400px stage on desktop; full width on phones */
-  min-height: 280px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+
+.photo-tool .photo-edge {
+  position: sticky;
+  top: 0;
+  width: calc(100% + 24px);
+  margin-left: -12px;
 }
-#photoTool:not(.has-photo) .photo-roll .empty {
-  max-width: 220px;
-  padding: 24px;
+
+/* The engine's preview image: 576px wide on the 624px slip */
+.photo-tool .photo-roll {
+  position: relative;
+  z-index: 2;
+}
+
+.photo-tool .photo-roll img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Paper is white in both themes, so the note keeps dark ink */
+.photo-tool .photo-empty {
+  margin: 0;
+  padding: 88px 24px;
   text-align: center;
-  color: #737373;
-  font-size: 13px;
+  color: #4a4741;
 }
 
-/* ---- camera mode (viewfinder open) ---- */
-/* the viewfinder is the input now, so it stands alone: hide the dropzone,
-   the take-photo button, and the empty preview, and center the viewfinder
-   + shutter. The engine toggles .camera on #photoEditor; capturing or
-   cancelling removes it and the two-up above returns. */
-#photoTool:has(.photo-editor.camera) .dropzone,
-#photoTool:has(.photo-editor.camera) .photo-take,
-#photoTool:has(.photo-editor.camera) .photo-stage {
+/* The live viewfinder: a 576-dot dither from the worker, shown on the
+   slip where the print will be. */
+.photo-tool .photo-cam {
+  display: none;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: auto;
+  background: #000;
+}
+
+/* The <video> is only the worker's frame source. It stays in the render
+   tree, out of sight: a video with display: none can hand drawImage black
+   frames. */
+.photo-tool .photo-cam-feed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- Camera mode ---- */
+
+.photo-tool:has(#photoEditor.camera) .photo-cam {
+  display: block;
+}
+
+.photo-tool:has(#photoEditor.camera) .photo-roll,
+.photo-tool:has(#photoEditor.camera) .photo-print-keys,
+.photo-tool:has(#photoEditor.camera) .photo-mod--edit,
+.photo-tool:has(#photoEditor.camera) .photo-mod--caption,
+.photo-tool:has(#photoEditor.camera) .tool-dock {
   display: none;
 }
+
+.photo-tool:has(#photoEditor.camera) .photo-camera-keys {
+  display: inline-flex;
+}
+
+/* ---- Two columns: the stage stays in view while the controls scroll,
+   and a long slip scrolls under the printer edge ---- */
+
 @media (min-width: 721px) {
-  #photoTool:has(.photo-editor.camera) .photo-controls {
-    width: 480px;
+  .photo-tool .photo-stage {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100dvh - 32px);
+  }
+
+  .photo-tool .photo-feed {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 
-/* phone tool dock: a row of tool names styled like the header nav —
-   quiet text, the active tool inked with the red underline */
-.tool-dock {
-  display: none;
-}
-.tool-dock button {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  user-select: none;
-  -webkit-user-select: none;
-  background: none;
-  border: 0;
-  border-bottom: 1.5px solid transparent;
-  color: var(--ink-muted);
-  padding: 4px 0 3px;
-  white-space: nowrap;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.tool-dock button.on {
-  color: var(--ink);
-  border-bottom-color: var(--red);
-}
+/* ---- Phones: preview on top, one tool at a time, Print at the end ---- */
 
-/* iPhone-editor layout on phones once a photo exists: the preview on top
-   (Print like iOS Done above it), a chip dock of tools at the bottom
-   showing one control at a time. Empty state stays a simple stack. */
 @media (max-width: 720px) {
-  /* stretch, not flex-start: in column direction flex-start would
-     shrink-wrap the stage to its content and pin it left */
-  .photo-tool {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 20px;
-  }
-  .photo-controls {
-    width: 100%;
-    gap: 20px;
+  .photo-tool .photo-controls {
+    gap: 16px;
   }
 
-  /* dissolve the stage box so the preview and the actions can order
-     independently: preview on top, Print at the very bottom */
-  .photo-tool.has-photo .photo-stage {
+  /* the stage dissolves so the slip and the keys order on their own */
+  .photo-tool .photo-stage {
     display: contents;
   }
-  .photo-tool.has-photo .photo-roll {
-    order: -1;
-    width: 100%; /* the preview is the hero on phones — full width */
-    max-width: none;
-    margin: 0;
-    max-height: 60vh;
-    overflow-y: auto; /* very tall slips scroll inside */
+
+  .photo-tool .photo-feed {
+    order: 1;
+    padding-bottom: 0;
   }
-  .photo-tool.has-photo .photo-actions {
+
+  .photo-tool .photo-actions {
     order: 9;
-    flex-direction: column; /* status above a full-width Print */
-    gap: 10px;
-    margin: 0;
-    max-width: none;
+    padding: 0;
   }
-  .photo-tool.has-photo .photo-actions .btn {
-    width: 100%;
+
+  .photo-tool .photo-drop {
+    min-height: 160px;
   }
-  /* crop takes the stage: hide the roll so the canvas can go big */
-  .photo-tool.has-photo.crop-mode .photo-roll {
+
+  .photo-tool .photo-empty {
+    padding: 48px 20px;
+  }
+
+  /* With a photo: the slip comes first and scrolls inside a fixed height;
+     the scroller reaches into the gutter so the edge still overhangs */
+  .photo-tool.has-photo .photo-feed {
+    order: -1;
+    max-height: 58vh;
+    margin: 0 -12px;
+    padding: 0 12px 12px;
+    overflow-y: auto;
+  }
+
+  /* Cropping takes the screen; the slip comes back for the other tools */
+  .photo-tool.has-photo.crop-mode .photo-feed {
     display: none;
   }
 
-  /* the dock shows exactly one panel; the caption field stays out of the
-     dock — always visible between the chips and Print */
-  .photo-tool.has-photo .pnl {
-    display: none;
-  }
-  .photo-tool.has-photo .pnl.pnl-on {
-    display: flex;
-  }
-  .photo-tool.has-photo canvas.pnl.pnl-on {
-    display: block;
-  }
-  .photo-tool.has-photo .level-track.pnl-on {
-    display: block;
-  }
-  .photo-tool.has-photo .photo-take.pnl-on {
-    display: block;
-  }
-  .photo-tool.has-photo .tone-toggle {
-    display: none;
-  } /* chips replace the collapse */
-  .photo-tool.has-photo .tone-body[hidden] {
-    display: flex;
-  }
-  .photo-tool.has-photo .photo-field {
-    order: 5;
-  } /* after the chip row */
-
-  /* keep the dock from jumping between tools: the tone zone gets one
-     fixed height whatever it holds, and containers left with no visible
-     panel are removed so their flex gaps don't add offsets */
-  .photo-tool.has-photo .tone-body {
-    min-height: 96px;
-    justify-content: center;
-  }
-  .photo-tool.has-photo .photo-editor:not(:has(.pnl-on)),
+  /* One panel at a time: a module shows only with the active panel */
+  .photo-tool.has-photo .photo-mod--source:not(:has(.pnl-on)),
+  .photo-tool.has-photo .photo-mod--edit:not(:has(.pnl-on)),
+  .photo-tool.has-photo .photo-mod--edit .pnl:not(.pnl-on),
   .photo-tool.has-photo .tone-group:not(:has(.pnl-on)) {
     display: none;
   }
-  /* camera mode survives the one-panel rule: the viewfinder and shutter
-     aren't panels, so the editor must show even with no panel active */
-  .photo-tool.has-photo .photo-editor.camera {
-    display: flex;
+
+  .photo-tool.has-photo .tone-group {
+    border-top: 0;
+  }
+
+  .photo-tool.has-photo .tone-toggle {
+    display: none;
+  }
+
+  /* the module keeps one height whatever tone tool it holds */
+  .photo-tool.has-photo .tone-body {
+    justify-content: center;
+    min-height: 96px;
+    padding-top: 0;
   }
 
   .photo-tool.has-photo .tool-dock {
-    display: flex;
-    gap: 18px;
+    display: block;
+    margin: 0 -16px;
+    padding: 2px 16px 4px;
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 2px 0 6px;
+    scrollbar-width: none;
+  }
+
+  .photo-tool.has-photo .tool-dock .hw-keys {
+    display: inline-flex;
+  }
+
+  /* Camera: the viewfinder slip and its keys, nothing else */
+  .photo-tool:has(#photoEditor.camera) .photo-feed {
+    display: block;
+    order: -1;
+    margin: 0 -12px;
+    padding: 0 12px 12px;
+  }
+
+  .photo-tool:has(#photoEditor.camera) .photo-controls {
+    display: none;
   }
 }
 
-/* phones: big tap target while empty (from the old 640px block) */
-@media (max-width: 640px) {
-  .dropzone {
-    min-height: 140px;
+@media (prefers-reduced-motion: reduce) {
+  .photo-tool .tone-chev {
+    transition: none;
   }
 }

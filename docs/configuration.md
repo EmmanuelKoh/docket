@@ -37,9 +37,9 @@ setup") shows how to keep local commands off it.
 | `OWNER_ID` | `default` | The account that `DEVICE_TOKEN` acts for. Set it to your local account id |
 | `PRINT_WIDTH` | `576` | Dots per line: 576 for 80 mm paper, 384 for 58 mm |
 | `FONT_DIR` | `render/fonts` | Folder with the DejaVu fonts |
-| `GEMINI_API_KEY` | Unset | Google AI Studio key for the Message ingest slip. Without it, a message fails unless it starts with `task:` |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | The model the Message ingest slip uses when its own `gemini model` setting is blank |
-| `WATCH_TEAMS` | Empty: all teams | Team abbreviations, separated by commas. They become the World Cup watcher's `watch teams` setting when an account first gets the slip |
+| `GEMINI_API_KEY` | Unset | Google AI Studio key for the Text messages slip. Without it, a message fails unless it starts with `task:` |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | The model the Text messages slip uses when its own `gemini model` setting is blank |
+| `WATCH_TEAMS` | Empty: all teams | Team abbreviations, separated by commas. They become the World Cup slip's `watch teams` setting when an account first gets the slip |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | | `redis` driver: the Upstash Redis connection. The `KV_REST_API_*` names that the Vercel Marketplace sets also work |
 | `BLOB_READ_WRITE_TOKEN` | | `redis` driver: the Vercel Blob connection. Vercel sets it |
 

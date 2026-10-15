@@ -74,7 +74,9 @@ Active costs come on top:
   an hour after two idle minutes, none once paused or hidden. The Studio
   strip (`/jobs?limit=10`) reads no Redis. A Queue poll (`/api/queue`)
   adds one HGETALL while a listed job has been handed to a printer, plus
-  one LRANGE while a job waits at the back of the queue.
+  one LRANGE while a job waits at the back of the queue. The Queue page
+  load (not its poll) also reads the slip list once (SMEMBERS and MGET,
+  two commands) to name each job's source.
 
 Before the July 2026 changes (3s polls, a presence write per poll, a
 dashboard poll in hidden tabs) one owner cost about 130K Redis commands a
@@ -120,14 +122,24 @@ more SET (EX 900), so a resend within 15 minutes costs five commands and
 no Postgres. A handled message still wakes Neon for the
 Task template check and, when it prints, the job row.
 
-Dashboard page loads (October 2026): the sidebar's queue badge, on
-every dashboard page, reads `jobs.queueSize`: LLEN plus ZCARD, two Redis
-commands and no Postgres (locally one grouped count), streamed in after
-the page instead of a 1000-row job listing before it. Overview's queue
-cell shares that read within the request. Job thumbnails on Overview,
+Dashboard page loads (October 2026): the panel's printer line, on every
+full dashboard page load or refresh (not on a move between pages in the
+app), reads `printers.overview` (the device listing in Postgres and one
+presence read, as the Printer page does) and `jobs.queueSize`: LLEN plus
+ZCARD, two Redis commands (locally one grouped count). Both stream in
+after the page, and React cache shares them with the page in the same
+request (`app/_lib/printer-data.ts`, `app/_lib/queue-data.ts`), so
+Home and the Printer page read nothing more for the printer and the
+waiting count. Home lists the 20 newest printed and printing jobs (one
+Postgres select) and shows at most three of today's receipts at full
+size. Receipts on Home and job thumbnails on
 Queue, History and the Studio load from the artifact's public Blob URL
 (jobs.list carries it), so a thumbnail costs Blob data transfer and a CDN
 Request, not a function invocation, a Postgres select and a Blob read.
+The kit's sprites (`public/hardware/*.png`: paper grain, printer edge,
+switch) are cached for good (`next.config.mjs` headers), so a repeat page
+load sends no request for them. A sprite whose pixels change gets a new
+file name.
 Slip previews render once per template version per browser (and again
 after a deploy): their URL carries the template's updatedAt and the
 deploy's short commit hash, and the response is cached `private,

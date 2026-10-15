@@ -1,24 +1,18 @@
-// The dashboard shell: session gate, sidebar, slim header (sidebar
-// trigger, theme toggle, logout) with the identity-defining 1.5px ink
-// bottom rule, and the content column (max 1120px, gutters that never
-// drop below 48px on desktop, 16px on phones — spec spacing system).
+// The dashboard shell: session gate, the panel (main navigation, see
+// components/app-sidebar.tsx) and the content column, the only <main>.
 // The session check (a signed cookie, no store read) is the only thing
-// the shell waits for: the queue badge streams in inside Suspense, and
-// loading.tsx fills the content column until the page is ready.
+// the shell waits for: the panel's printer line streams in inside
+// Suspense, and loading.tsx fills the content column until the page is
+// ready. The root layout already lays the printed ground under it.
 
-import { LogOut } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { AppSidebar } from '@/components/app-sidebar';
-import { ContentColumn } from '@/components/content-column';
-import { ThemeToggle } from '@/components/theme-toggle';
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
+import { ContentColumn, MAIN_ID } from '@/components/content-column';
+import { TimeZoneCookie } from '@/components/time-zone-cookie';
+import pkg from '@/package.json';
 import { getCaller } from '../_lib/caller';
-import { QueueBadge } from './queue-badge';
+import { PrinterStatus } from './printer-status';
 
 export default async function DashboardLayout({
   children,
@@ -27,31 +21,21 @@ export default async function DashboardLayout({
   if (!caller) redirect('/login');
 
   return (
-    <SidebarProvider>
+    <div className="hw-shell">
+      <a href={`#${MAIN_ID}`} className="hw-skip">
+        Skip to content
+      </a>
       <AppSidebar
-        queueBadge={
+        status={
           <Suspense fallback={null}>
-            <QueueBadge caller={caller} />
+            <PrinterStatus caller={caller} />
           </Suspense>
         }
         isAdmin={caller.role === 'admin'}
+        version={`v${pkg.version}`}
       />
-      <SidebarInset className="bg-transparent">
-        <header className="flex items-center justify-between border-b-[1.5px] border-b-ink px-4 py-3">
-          <SidebarTrigger className="text-ink-faint hover:text-ink" />
-          <div className="flex items-center gap-5">
-            <ThemeToggle />
-            <a
-              href="/logout"
-              aria-label="Sign out"
-              className="text-ink-faint transition-colors hover:text-ink"
-            >
-              <LogOut size={15} />
-            </a>
-          </div>
-        </header>
-        <ContentColumn>{children}</ContentColumn>
-      </SidebarInset>
-    </SidebarProvider>
+      <ContentColumn>{children}</ContentColumn>
+      <TimeZoneCookie />
+    </div>
   );
 }

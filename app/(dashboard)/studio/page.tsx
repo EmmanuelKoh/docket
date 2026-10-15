@@ -1,26 +1,26 @@
-// Studio — the template editor. A full-bleed workbench (see
-// components/content-column.tsx): the sidebar collapses on entry and the
-// breadcrumb returns to Slips. The editor itself is
-// components/studio-editor.tsx; useSearchParams (the ?template= / ?new=1
-// contract) requires the Suspense boundary.
+// Studio: the template editor. A full-width workbench (see
+// components/content-column.tsx); Back returns to where you came from
+// (a slip's "Open in Studio", Slips' "New template"). The editor itself
+// is components/studio-editor.tsx; useSearchParams (the ?template= /
+// ?new=1 contract) requires the Suspense boundary.
 
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { BackLink } from '@/components/back-link';
+import { PageTitle } from '@/components/hardware/page-title';
 import { StudioEditor } from '@/components/studio-editor';
 import './studio.css';
 
+export const metadata: Metadata = { title: 'Studio' };
+
 export default function StudioPage() {
   return (
-    <div className="space-y-4">
-      <div>
-        <BackLink fallback="/slips" />
-        <div className="mt-1 flex items-baseline gap-3">
-          <h1 className="text-base font-medium text-ink">Studio</h1>
-        </div>
-      </div>
+    <>
+      <BackLink fallback="/slips" className="-mt-3 mb-1" />
+      <PageTitle className="mb-7">Studio</PageTitle>
       <Suspense>
         <StudioEditor />
       </Suspense>
-    </div>
+    </>
   );
 }

@@ -194,7 +194,7 @@ describe('templates.delete', () => {
     );
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'This template is used by World Cup watcher',
+      error: 'This template is used by World Cup',
     });
     expect(await names(a)).toEqual(before);
   });

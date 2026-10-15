@@ -25,11 +25,16 @@ import { escapeHtml } from '../render/escape-html.js';
 
 export const id = 'message-ingest';
 
-// Card copy for the dashboard's Recipes pages.
+// Card copy for the Slips pages. trigger: what makes it print, shown where
+// a slip with a daily time shows its next run. sources: the job sources
+// its receipts carry (the envelope's, 'sms' by default), so a receipt
+// names this slip.
 export const meta = {
-  title: 'Message ingest',
+  title: 'Text messages',
   description: 'Classifies texts forwarded from your phone and prints task receipts.',
   category: 'messages',
+  trigger: 'Each text',
+  sources: ['sms'],
 };
 
 export const defaults = {
@@ -49,6 +54,7 @@ export const templates = ['Task'];
 export const configLabels = {
   minConfidence: 'min confidence',
   geminiModel: 'gemini model',
+  timezone: 'receipt time zone',
 };
 
 export const hooks = {

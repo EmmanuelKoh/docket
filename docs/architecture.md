@@ -164,8 +164,9 @@ shape op results for display. Scripts call ops with `systemCaller`
 
 ## The dashboard
 
-The dashboard is a Next.js app (React, Tailwind, a small shadcn kit in
-`components/ui/`), styled per `docs/design-spec.md`.
+The dashboard is a Next.js app (React, Tailwind, and the hardware kit in
+`components/hardware/` with its styles in `app/hardware.css`), styled per
+`docs/design-spec.md`.
 
 **Accounts.** Email and password (Better Auth on Postgres). Signup is by
 invite: an admin mints invite links on the Users page, and each link
@@ -177,14 +178,14 @@ and write is scoped to the signed-in owner.
 
 | Page | What it does |
 |------|--------------|
-| Overview | The latest print, counts (templates, plugins, queue, last print), printer contact, the three newest jobs |
-| Slips | Every plugin and stored template as a card with its rendered preview. A slip's page has Print test, and for a plugin the enable toggle, schedule and config |
+| Home | Today's receipts at full size, newest first, under the printer's front edge. The printer's state and the jobs waiting. Each slip with its next run and its on/off switch |
+| Slips | Every plugin and stored template as a row with a small preview, grouped by category; a plugin's row has its on/off switch. A slip's page shows the receipt at full size with Print test, and for a plugin the switch, schedule and settings |
 | Studio (`/studio`) | Template editor with a live preview from the real renderer, Save, Delete and Print. Reached from a slip or "New template" |
 | Photo | Upload or shoot a picture, adjust it against a live dithered preview, print it with an optional caption |
 | Tape | Duduk transcription to printed tape. While you record, only the pitch trace draws; the take transcribes after Stop. Saved takes, editing, phrases and per-phrase printing |
 | Queue | Waiting and printing jobs in print order. Cancel a waiting job, or requeue one stuck printing |
 | History | Done, failed and canceled jobs. A row expands to its template and data. Reprint renders the stored template again |
-| Printer | Printer status, and the devices: pair, share, leave, revoke |
+| Printer | Printer status, and the printers: pair, share, leave, remove |
 | Users | Admins only: accounts and invite links |
 
 **Polling.** The Queue page and the Studio's recent-jobs strip re-fetch
@@ -429,7 +430,12 @@ A plugin is a module listed in `PLUGINS` in `plugins/index.js`. It
 exports:
 
 - `id`, `meta` (card copy), `templates` (names it prints with) and,
-  optionally, `configLabels`.
+  optionally, `configLabels`. `meta` holds `title`, `description` and
+  `category`, and optionally `trigger` and `sources`. `trigger` says what
+  makes a slip print when it has no daily time ("Each text"); the
+  dashboard shows it where a daily slip shows its next run. `sources`
+  lists job sources other than the module id that its receipts carry
+  (`['sms']`), so the dashboard can name the slip under a receipt.
 - `defaults`: `{ enabled, schedule?, config }`. `schedule` is
   `{ every: seconds }` or `{ at: 'HH:MM', timezone }` (`lib/schedule.js`).
   `enabled` applies only when a record is first created.
@@ -579,8 +585,8 @@ exactly the dots the bytes print, and that a second render is identical.
 - An operation: a `defineOperation` in the matching `lib/ops/<area>.js`.
   A new module also goes into `lib/ops/index.js`. Then a route or page
   calls it.
-- A route or page: a thin adapter over ops (see "Adapters"). A page goes
-  into the sidebar (`components/app-sidebar.tsx`) and
+- A route or page: a thin adapter over ops (see "Adapters"). A page gets
+  a key in the panel's key bank (`components/app-sidebar.tsx`) and
   `docs/design-spec.md`. Deploy wiring lives in `next.config.mjs`: a route
   that renders (it loads `render/fonts/`) or seeds templates (it reads
   `reference/`) needs an `outputFileTracingIncludes` entry, or Vercel
@@ -699,7 +705,7 @@ db/
   schema.js                Drizzle schema (every Postgres table)
   migrations/              Generated SQL (npm run db:generate / db:migrate)
 app/                       The Next.js app: pages and route adapters
-  (dashboard)/             Overview, Slips, Studio, Photo, Tape, Queue, History,
+  (dashboard)/             Home, Slips, Studio, Photo, Tape, Queue, History,
                            Printer, Users
   login/ invite/ logout/   Sign in, invite acceptance, sign out
   api/auth/                Better Auth endpoints
@@ -708,7 +714,7 @@ app/                       The Next.js app: pages and route adapters
   templates/ preview/ jobs/      Studio and Photo JSON routes
   api/                     Dashboard JSON routes
   _lib/                    Caller from the session, OpError to HTTP, view models
-components/                React components (shadcn kit in ui/, the Tape tool in tape/)
+components/                React components (the hardware kit in hardware/, the Tape tool in tape/)
 lib/
   ops/                     Operations: every product action as (caller, input) -> output
     define.js caller.js    defineOperation, OpError, the Caller values

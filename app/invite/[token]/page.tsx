@@ -1,12 +1,20 @@
-// /invite/[token] — public invite-acceptance page. Valid token: the
-// signup card (the before-hook in lib/auth-server.js re-validates and
-// claims the token atomically at submit, so this page's check is only a
-// courtesy). Invalid: a plain explanation, no form.
+// Create account from an invite link (design spec: pages, Login and
+// Invite): the DOCKET wordmark printed on the ground and one module. A
+// live link shows the sign-up form; the before-hook in
+// lib/auth-server.js checks and uses up the token again at submit, so
+// this page's check is only a courtesy. A dead link (unknown, used,
+// expired or revoked) shows a note and no form. A signed-in visitor goes
+// to Home.
 
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
+import { Module } from '@/components/hardware/module';
+import { Note } from '@/components/hardware/text';
 import { invitesCheck } from '@/lib/ops/accounts.js';
 import { InviteForm } from './invite-form';
+
+export const metadata: Metadata = { title: 'Create account' };
 
 export default async function InvitePage({
   params,
@@ -24,20 +32,22 @@ export default async function InvitePage({
   });
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-xs rounded-md border-[0.5px] border-border bg-raised p-6">
-        <div className="font-mono text-sm font-medium tracking-[0.14em]">
-          DOCKET
-        </div>
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12">
+      <h1 className="hw-wordmark hw-ink m-0 text-[48px]">DOCKET</h1>
+      <Module
+        number="01"
+        title={found ? 'Create account' : 'Invite'}
+        className="w-full max-w-[400px]"
+      >
         {found ? (
           <InviteForm token={token} email={found.email} />
         ) : (
-          <p className="mt-5 text-xs text-ink-faint">
-            This invite link is invalid, already used, or expired. Ask the
-            person who runs this docket for a new one.
-          </p>
+          <Note>
+            This invite link does not work. It was used, it expired, or it was
+            revoked. Ask an admin for a new link.
+          </Note>
         )}
-      </div>
+      </Module>
     </main>
   );
 }

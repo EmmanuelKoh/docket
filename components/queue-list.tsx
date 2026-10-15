@@ -1,23 +1,65 @@
 'use client';
 
-// The live queue list. Server renders the initial data; this component
-// then re-fetches /api/queue while the tab is visible, at a cadence that
-// follows the human (components/hooks/use-eased-poll.ts): every 3s while
-// they are active on the page, easing to 30s after two idle minutes, and
-// stopping entirely after thirty. Any interaction resumes the fast
-// cadence; the quiet "refresh" control re-fetches on demand and doubles
-// as the resume affordance while paused. Job cards per spec: thumbnail
-// (straight from the artifact store when hosted), name + "source ·
-// created HH:MM:SS" (+ " · N failed attempts" once a printer handed it
-// back), status mono (printing = red), rail = "claimed Ns" for inflight
-// or Cancel for queued only.
+// The Queue page's live view (design spec: pages, Queue). The server
+// renders the first list; this component then re-fetches /api/queue while
+// the tab is visible, at a cadence that follows the person
+// (components/hooks/use-eased-poll.ts): every 3s while they are active,
+// every 30s after two idle minutes, stopped after thirty. Any interaction
+// resumes the fast cadence; the Refresh key re-fetches at once and is the
+// way back from Paused.
+//
+// Two modules in print order: Printing (the job a printer holds, with a
+// red LED and a Requeue key, the way back for a job stuck on a printer
+// that went away) and Waiting (the jobs in the order they will print,
+// each with a Cancel key). A row: the receipt's thumbnail on white paper,
+// its name, when it was made (viewer's time zone, formatted by the
+// server) and what made it, and any failed print attempts in red. A
+// refused action shows a red line in its row.
 
+import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import type { QueueJob } from '@/app/_lib/queue-data';
+import { Led } from '@/components/hardware/led';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Row } from '@/components/hardware/row';
+import { ErrorText, Note } from '@/components/hardware/text';
 import { useEasedPoll } from '@/components/hooks/use-eased-poll';
 
-export function QueueList({ initial }: { initial: QueueJob[] }) {
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// "a done job cannot be requeued" -> "A done job cannot be requeued."
+const sentence = (s: string) => {
+  const t = capital(s);
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+};
+
+const POLL_TEXT = {
+  live: 'Updates every 3 s',
+  eased: 'Updates every 30 s',
+  paused: 'Paused',
+} as const;
+
+type Action = 'cancel' | 'requeue';
+
+export function QueueList({
+  initial,
+  labels,
+}: {
+  initial: QueueJob[];
+  /** a job's source id to the name a caption gives it ('sms' -> 'Text messages') */
+  labels: Record<string, string>;
+}) {
   const [jobs, setJobs] = useState<QueueJob[]>(initial);
+  // A server render (router.refresh, for example once the time zone
+  // cookie is first set) brings a fresher list: take it.
+  const [rendered, setRendered] = useState(initial);
+  if (initial !== rendered) {
+    setRendered(initial);
+    setJobs(initial);
+  }
+  const [busy, setBusy] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -26,151 +68,175 @@ export function QueueList({ initial }: { initial: QueueJob[] }) {
       const data = await res.json();
       setJobs(data.jobs);
     } catch {
-      // transient network error — keep the last good list
+      // transient network error: keep the last good list
     }
   }, []);
   const { mode, resume } = useEasedPoll(load);
 
-  // cancel a queued job; requeue an inflight one (a stuck claim back to
-  // queued). Both return the fresh list so the row updates in one round trip.
-  async function act(path: string, id: string) {
+  // Cancel a waiting job; requeue a printing one (a stuck claim back to
+  // the front of the queue). Both answer the fresh list, so the rows
+  // update in one round trip.
+  async function act(action: Action, id: string) {
+    setBusy(id);
+    setErrors((e) => {
+      const { [id]: _gone, ...rest } = e;
+      return rest;
+    });
+    let error = '';
     try {
-      const res = await fetch(`${path}?job=${encodeURIComponent(id)}`, {
-        method: 'POST',
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setJobs(data.jobs);
+      const res = await fetch(
+        `/api/jobs/${action}?job=${encodeURIComponent(id)}`,
+        { method: 'POST' },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        error = sentence(
+          data?.error ||
+            (action === 'cancel'
+              ? 'Not canceled. Try again'
+              : 'Not requeued. Try again'),
+        );
+      } else {
+        const list: QueueJob[] = data.jobs;
+        setJobs(list);
+        // A printer took the job between the last poll and the press
+        if (
+          action === 'cancel' &&
+          list.some((j) => j.id === id && j.inflight)
+        ) {
+          error = 'Not canceled: a printer took it first.';
+        }
+      }
     } catch {
-      // leave the list as is; the next poll corrects it
+      error = 'No connection. Try again.';
+    } finally {
+      setBusy(null);
     }
+    if (error) setErrors((e) => ({ ...e, [id]: error }));
   }
-  const cancel = (id: string) => act('/api/jobs/cancel', id);
-  const requeue = (id: string) => act('/api/jobs/requeue', id);
 
-  const statusLine = (
-    <div className="flex items-baseline justify-end gap-2 text-xs text-ink-faint">
-      <span className="font-mono">
-        {mode === 'paused'
-          ? 'paused'
-          : mode === 'eased'
-            ? 'updates every 30s'
-            : 'updates every 3s'}
-      </span>
-      <button
-        type="button"
-        onClick={resume}
-        className="transition-colors hover:text-ink"
-      >
-        refresh
-      </button>
-    </div>
+  const printing = jobs.filter((j) => j.inflight);
+  const waiting = jobs.filter((j) => !j.inflight);
+  const label = (source: string) =>
+    source ? (labels[source] ?? capital(source)) : '';
+  const row = (job: QueueJob) => (
+    <QueueRow
+      key={job.id}
+      job={job}
+      source={label(job.source)}
+      busy={busy === job.id}
+      error={errors[job.id] ?? ''}
+      onAct={act}
+    />
   );
 
-  if (!jobs.length) {
-    return (
-      <div className="space-y-3">
-        {statusLine}
-        <div className="rounded-md border-[0.5px] border-border bg-raised px-5 py-8 text-center text-sm text-ink-faint">
-          No jobs waiting.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      {statusLine}
-      {jobs.map((job) => (
-        <div
-          key={job.id}
-          className="rounded-md border-[0.5px] border-border bg-raised px-5 py-4"
-        >
-          {/* Phones: thumbnail shrinks one step (110x74) and status +
-              action move under the name; the fixed rail columns only
-              exist from sm up, so nothing can push off-screen. */}
-          <div className="flex items-start gap-4 sm:gap-6">
-            <div className="shrink-0 rounded-[2px] border-[0.5px] border-border bg-white">
-              <img
-                src={job.image}
-                alt=""
-                loading="lazy"
-                className="h-[74px] w-[110px] object-contain sm:h-[108px] sm:w-[158px]"
-              />
-            </div>
-            <div className="min-w-0 grow pt-0.5">
-              {/* the ledger line: name……………status [action] share ONE
-                  baseline — the button aligns by its label text */}
-              <div className="flex min-w-0 items-baseline gap-3">
-                <div className="truncate font-mono text-[13px] text-ink">
-                  {job.name}
-                </div>
-                <span className="leader" aria-hidden="true" />
-                <span
-                  className={`hidden shrink-0 font-mono text-xs sm:inline ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
-                >
-                  {job.statusText}
-                </span>
-                {job.inflight ? (
-                  <>
-                    <span className="hidden shrink-0 font-mono text-xs text-ink-faint sm:inline">
-                      started {job.claimedAgo} ago
-                    </span>
-                    <button
-                      type="button"
-                      className="hidden shrink-0 font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink sm:inline"
-                      onClick={() => requeue(job.id)}
-                    >
-                      requeue
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="hidden shrink-0 font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink sm:inline"
-                    onClick={() => cancel(job.id)}
-                  >
-                    cancel
-                  </button>
-                )}
-              </div>
-              <div className="mt-0.5 text-xs text-ink-muted">
-                {job.source} · created {job.createdTime}
-                {job.attemptsText ? ` · ${job.attemptsText}` : ''}
-              </div>
-              <div className="mt-2 flex items-center gap-3 sm:hidden">
-                <span
-                  className={`font-mono text-xs ${job.inflight ? 'text-red' : 'text-ink-muted'}`}
-                >
-                  {job.statusText}
-                </span>
-                {job.inflight ? (
-                  <>
-                    <span className="font-mono text-xs text-ink-faint">
-                      started {job.claimedAgo} ago
-                    </span>
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink"
-                      onClick={() => requeue(job.id)}
-                    >
-                      requeue
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="font-mono text-xs text-ink-muted underline underline-offset-2 hover:text-ink"
-                    onClick={() => cancel(job.id)}
-                  >
-                    cancel
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+    <>
+      <PageTitle
+        aside={POLL_TEXT[mode]}
+        actions={
+          <KeyGroup>
+            <PushKey size="compact" onClick={() => resume()}>
+              Refresh
+            </PushKey>
+          </KeyGroup>
+        }
+      >
+        Queue
+      </PageTitle>
+
+      <div className="flex max-w-[860px] flex-col gap-[30px]">
+        {jobs.length === 0 ? (
+          <Module number="01" title="Waiting">
+            <Note>Nothing is waiting to print.</Note>
+            <Link href="/" className="hw-link self-start">
+              Back to Home
+            </Link>
+          </Module>
+        ) : (
+          <>
+            <Module number="01" title="Printing" flush>
+              {printing.map(row)}
+              {printing.length === 0 ? (
+                <Row>
+                  <Note>Nothing printing.</Note>
+                </Row>
+              ) : null}
+            </Module>
+            <Module number="02" title="Waiting" flush>
+              {waiting.map(row)}
+              {waiting.length === 0 ? (
+                <Row>
+                  <Note>Nothing else waiting.</Note>
+                </Row>
+              ) : null}
+            </Module>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function QueueRow({
+  job,
+  source,
+  busy,
+  error,
+  onAct,
+}: {
+  job: QueueJob;
+  source: string;
+  busy: boolean;
+  error: string;
+  onAct: (action: Action, id: string) => void;
+}) {
+  return (
+    <Row className="items-start justify-start gap-4">
+      <span className="hw-thumb max-h-[150px] w-[72px] sm:w-[112px]">
+        <img
+          src={job.image}
+          alt=""
+          width={job.width}
+          height={job.height ?? undefined}
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-1">
+          <span className="break-words font-semibold">{job.name}</span>
+          {job.inflight ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-2 font-semibold text-red">
+                <Led state="printing" />
+                Printing
+              </span>
+              {job.claimedAgo ? (
+                <Note as="span">
+                  Started <span className="hw-mono">{job.claimedAgo}</span> ago
+                </Note>
+              ) : null}
+            </span>
+          ) : null}
+          <span className="hw-row-sub">
+            {source ? `${job.createdTime} · ${source}` : job.createdTime}
+          </span>
+          {job.attemptsText ? (
+            <span className="hw-error">{capital(job.attemptsText)}</span>
+          ) : null}
+          {error ? <ErrorText className="mt-1">{error}</ErrorText> : null}
         </div>
-      ))}
-    </div>
+        <KeyGroup>
+          <PushKey
+            size="compact"
+            disabled={busy}
+            onClick={() => onAct(job.inflight ? 'requeue' : 'cancel', job.id)}
+          >
+            {job.inflight ? 'Requeue' : 'Cancel'}
+          </PushKey>
+        </KeyGroup>
+      </div>
+    </Row>
   );
 }

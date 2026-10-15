@@ -1,136 +1,163 @@
-// Printer — the device page. Status per the 90-second rule (the ESP32
-// polls /next constantly and its "last seen" write is throttled to once
-// per 60s), then the running configuration from config.js and pointers to
-// the hardware docs. Read-only: the printer is configured by env vars and
-// firmware, not from the dashboard.
+// Printer (design spec: pages, Printer). Left: the Status module (the
+// printer the account prints to: LED and state, last seen, jobs waiting
+// and a Queue link while anything waits or prints, paper width, version)
+// and the Printers module (each printer you own or share, with its
+// keys). Right: Add a printer, the one form for a pairing code or a
+// share code.
+//
+// One printers.overview read, shared with the panel's printer line
+// through React cache (app/_lib/printer-data.ts). Presence is read from
+// the printer's primary owner's slot, so a shared printer shows online
+// for its members too. While a pairing is pending the page refreshes
+// every 3s (PairingWatcher).
 
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
+import {
+  printerOverview,
+  printerStateText,
+  printerSummary,
+} from '@/app/_lib/printer-data';
+import { ago, agoLabel } from '@/app/_lib/time';
+import { Led } from '@/components/hardware/led';
+import { Module } from '@/components/hardware/module';
+import { PageTitle } from '@/components/hardware/page-title';
+import { Row } from '@/components/hardware/row';
+import { Note } from '@/components/hardware/text';
+import { cn } from '@/components/utils';
 import { PRINT_WIDTH } from '@/config.js';
-import { printersOverview } from '@/lib/ops/printers.js';
 import pkg from '@/package.json';
-import { agoText } from '../../_lib/format';
 import {
   ClaimDeviceForm,
-  LeaveDeviceButton,
+  DeviceRow,
+  type DeviceRowData,
   PairingWatcher,
-  RemoveMemberButton,
-  RevokeDeviceButton,
-  ShareDeviceButton,
 } from './devices-client';
 
-type DeviceRow = {
-  id: string;
-  name: string | null;
-  pairedAt: string | null;
-  role: 'owner' | 'member';
-  primaryOwnerId: string;
-  shareCode: string | null;
-  members: { ownerId: string; email: string }[];
-};
+export const metadata: Metadata = { title: 'Printer' };
+
+function rowData(
+  d: Awaited<ReturnType<typeof printerOverview>>['devices'][number],
+  now: number,
+): DeviceRowData {
+  const sub = !d.pairedAt
+    ? 'Pairing'
+    : d.role === 'member'
+      ? 'Shared with you'
+      : `Paired ${agoLabel(d.pairedAt, now)} ago`;
+  return {
+    id: d.id,
+    name: d.name?.trim() || 'Printer',
+    sub,
+    role: d.role,
+    shareCode: d.shareCode ?? null,
+    members: d.members ?? [],
+  };
+}
 
 export default async function PrinterPage() {
   const caller = await getCaller();
   if (!caller) redirect('/login');
-  // One device listing for both: the presence reads the printer's primary
-  // owner's slot, so a shared printer shows online for its members too.
-  const { devices, status } = await printersOverview(caller);
-  const paired: DeviceRow[] = devices;
-  const { lastSeenAt: lastSeen, online } = status;
-  const pairingPending = paired.some((d) => d.pairedAt === null);
-
-  const rows = [
-    {
-      label: 'printer',
-      value: lastSeen ? `seen ${agoText(lastSeen)}` : 'no printer contact yet',
-    },
-    { label: 'print width', value: `${PRINT_WIDTH} dots` },
-    { label: 'version', value: `v${pkg.version}` },
-  ];
+  const [{ devices }, printer] = await Promise.all([
+    printerOverview(caller),
+    printerSummary(caller),
+  ]);
+  const now = Date.now();
+  const pairingPending = devices.some((d) => d.pairedAt === null);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-base font-medium text-ink">Printer</h1>
-      </div>
+    <>
+      <PageTitle>Printer</PageTitle>
+      {pairingPending ? <PairingWatcher /> : null}
 
-      <section className="rounded-md border-[0.5px] border-border bg-raised px-5 py-4">
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${online ? 'bg-ink' : 'bg-ink-faint'}`}
-          />
-          <span className="font-mono text-[13px] text-ink">
-            {online ? 'online' : 'offline'}
-          </span>
-        </div>
-        <div className="mt-4 space-y-3">
-          {rows.map((r) => (
-            <div
-              key={r.label}
-              className="grid grid-cols-[110px_minmax(0,1fr)] items-baseline gap-3"
-            >
-              <span className="text-[13px] font-semibold text-ink">
-                {r.label}
-              </span>
-              <span className="font-mono text-[12.5px] text-ink-muted">
-                {r.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        {pairingPending ? <PairingWatcher /> : null}
-        <h2 className="text-[13px] font-semibold text-ink">Devices</h2>
-        <ul className="mt-3">
-          {paired.map((d) => (
-            <li
-              key={d.id}
-              className="flex flex-col border-b-[0.5px] border-border py-2"
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-ink">
-                  {d.name || 'printer'}
-                </span>
-                <span className="leader" aria-hidden />
-                <span className="text-xs text-ink-faint">
-                  {d.pairedAt
-                    ? `${d.role === 'member' ? 'shared with you · ' : ''}paired ${agoText(d.pairedAt)}`
-                    : 'pairing…'}
-                </span>
-                {d.role === 'owner' ? (
-                  <span className="flex items-baseline gap-2">
-                    <ShareDeviceButton id={d.id} initial={d.shareCode} />
-                    <RevokeDeviceButton id={d.id} />
-                  </span>
-                ) : (
-                  <LeaveDeviceButton id={d.id} />
-                )}
-              </div>
-              {d.role === 'owner' && d.members.length > 0 ? (
-                <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-xs text-ink-faint">
-                  <span>also prints for</span>
-                  {d.members.map((m) => (
-                    <span key={m.ownerId} className="flex items-baseline gap-1">
-                      {m.email}
-                      <RemoveMemberButton id={d.id} member={m.ownerId} />
-                    </span>
-                  ))}
+      <div className="flex flex-wrap items-start gap-x-[52px] gap-y-[30px]">
+        <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-[30px]">
+          <Module number="01" title="Status" bodyClassName="gap-2">
+            {printer.name ? (
+              <>
+                <div className="text-[21px] font-bold leading-tight">
+                  {printer.name}
                 </div>
-              ) : null}
-            </li>
-          ))}
-          {paired.length === 0 ? (
-            <li className="py-2 text-xs text-ink-faint">
-              No devices yet. Enter a pairing or share code below.
-            </li>
-          ) : null}
-        </ul>
-        <div className="mt-4">
-          <ClaimDeviceForm />
+                <div
+                  className={cn(
+                    'flex items-center gap-2.5 font-semibold',
+                    printer.state === 'printing' && 'text-red',
+                  )}
+                >
+                  <Led state={printer.state} />
+                  {printerStateText(printer.state)}
+                </div>
+                <Note>
+                  {printer.lastSeenAt ? (
+                    <>
+                      Last seen{' '}
+                      <span className="hw-mono">
+                        {ago(printer.lastSeenAt, now).value}
+                      </span>{' '}
+                      {ago(printer.lastSeenAt, now).unit} ago
+                    </>
+                  ) : (
+                    'Not seen yet'
+                  )}
+                </Note>
+              </>
+            ) : (
+              <>
+                <div className="text-[21px] font-bold leading-tight">
+                  No printer yet
+                </div>
+                <Note className="max-w-[52ch]">
+                  Turn the printer on: it prints a pairing code. Enter the code
+                  under Add a printer.
+                </Note>
+              </>
+            )}
+            {printer.queued > 0 || printer.inflight > 0 ? (
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                {printer.queued > 0 ? (
+                  <span className="font-semibold text-red">
+                    {printer.queued} waiting
+                  </span>
+                ) : null}
+                <Link href="/queue" className="hw-link">
+                  Queue
+                </Link>
+              </div>
+            ) : null}
+            <dl className="m-0 mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-6 gap-y-1.5">
+              <dt className="hw-label">Paper width</dt>
+              <dd className="hw-mono m-0 text-sm">
+                80 mm · {PRINT_WIDTH} dots
+              </dd>
+              <dt className="hw-label">Version</dt>
+              <dd className="hw-mono m-0 text-sm">v{pkg.version}</dd>
+            </dl>
+          </Module>
+
+          <Module number="02" title="Printers" flush>
+            {devices.map((d) => (
+              <DeviceRow key={d.id} device={rowData(d, now)} />
+            ))}
+            {devices.length === 0 ? (
+              <Row>
+                <Note>
+                  No printers yet. Enter a pairing code or a share code.
+                </Note>
+              </Row>
+            ) : null}
+          </Module>
         </div>
-      </section>
-    </div>
+
+        <Module
+          number="03"
+          title="Add a printer"
+          className="min-w-[280px] flex-[1_1_320px] max-[400px]:min-w-0"
+        >
+          <ClaimDeviceForm />
+        </Module>
+      </div>
+    </>
   );
 }

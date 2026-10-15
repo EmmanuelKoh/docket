@@ -1,74 +1,81 @@
-/* app/globals.css — the docket theme. Tokens per docs/design-spec.md
-   (the source of truth for how they may be used). The --dither values are
-   the thermal-paper grain tiles, one per theme — the spec describes how
-   to regenerate them if they ever need tuning. */
+/* app/globals.css: the docket theme. The tokens follow the E design (the
+   printer's own control deck); docs/design-spec.md says how they may be
+   used. The hardware kit (app/hardware.css) puts its rules in the
+   components layer, so utilities still apply on top of it. Keep the plain
+   @import: Turbopack drops the whole file on `@import ... layer(...)`,
+   with no error. */
 
 @import "tailwindcss";
+@import "./hardware.css";
 
 @custom-variant dark (
   &:where(html[data-theme="dark"], html[data-theme="dark"] *)
 );
 
 :root {
-  --page: #fbfbfa;
-  --raised: #ffffff;
-  --hairline: #eaeae8;
-  --border: #dcdcda;
-  --dash: #c6c6c3;
+  /* The ramp, remapped onto E: page = ground, raised = panel,
+     ink-muted = secondary text, ink-faint = tertiary text */
+  --page: #e8e6e1;
+  --raised: #f0efeb;
+  --hairline: #d8d5ce;
+  --border: #bdb9b0;
+  --dash: #a9a69e;
   --ink: #161616;
-  --ink-muted: #6d6d6a;
-  --ink-faint: #9b9b97;
+  --ink-muted: #4a4741;
+  --ink-faint: #5d5a53;
   --red: #b3261e;
 
-  --dither: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='96'%20height='96'%3E%3Crect%20x='50'%20y='20'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='24'%20y='39'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='52'%20y='89'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='18'%20y='37'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='21'%20y='76'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='1'%20y='93'%20width='2'%20height='2'%20fill='%23f3f3f0'/%3E%3Crect%20x='44'%20y='62'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='37'%20y='13'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='28'%20y='88'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='7'%20y='64'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='84'%20y='8'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='27'%20y='63'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='5'%20y='73'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='34'%20y='69'%20width='1.5'%20height='1.5'%20fill='%23f0f0ed'/%3E%3Crect%20x='68'%20y='59'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='70'%20y='88'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='54'%20y='26'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='38'%20y='11'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='1'%20y='13'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='41'%20y='13'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='14'%20y='11'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='86'%20y='57'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='73'%20y='16'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='8'%20y='45'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='27'%20y='58'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='62'%20y='55'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='23'%20y='11'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='34'%20y='34'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='79'%20y='85'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='81'%20y='88'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='42'%20y='79'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='20'%20y='47'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='93'%20y='16'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='15'%20y='84'%20width='1'%20height='1'%20fill='%23a5a5a1'/%3E%3Crect%20x='15'%20y='33'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='72'%20y='11'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='90'%20y='47'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='47'%20y='87'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='54'%20y='34'%20width='2'%20height='2'%20fill='%23efefec'/%3E%3Crect%20x='7'%20y='10'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='40'%20y='36'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='88'%20y='1'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='10'%20y='22'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='79'%20y='37'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='62'%20y='79'%20width='1.5'%20height='1.5'%20fill='%23dcdcd9'/%3E%3Crect%20x='35'%20y='54'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='52'%20y='57'%20width='2'%20height='2'%20fill='%23f3f3f0'/%3E%3Crect%20x='40'%20y='90'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='67'%20y='20'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='89'%20y='20'%20width='1'%20height='1'%20fill='%23a5a5a1'/%3E%3Crect%20x='22'%20y='74'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='60'%20y='36'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='34'%20y='0'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='23'%20y='41'%20width='2'%20height='2'%20fill='%23e9e9e6'/%3E%3Crect%20x='48'%20y='17'%20width='1.5'%20height='1.5'%20fill='%23f0f0ed'/%3E%3Crect%20x='1'%20y='61'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='79'%20y='61'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='64'%20y='26'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='58'%20y='71'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='44'%20y='41'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='12'%20y='41'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='56'%20y='88'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='7'%20y='39'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='86'%20y='52'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='49'%20y='56'%20width='1.5'%20height='1.5'%20fill='%23f0f0ed'/%3E%3Crect%20x='86'%20y='26'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='93'%20y='10'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='10'%20y='58'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='3'%20y='71'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='8'%20y='65'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='92'%20y='43'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='50'%20y='74'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='90'%20y='49'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='10'%20y='83'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='72'%20y='4'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='2'%20y='37'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='15'%20y='54'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='47'%20y='28'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='70'%20y='70'%20width='2'%20height='2'%20fill='%23efefec'/%3E%3Crect%20x='46'%20y='35'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='34'%20y='26'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='17'%20y='60'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='11'%20y='3'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='42'%20y='7'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='66'%20y='19'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='25'%20y='28'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='47'%20y='67'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='24'%20y='64'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='43'%20y='74'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='66'%20y='55'%20width='1'%20height='1'%20fill='%23e9e9e6'/%3E%3Crect%20x='46'%20y='55'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='5'%20y='61'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='60'%20y='48'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='30'%20y='50'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='88'%20y='31'%20width='2'%20height='2'%20fill='%23f3f3f0'/%3E%3Crect%20x='37'%20y='7'%20width='2'%20height='2'%20fill='%23f3f3f0'/%3E%3Crect%20x='85'%20y='46'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='93'%20y='91'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='74'%20y='63'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='80'%20y='26'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='77'%20y='8'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='34'%20y='77'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='92'%20y='86'%20width='2'%20height='2'%20fill='%23f3f3f0'/%3E%3Crect%20x='66'%20y='15'%20width='1'%20height='1'%20fill='%23a5a5a1'/%3E%3Crect%20x='60'%20y='16'%20width='1.5'%20height='1.5'%20fill='%23dcdcd9'/%3E%3Crect%20x='50'%20y='80'%20width='1'%20height='1'%20fill='%23f0f0ed'/%3E%3Crect%20x='69'%20y='46'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='18'%20y='45'%20width='2'%20height='2'%20fill='%23e9e9e6'/%3E%3Crect%20x='67'%20y='90'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='36'%20y='22'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3Crect%20x='89'%20y='52'%20width='1.5'%20height='1.5'%20fill='%23f3f3f0'/%3E%3Crect%20x='51'%20y='36'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='7'%20y='93'%20width='2'%20height='2'%20fill='%23f0f0ed'/%3E%3Crect%20x='1'%20y='48'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='54'%20y='87'%20width='1.5'%20height='1.5'%20fill='%23e9e9e6'/%3E%3Crect%20x='5'%20y='45'%20width='1'%20height='1'%20fill='%23dcdcd9'/%3E%3Crect%20x='55'%20y='37'%20width='1.5'%20height='1.5'%20fill='%23f0f0ed'/%3E%3Crect%20x='80'%20y='37'%20width='1'%20height='1'%20fill='%23efefec'/%3E%3Crect%20x='27'%20y='52'%20width='1.5'%20height='1.5'%20fill='%23efefec'/%3E%3Crect%20x='51'%20y='29'%20width='1'%20height='1'%20fill='%23f3f3f0'/%3E%3C/svg%3E");
-
-  /* shadcn semantic tokens, mapped onto the docket ramp above. They
-     reference the docket tokens (not literal colors), so dark mode flips
-     them automatically via html[data-theme="dark"] — there is no separate
-     .dark block. Per the design spec: primary is inverse ink (never a
-     brand fill), destructive is the register red, focus rings are faint
-     ink, radius is ZERO — the machine's chrome is flat and square. */
-  --radius: 0px;
-  --background: var(--page);
-  --foreground: var(--ink);
-  --card: var(--raised);
-  --card-foreground: var(--ink);
-  --popover: var(--raised);
-  --popover-foreground: var(--ink);
-  --primary: var(--ink);
-  --primary-foreground: var(--page);
-  --secondary: var(--raised);
-  --secondary-foreground: var(--ink);
-  --muted: var(--hairline);
-  --muted-foreground: var(--ink-muted);
-  --accent: var(--hairline);
-  --accent-foreground: var(--ink);
-  --destructive: var(--red);
-  --destructive-foreground: #ffffff;
-  --input: var(--border);
-  --ring: var(--ink-faint);
-  --sidebar: var(--page);
-  --sidebar-foreground: var(--ink-muted);
-  --sidebar-primary: var(--ink);
-  --sidebar-primary-foreground: var(--page);
-  --sidebar-accent: var(--hairline);
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ink-faint);
+  /* E materials */
+  --ground: #e8e6e1;
+  --panel: #f0efeb;
+  --key: #ebe7de;
+  --paper: #fefefe;
+  --plate: #262523;
+  --plate-ink: #dedbd4;
+  --cutout: #151311;
+  --printed-ink: #262420;
+  --key-red: #b5422f;
+  --flag: #d8483a;
+  --led-green: #9be41f;
+  --switch-on: #cf6d2f;
+  --field: #f8f7f4;
+  --field-edge: #2a2926;
+  --legend-disabled: #a29d92;
 }
 
 html[data-theme="dark"] {
-  --page: #161615;
-  --raised: #1c1c1a;
-  --hairline: #2e2d2b;
-  --border: #2e2d2b;
-  --dash: #3d3c39;
-  --ink: #e8e6e1;
-  --ink-muted: #8f8d87;
-  --ink-faint: #6b6963;
-  --red: #d64541;
+  /* The ramp, remapped onto the dark E edition as in light: page = mat,
+     raised = panel, ink = text on the panel, ink-muted = secondary text,
+     ink-faint = tertiary text, red = red text (4.8:1 on the panel). The
+     rules are the dashed light ink composited on the panel. */
+  --page: #262522;
+  --raised: #2f2e2b;
+  --hairline: #44433f;
+  --border: #4f4d48;
+  --dash: #5a5854;
+  --ink: #ece9e2;
+  --ink-muted: #b5b1a7;
+  --ink-faint: #a29e94;
+  --red: #f27462;
 
-  --dither: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='96'%20height='96'%3E%3Crect%20x='50'%20y='20'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='24'%20y='39'%20width='1.5'%20height='1.5'%20fill='%230f0f0e'/%3E%3Crect%20x='52'%20y='89'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='18'%20y='37'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='21'%20y='76'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='1'%20y='93'%20width='2'%20height='2'%20fill='%23101010'/%3E%3Crect%20x='44'%20y='62'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='37'%20y='13'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='28'%20y='88'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='7'%20y='64'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='84'%20y='8'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='27'%20y='63'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='5'%20y='73'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='34'%20y='69'%20width='1.5'%20height='1.5'%20fill='%23232322'/%3E%3Crect%20x='68'%20y='59'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='70'%20y='88'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='54'%20y='26'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='38'%20y='11'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='1'%20y='13'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='41'%20y='13'%20width='1.5'%20height='1.5'%20fill='%231b1b1a'/%3E%3Crect%20x='14'%20y='11'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='86'%20y='57'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='73'%20y='16'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='8'%20y='45'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='27'%20y='58'%20width='1.5'%20height='1.5'%20fill='%230f0f0e'/%3E%3Crect%20x='62'%20y='55'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='23'%20y='11'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='34'%20y='34'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='79'%20y='85'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='81'%20y='88'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='42'%20y='79'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='20'%20y='47'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='93'%20y='16'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='15'%20y='84'%20width='1'%20height='1'%20fill='%23000000'/%3E%3Crect%20x='15'%20y='33'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='72'%20y='11'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='90'%20y='47'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='47'%20y='87'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='54'%20y='34'%20width='2'%20height='2'%20fill='%23131312'/%3E%3Crect%20x='7'%20y='10'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='40'%20y='36'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='88'%20y='1'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='10'%20y='22'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='79'%20y='37'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='62'%20y='79'%20width='1.5'%20height='1.5'%20fill='%23060606'/%3E%3Crect%20x='35'%20y='54'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='52'%20y='57'%20width='2'%20height='2'%20fill='%23101010'/%3E%3Crect%20x='40'%20y='90'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='67'%20y='20'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='89'%20y='20'%20width='1'%20height='1'%20fill='%23000000'/%3E%3Crect%20x='22'%20y='74'%20width='1.5'%20height='1.5'%20fill='%230f0f0e'/%3E%3Crect%20x='60'%20y='36'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='34'%20y='0'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='23'%20y='41'%20width='2'%20height='2'%20fill='%23121211'/%3E%3Crect%20x='48'%20y='17'%20width='1.5'%20height='1.5'%20fill='%23232322'/%3E%3Crect%20x='1'%20y='61'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='79'%20y='61'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='64'%20y='26'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='58'%20y='71'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='44'%20y='41'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='12'%20y='41'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='56'%20y='88'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='7'%20y='39'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='86'%20y='52'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='49'%20y='56'%20width='1.5'%20height='1.5'%20fill='%23232322'/%3E%3Crect%20x='86'%20y='26'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='93'%20y='10'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='10'%20y='58'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='3'%20y='71'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='8'%20y='65'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='92'%20y='43'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='50'%20y='74'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='90'%20y='49'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='10'%20y='83'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='72'%20y='4'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='2'%20y='37'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='15'%20y='54'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='47'%20y='28'%20width='2'%20height='2'%20fill='%23232322'/%3E%3Crect%20x='70'%20y='70'%20width='2'%20height='2'%20fill='%23131312'/%3E%3Crect%20x='46'%20y='35'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='34'%20y='26'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='17'%20y='60'%20width='2'%20height='2'%20fill='%23232322'/%3E%3Crect%20x='11'%20y='3'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='42'%20y='7'%20width='2'%20height='2'%20fill='%23232322'/%3E%3Crect%20x='66'%20y='19'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='25'%20y='28'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='47'%20y='67'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='24'%20y='64'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='43'%20y='74'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='66'%20y='55'%20width='1'%20height='1'%20fill='%23121211'/%3E%3Crect%20x='46'%20y='55'%20width='2'%20height='2'%20fill='%231b1b1a'/%3E%3Crect%20x='5'%20y='61'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='60'%20y='48'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='30'%20y='50'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='88'%20y='31'%20width='2'%20height='2'%20fill='%231b1b1a'/%3E%3Crect%20x='37'%20y='7'%20width='2'%20height='2'%20fill='%23101010'/%3E%3Crect%20x='85'%20y='46'%20width='1.5'%20height='1.5'%20fill='%23121211'/%3E%3Crect%20x='93'%20y='91'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='74'%20y='63'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='80'%20y='26'%20width='1'%20height='1'%20fill='%231b1b1a'/%3E%3Crect%20x='77'%20y='8'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='34'%20y='77'%20width='2'%20height='2'%20fill='%23232322'/%3E%3Crect%20x='92'%20y='86'%20width='2'%20height='2'%20fill='%231b1b1a'/%3E%3Crect%20x='66'%20y='15'%20width='1'%20height='1'%20fill='%23000000'/%3E%3Crect%20x='60'%20y='16'%20width='1.5'%20height='1.5'%20fill='%23060606'/%3E%3Crect%20x='50'%20y='80'%20width='1'%20height='1'%20fill='%23232322'/%3E%3Crect%20x='69'%20y='46'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='18'%20y='45'%20width='2'%20height='2'%20fill='%230f0f0e'/%3E%3Crect%20x='67'%20y='90'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='36'%20y='22'%20width='1'%20height='1'%20fill='%23101010'/%3E%3Crect%20x='89'%20y='52'%20width='1.5'%20height='1.5'%20fill='%23101010'/%3E%3Crect%20x='51'%20y='36'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='7'%20y='93'%20width='2'%20height='2'%20fill='%231b1b1a'/%3E%3Crect%20x='1'%20y='48'%20width='1'%20height='1'%20fill='%23131312'/%3E%3Crect%20x='54'%20y='87'%20width='1.5'%20height='1.5'%20fill='%230f0f0e'/%3E%3Crect%20x='5'%20y='45'%20width='1'%20height='1'%20fill='%23060606'/%3E%3Crect%20x='55'%20y='37'%20width='1.5'%20height='1.5'%20fill='%23232322'/%3E%3Crect%20x='80'%20y='37'%20width='1'%20height='1'%20fill='%230f0f0e'/%3E%3Crect%20x='27'%20y='52'%20width='1.5'%20height='1.5'%20fill='%23131312'/%3E%3Crect%20x='51'%20y='29'%20width='1'%20height='1'%20fill='%23101010'/%3E%3C/svg%3E");
+  /* E materials, dark: the approved dark boards (Home-E-dark and
+     System-E-dark): a dark cutting mat, dark painted metal, black plates,
+     dark grey keys, the print key in a darker matte red */
+  --ground: #262522;
+  --panel: #2f2e2b;
+  --key: #4b4a46;
+  --paper: #fefefe;
+  --plate: #151413;
+  --plate-ink: #e2ded4;
+  --cutout: #090807;
+  --printed-ink: #e2ded4;
+  --key-red: #a93f2d;
+  --flag: #d6473a;
+  --led-green: #9be41f;
+  --switch-on: #cf6d2f;
+  --field: #1b1a18;
+  --field-edge: #0d0c0b;
+  --legend-disabled: #85817a;
 }
 
 @theme inline {
@@ -81,154 +88,40 @@ html[data-theme="dark"] {
   --color-ink-muted: var(--ink-muted);
   --color-ink-faint: var(--ink-faint);
   --color-red: var(--red);
-
-  /* ONE typeface: the receipt mono carries the whole app (the tape
-     studio proved the look) — font-sans keeps its NAME so utilities
-     don't change, but its value is the mono stack */
-  --font-sans: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-
-  /* square everywhere (calc against a 0px base would go negative) */
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-key: var(--key);
+  --color-paper: var(--paper);
+  --color-plate: var(--plate);
+  --color-plate-ink: var(--plate-ink);
+  --color-cutout: var(--cutout);
+  --color-printed-ink: var(--printed-ink);
+  --color-key-red: var(--key-red);
+  --color-flag: var(--flag);
+  --color-led-green: var(--led-green);
+  --color-switch-on: var(--switch-on);
+  --color-field: var(--field);
+  --color-field-edge: var(--field-edge);
+  --color-legend-disabled: var(--legend-disabled);
 }
 
+/* Three faces, loaded with next/font in app/layout.tsx: Hanken Grotesk
+   for text, Martian Mono (with its width axis) for times, codes and
+   plates, Big Shoulders for titles, the wordmark and stamps. `static`
+   keeps the variables on :root even when no utility uses them, because
+   app/hardware.css reads them. */
+@theme static {
+  --font-sans: var(--font-hanken), "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    var(--font-martian), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: var(--font-big-shoulders), "Arial Narrow", sans-serif;
+}
+
+/* The page is the E ground: app/layout.tsx wraps every page in
+   .hw-ground, and the body carries the same stock colour for overscroll */
 body {
-  background-color: var(--page);
-  background-image: var(--dither);
+  background-color: var(--ground);
   color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-}
-
-/* ---- receipt accents (design-spec — material & type) ---- */
-
-/* perforation: the dotted tear-off rule between major page zones */
-.perf {
-  height: 1px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--dash) 0 5px,
-    transparent 5px 11px
-  );
-}
-
-/* ledger leader: the dotted run between a row's name and its rail,
-   like a receipt line item (name……………value). Round 2px dots on a 7px
-   rhythm — a 1px dotted border reads as a faint line, not dots. Rides
-   inside a baseline flex next to a truncating name. */
-.leader {
-  flex: 1 1 16px;
-  min-width: 16px;
-  height: 3px;
-  background-image: radial-gradient(
-    circle,
-    var(--ink-muted) 0.75px,
-    transparent 1.25px
-  );
-  background-size: 7px 3px;
-  margin: 0 4px 0 6px;
-  align-self: baseline;
-  position: relative;
-  top: 1px;
-}
-
-/* the key's hard offset edge is a SECOND STRIKE, not a shadow — it
-   prints in ink in both themes (light ink on the dark page included:
-   deliberately visible) */
-:root {
-  --key-shadow: var(--ink);
-}
-
-/* the bite: solid-ink surfaces (knockout buttons, banners, stamps)
-   carry a whisper of print texture — three tail-thresholded
-   fractal-noise layers multiplied into one mask (sparse speckle,
-   occasional splatter clump, micro dust at half a pixel: the texture
-   is authored at 480px and displayed at 240px). Coverage 1-2%; holes
-   are full paper, never gray. Never on body text or keys. */
-.bite {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27480%27%20height=%27480%27%3E%3Cfilter%20id=%27f%27%20x=%270%27%20y=%270%27%20width=%27100%%27%20height=%27100%%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.08%27%20numOctaves=%274%27%20seed=%275%27%20stitchTiles=%27stitch%27%20result=%27n0%27/%3E%3CfeComponentTransfer%20in=%27n0%27%20result=%27t0%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.0225%27%20numOctaves=%273%27%20seed=%2717%27%20stitchTiles=%27stitch%27%20result=%27n1%27/%3E%3CfeComponentTransfer%20in=%27n1%27%20result=%27t1%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27t0%27%20in2=%27t1%27%20operator=%27in%27%20result=%27c1%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.75%27%20numOctaves=%272%27%20seed=%274%27%20stitchTiles=%27stitch%27%20result=%27n2%27/%3E%3CfeComponentTransfer%20in=%27n2%27%20result=%27t2%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c1%27%20in2=%27t2%27%20operator=%27in%27/%3E%3C/filter%3E%3Crect%20width=%27480%27%20height=%27480%27%20filter=%27url(%23f)%27/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27480%27%20height=%27480%27%3E%3Cfilter%20id=%27f%27%20x=%270%27%20y=%270%27%20width=%27100%%27%20height=%27100%%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.08%27%20numOctaves=%274%27%20seed=%275%27%20stitchTiles=%27stitch%27%20result=%27n0%27/%3E%3CfeComponentTransfer%20in=%27n0%27%20result=%27t0%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.0225%27%20numOctaves=%273%27%20seed=%2717%27%20stitchTiles=%27stitch%27%20result=%27n1%27/%3E%3CfeComponentTransfer%20in=%27n1%27%20result=%27t1%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27t0%27%20in2=%27t1%27%20operator=%27in%27%20result=%27c1%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.75%27%20numOctaves=%272%27%20seed=%274%27%20stitchTiles=%27stitch%27%20result=%27n2%27/%3E%3CfeComponentTransfer%20in=%27n2%27%20result=%27t2%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c1%27%20in2=%27t2%27%20operator=%27in%27/%3E%3C/filter%3E%3Crect%20width=%27480%27%20height=%27480%27%20filter=%27url(%23f)%27/%3E%3C/svg%3E");
-  -webkit-mask-size: 240px 240px;
-  mask-size: 240px 240px;
-}
-/* the heavier bite: buttons only, owner-picked by eye (9/8/6 + spread
-   9). Four layers vs .bite's three — tails in zeros per 48: medium
-   speckle 9, big splatter 8 (unchanged: bigger blobs read as damage,
-   not grain, at button size), micro dust 6, plus a fourth mid-dust
-   layer (bf 0.3, seed 9, tail 9) that widens the dust's size range.
-   Banners and stamps keep .bite. */
-.bite-heavy {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27480%27%20height=%27480%27%3E%3Cfilter%20id=%27f%27%20x=%270%27%20y=%270%27%20width=%27100%%27%20height=%27100%%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.08%27%20numOctaves=%274%27%20seed=%275%27%20stitchTiles=%27stitch%27%20result=%27n0%27/%3E%3CfeComponentTransfer%20in=%27n0%27%20result=%27t0%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.0225%27%20numOctaves=%273%27%20seed=%2717%27%20stitchTiles=%27stitch%27%20result=%27n1%27/%3E%3CfeComponentTransfer%20in=%27n1%27%20result=%27t1%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27t0%27%20in2=%27t1%27%20operator=%27in%27%20result=%27c1%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.75%27%20numOctaves=%272%27%20seed=%274%27%20stitchTiles=%27stitch%27%20result=%27n2%27/%3E%3CfeComponentTransfer%20in=%27n2%27%20result=%27t2%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c1%27%20in2=%27t2%27%20operator=%27in%27%20result=%27c2%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.3%27%20numOctaves=%272%27%20seed=%279%27%20stitchTiles=%27stitch%27%20result=%27n3%27/%3E%3CfeComponentTransfer%20in=%27n3%27%20result=%27t3%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c2%27%20in2=%27t3%27%20operator=%27in%27/%3E%3C/filter%3E%3Crect%20width=%27480%27%20height=%27480%27%20filter=%27url(%23f)%27/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27480%27%20height=%27480%27%3E%3Cfilter%20id=%27f%27%20x=%270%27%20y=%270%27%20width=%27100%%27%20height=%27100%%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.08%27%20numOctaves=%274%27%20seed=%275%27%20stitchTiles=%27stitch%27%20result=%27n0%27/%3E%3CfeComponentTransfer%20in=%27n0%27%20result=%27t0%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.0225%27%20numOctaves=%273%27%20seed=%2717%27%20stitchTiles=%27stitch%27%20result=%27n1%27/%3E%3CfeComponentTransfer%20in=%27n1%27%20result=%27t1%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27t0%27%20in2=%27t1%27%20operator=%27in%27%20result=%27c1%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.75%27%20numOctaves=%272%27%20seed=%274%27%20stitchTiles=%27stitch%27%20result=%27n2%27/%3E%3CfeComponentTransfer%20in=%27n2%27%20result=%27t2%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c1%27%20in2=%27t2%27%20operator=%27in%27%20result=%27c2%27/%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.3%27%20numOctaves=%272%27%20seed=%279%27%20stitchTiles=%27stitch%27%20result=%27n3%27/%3E%3CfeComponentTransfer%20in=%27n3%27%20result=%27t3%27%3E%3CfeFuncA%20type=%27discrete%27%20tableValues=%271%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%201%200%200%200%200%200%200%200%200%200%27/%3E%3C/feComponentTransfer%3E%3CfeComposite%20in=%27c2%27%20in2=%27t3%27%20operator=%27in%27/%3E%3C/filter%3E%3Crect%20width=%27480%27%20height=%27480%27%20filter=%27url(%23f)%27/%3E%3C/svg%3E");
-  -webkit-mask-size: 240px 240px;
-  mask-size: 240px 240px;
-}
-
-/* rubber stamp: a terminal state pressed onto a printed record —
-   rotated, ink-starved (the bite), red reserved for failure. Stamps
-   sit ON the paper (always white in both themes), so their ink is
-   paper-fixed, never theme ink. */
-.stamp {
-  display: inline-block;
-  transform: rotate(-7deg);
-  border: 2px solid #1a1a1a;
-  color: #1a1a1a;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  padding: 2px 9px;
-  opacity: 0.85;
-  background: transparent;
-}
-.stamp-red {
-  border-color: #b3261e;
-  color: #b3261e;
-}
-
-/* job barcode: an id set as a false barcode — identity as decoration */
-.barcode {
-  height: 26px;
-  width: 150px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--ink) 0 2px,
-    transparent 2px 4px,
-    var(--ink) 4px 5px,
-    transparent 5px 9px,
-    var(--ink) 9px 12px,
-    transparent 12px 14px,
-    var(--ink) 14px 15px,
-    transparent 15px 19px
-  );
 }
