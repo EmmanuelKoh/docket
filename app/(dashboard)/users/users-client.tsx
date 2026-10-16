@@ -1,17 +1,19 @@
 'use client';
 
-// The Users page's client parts: an invite's row with its keys, and the
-// form for a new invite. Copy link puts the link on the clipboard; where
-// the browser refuses (a page not served over https), the row shows the
-// link in a read-only field to copy by hand. Revoke takes two presses:
-// the second key names what happens. A refused action shows a red line.
+// The Users page's client parts: an invite's row with its compact keys,
+// and the front plate that makes a new invite. Copy link puts the link on
+// the clipboard; where the browser refuses (a page not served over
+// https), the row shows the link in a read-only field to copy by hand.
+// Revoke takes two presses: Keep, then Revoke invite, which names what
+// happens. A refused action shows a red line.
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Field } from '@/components/hardware/field';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { Row, RowText } from '@/components/hardware/row';
-import { ErrorText, Note } from '@/components/hardware/text';
+import { Note } from '@/components/hardware/kit/engraved';
+import { Field } from '@/components/hardware/kit/field';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
+import { Row } from '@/components/hardware/kit/sheet';
+import { UsersPlate } from './users-plate';
 
 // "invite is invalid" -> "Invite is invalid."
 const sentence = (s: string) => {
@@ -74,41 +76,54 @@ export function InviteRow({
     else router.refresh();
   }
 
+  const who = email ? 'For one address' : 'Anyone with the link';
   return (
-    <Row className="flex-col items-stretch gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <RowText
-          className="min-w-0"
-          title={
-            <span className="break-all">{email || 'Anyone with the link'}</span>
-          }
-          sub={`Expires ${expires}`}
-        />
-        <KeyGroup>
+    <Row className="flex-col items-stretch gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <span className="pk-row-text">
+          <span className="pk-engr leading-[1.25]">{who}</span>
+          <Note as="span" className="[overflow-wrap:anywhere]">
+            {email ? `${email} · ` : ''}Expires {expires}
+          </Note>
+        </span>
+        <KeyWell
+          compact
+          label={email ? `Invite for ${email}` : 'Open invite'}
+          className="ml-auto"
+        >
           {asking ? (
             <>
-              <PushKey
-                size="compact"
+              <Key
+                legend="Keep"
+                width={96}
                 disabled={busy}
                 onClick={() => setAsking(false)}
-              >
-                Keep
-              </PushKey>
-              <PushKey size="compact" disabled={busy} onClick={revoke}>
-                Revoke invite
-              </PushKey>
+              />
+              <Key
+                legend="Revoke invite"
+                width={176}
+                down={busy}
+                onClick={() => {
+                  if (!busy) revoke();
+                }}
+              />
             </>
           ) : (
             <>
-              <PushKey size="compact" onClick={copy} aria-live="polite">
-                {copied ? 'Copied' : 'Copy link'}
-              </PushKey>
-              <PushKey size="compact" onClick={() => setAsking(true)}>
-                Revoke
-              </PushKey>
+              <Key
+                legend={copied ? 'Copied' : 'Copy link'}
+                width={136}
+                aria-live="polite"
+                onClick={copy}
+              />
+              <Key
+                legend="Revoke"
+                width={112}
+                onClick={() => setAsking(true)}
+              />
             </>
           )}
-        </KeyGroup>
+        </KeyWell>
       </div>
       {manual ? (
         <Field
@@ -120,7 +135,11 @@ export function InviteRow({
           onFocus={(e) => e.currentTarget.select()}
         />
       ) : null}
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      {error ? (
+        <Note tone="red" role="alert">
+          {error}
+        </Note>
+      ) : null}
     </Row>
   );
 }
@@ -157,34 +176,48 @@ export function NewInviteForm() {
 
   return (
     <form
-      className="hw-module-body--padded flex flex-col"
+      className="contents"
       onSubmit={(e) => {
         e.preventDefault();
-        create(e.currentTarget);
+        if (!busy) create(e.currentTarget);
       }}
     >
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-        <Field
-          label="Email (optional)"
-          type="email"
-          name="email"
-          autoComplete="off"
-          spellCheck={false}
-          className="min-w-0 flex-[1_1_260px]"
-          onChange={() => setMade(false)}
-        />
-        <KeyGroup>
-          <PushKey type="submit" disabled={busy}>
-            New invite
-          </PushKey>
-        </KeyGroup>
-      </div>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      <Note role="status">
-        {made
-          ? 'Invite made. Copy its link above.'
-          : 'With an email, only that address can use the link. It works for 7 days.'}
-      </Note>
+      <UsersPlate
+        id="users-new"
+        number="03"
+        title="New invite"
+        className="pb-[26px]"
+      >
+        {/* the hint stays under the field; the key sits beside the field
+            (below the hint on a phone) */}
+        <div className="grid grid-cols-1 gap-y-3 pt-3 min-[640px]:grid-cols-[minmax(0,480px)_auto] min-[640px]:items-end min-[640px]:justify-between min-[640px]:gap-x-8 min-[1180px]:pt-[10px]">
+          <Field
+            label="Email (optional)"
+            type="email"
+            name="email"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="users-new-status"
+            className="min-w-0"
+            onChange={() => setMade(false)}
+          />
+          <div className="flex flex-col gap-2 min-[640px]:col-start-1">
+            <Note id="users-new-status" role="status">
+              {made
+                ? 'Invite made. Copy its link above.'
+                : 'With an email, only that address can use the link. It works for 7 days.'}
+            </Note>
+            {error ? (
+              <Note tone="red" role="alert">
+                {error}
+              </Note>
+            ) : null}
+          </div>
+          <KeyWell className="justify-self-end min-[640px]:col-start-2 min-[640px]:row-start-1">
+            <Key legend="Make invite" type="submit" width={144} down={busy} />
+          </KeyWell>
+        </div>
+      </UsersPlate>
     </form>
   );
 }

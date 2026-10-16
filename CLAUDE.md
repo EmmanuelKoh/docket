@@ -55,8 +55,8 @@ and the Printer page every 3s while a pairing is pending.
 
 ## Layout
 
-- `app/`: Next.js App Router (TypeScript, Tailwind 4, the hardware kit in
-  `components/hardware/` and `app/hardware.css`). Dashboard pages live in
+- `app/`: Next.js App Router (TypeScript, Tailwind 4, the parts kit in
+  `components/hardware/kit/` and `app/kit.css`). Dashboard pages live in
   the `(dashboard)/` route group behind the session. `next.config.mjs`
   keeps the render/plugin deps in `serverExternalPackages` (Turbopack
   breaks node-ical and the resvg native module otherwise) and traces
@@ -205,27 +205,34 @@ and the Printer page every 3s while a pairing is pending.
 templates (Satori's CSS dialect, thermal-paper rules); give it to any
 LLM asked to design one.
 
-`docs/design-spec.md` is the visual source of truth (direction E: the
-printer's own control deck, both themes, strict accent rules). **Update it
-whenever the UI changes**; it must describe what's built. `DESIGN.md`
-holds the tokens and components once it exists. Rules that keep
-recurring:
+`docs/design-spec.md` is the visual source of truth (the units
+direction: each page is one machine body built from the parts kit, both
+themes, strict accent rules). **Update it whenever the UI changes**; it
+must describe what's built. `DESIGN.md` holds the tokens and components.
+Rules that keep recurring:
 
 - Accent jobs: red only for the current page's flag, printing, failures,
-  waiting jobs, the one print key on a screen, and Tape's live audio and
-  selection; green only for the online LED; orange only for a slide
-  switch's ON mark. A key that does not print is never red.
-- Materials: build pages from the kit (`components/hardware/`, `hw-`
-  classes in `app/hardware.css`; paper parts in
-  `components/hardware/paper.css`). Pages add layout around the parts; a
-  new look for a part goes into the kit. Depth comes from the material (soft offset shadows, sprites in
-  `public/hardware/` with their origin embedded), never hard offset
-  shadows or decorative gradients. Motion is short mechanical travel: no
-  fades, no springs.
-- Paper: receipts and thumbnails stay white paper in both themes; the
-  Studio and Photo previews keep exact 576px pixels.
-- Type: body 16px, secondary 14px minimum; capitals only by CSS on
-  hardware legends; mono only for times, dates, codes and values.
+  waiting jobs, the one print key in a well (always last), the Capture
+  release's dot, and Tape's live audio and selection; green only for the
+  online LED; orange only for a slide switch's ON mark. A key that does
+  not print is never red.
+- Materials: build pages from the parts kit (`components/hardware/kit/`,
+  `pk-` classes in `app/kit.css`; the slip in
+  `components/hardware/kit/slip.css`). Pages add layout around the
+  parts; a new look for a part goes into the kit. One key sprite set for
+  every page. From the E kit (`app/hardware.css`) use only the ground,
+  the skip link, ink on the mat and the Stamp. Depth comes from the
+  material (sprites in `public/hardware/kit/` and `public/hardware/nav/`
+  with their origin embedded), never hard offset shadows or decorative
+  gradients. Motion is short mechanical travel: no fades, no springs.
+- Paper: receipts and thumbnails stay white paper in both themes, at
+  real size (a 320px slip, the print at 288px); the Studio and Photo
+  previews keep the printer's exact dots.
+- Type: body 16px, notes 14px minimum; 10.5 to 12px only for engraved
+  legends on parts; capitals only by CSS on hardware legends; mono only
+  for times, dates, codes and values.
+- The Studio editor's textarea and its highlight layer keep identical
+  metrics (font, size, line height, padding, tab size, wrapping).
 - Buttons never repeat an already-clickable object's default action;
   rows with thumbnails top-align.
 

@@ -69,10 +69,11 @@ Active costs come on top:
   Cup plugin at `every: 60` keeps this up all day: up to about 10,000 a
   day, about 300K per 30 days. The morning brief costs about 45 a day: the
   ticks in the 10 minutes before it is due, and its run.
-- Dashboard Queue page or Studio strip: one function invocation and one
-  Postgres query per poll, 1,200 an hour while the person is active, 120
-  an hour after two idle minutes, none once paused or hidden. The Studio
-  strip (`/jobs?limit=10`) reads no Redis. A Queue poll (`/api/queue`)
+- Dashboard Queue page, or the Studio while it follows a print it sent:
+  one function invocation and one Postgres query per poll, 1,200 an hour
+  while the person is active, 120 an hour after two idle minutes, none
+  once paused or hidden. The Studio polls only until that print ends, and
+  its poll (`/jobs?limit=10`) reads no Redis. A Queue poll (`/api/queue`)
   adds one HGETALL while a listed job has been handed to a printer, plus
   one LRANGE while a job waits at the back of the queue. The Queue page
   load (not its poll) also reads the slip list once (SMEMBERS and MGET,
@@ -136,8 +137,8 @@ size. Receipts on Home and job thumbnails on
 Queue, History and the Studio load from the artifact's public Blob URL
 (jobs.list carries it), so a thumbnail costs Blob data transfer and a CDN
 Request, not a function invocation, a Postgres select and a Blob read.
-The kit's sprites (`public/hardware/*.png`: paper grain, printer edge,
-switch) are cached for good (`next.config.mjs` headers), so a repeat page
+The kit's sprites (`public/hardware/`: the paper grain, and the parts
+in `kit/` and `nav/`) are cached for good (`next.config.mjs` headers), so a repeat page
 load sends no request for them. A sprite whose pixels change gets a new
 file name.
 Slip previews render once per template version per browser (and again
@@ -245,8 +246,8 @@ tripped Hobby's 30-day Blob lockout in under two days.
 
 Each /nack counts one in a per-owner hash (rp:{owner}:jobs:attempts, one
 HINCRBY); from the third the job waits at the back of the queue. The Queue
-and History pages read the hash with one HGETALL (the Studio's recent-jobs
-strip does not ask for attempts), and only when a listed job was ever
+and History pages read the hash with one HGETALL (the Studio's print
+follower does not ask for attempts), and only when a listed job was ever
 claimed, so an empty or untouched queue costs nothing extra;
 a trim that deletes records sends one HDEL. While a job waits at the back,
 each Queue read also sends one LRANGE for the queue's real order, so the
@@ -306,8 +307,8 @@ enabling a plugin reschedules it from now.
   over a day ago, with no live code (`lib/devices.js`). It runs only when
   a row is added, never on the device cadence.
 - **Dashboard polls only while visible, and ease off when idle**: the
-  Queue page (`/api/queue`) and the Studio's recent jobs (`/jobs`) poll
-  only while `document.visibilityState` is visible, every 3s while the
+  Queue page (`/api/queue`) and the Studio's print follower (`/jobs`,
+  only until the print it sent ends) poll only while `document.visibilityState` is visible, every 3s while the
   person is active, 30s after two idle minutes, not at all after thirty
   (`components/hooks/use-eased-poll.ts`). Hidden tabs cost zero; cost
   scales with people watching, not tabs open.

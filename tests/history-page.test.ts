@@ -1,14 +1,17 @@
 // tests/history-page.test.ts — a History record's rubber stamp names how
 // the job ended. done is PRINTED, canceled is CANCELED, failed is FAILED,
-// and only FAILED is marked as a failure (the kit's red fail stamp).
+// and only FAILED is marked as a failure (the kit's red fail stamp). The
+// deck holds the current filter key down and keeps Reprint off until a
+// record that can print again is open.
 
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import { createElement, isValidElement, type ReactElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { historyStamp } from '@/app/_lib/format';
 import { HistoryList, type HistoryRow } from '@/components/history-list';
+import { HistoryView, type HistoryViewProps } from '@/components/history-view';
 import { job } from '@/db/schema.js';
 import { getDb } from '@/lib/db.js';
 import * as jobStore from '@/lib/job-store.js';
@@ -40,17 +43,6 @@ beforeAll(() => {
 afterAll(() => {
   vi.unstubAllGlobals();
 });
-
-// Depth-first search of a React element tree for elements of `type`.
-function findAll(node: unknown, type: unknown, out: ReactElement[] = []) {
-  if (Array.isArray(node)) {
-    for (const n of node) findAll(n, type, out);
-  } else if (isValidElement(node)) {
-    if (node.type === type) out.push(node);
-    for (const v of Object.values(node.props as object)) findAll(v, type, out);
-  }
-  return out;
-}
 
 async function rawJob(caller: Caller, name: string) {
   const { id } = await jobsCreateRaw(caller, {
@@ -131,16 +123,43 @@ describe('History stamps', () => {
     const { default: HistoryPage } = await import(
       '@/app/(dashboard)/history/page'
     );
-    const page = await HistoryPage({ searchParams: Promise.resolve({}) });
-    // one list per day
-    const rows = findAll(page, HistoryList).flatMap(
-      (list) => (list.props as { rows: HistoryRow[] }).rows,
-    );
+    const page = (await HistoryPage({
+      searchParams: Promise.resolve({}),
+    })) as ReactElement<HistoryViewProps>;
+    expect(page.type).toBe(HistoryView);
+    expect(page.props.count).toBe(3);
+    // one sheet per day
+    const rows = page.props.days.flatMap((day) => day.rows);
     const stamps = Object.fromEntries(rows.map((r) => [r.name, r.stamp]));
     expect(stamps).toEqual({
       printed: 'printed',
       canceled: 'canceled',
       failed: 'failed',
     });
+  });
+
+  it('the deck holds the current filter down and Reprint stays off until a record opens', () => {
+    const html = renderToStaticMarkup(
+      createElement(HistoryView, {
+        count: 3,
+        filters: [
+          { label: 'All', href: '/history', current: false },
+          { label: 'Failed', href: '/history?filter=failed', current: true },
+        ],
+        lamp: { state: 'online', text: 'Online' },
+        days: [],
+        empty: { title: 'Failed', text: 'No failed jobs.' },
+        pager: null,
+      }),
+    );
+    expect(html).toMatch(
+      /<a[^>]*aria-current="true"[^>]*href="\/history\?filter=failed"[^>]*>/,
+    );
+    expect(html).not.toMatch(/<a[^>]*aria-current[^>]*href="\/history"/);
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*class="pk-key pk-key--print"[^>]*><span class="pk-key-legend">Reprint</,
+    );
+    expect(html).toContain('3 receipts');
+    expect(html).toContain('No failed jobs.');
   });
 });

@@ -11,9 +11,11 @@ export const metadata: Metadata = {
 // The three E faces. They load here and only here: tests import the
 // dashboard layout, and next/font needs the Next.js compiler.
 // globals.css maps them to --font-sans, --font-mono and --font-display.
+// The variable face (every weight): for a list of weights Google Fonts now
+// answers with /l/font?kit=...&skey=... files, and next/font cannot
+// resolve a font URL that has a query string.
 const hanken = Hanken_Grotesk({
   subsets: ['latin'],
-  weight: ['400', '600', '700'],
   variable: '--font-hanken',
   display: 'swap',
 });

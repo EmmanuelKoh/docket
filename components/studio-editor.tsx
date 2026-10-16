@@ -1,185 +1,299 @@
 'use client';
 
-// The Studio, rebuilt in the shell. Behavior ported from the legacy
-// views/studio.html: template select + New/Save/Delete/Print toolbar,
-// Template/Data editors with syntax highlighting (transparent textarea
-// over a colored <pre> — see studio.css), a 400ms-debounced abortable
-// /preview render onto the 624px paper roll, a recent-jobs strip that
-// polls on the Queue's eased cadence (3s while active, 30s after two idle
-// minutes, paused after thirty, never while the tab is hidden; any
-// interaction resumes it), Ctrl/Cmd+S and +P, and the
-// /studio?template=Name / ?new=1 URL contract the slip pages use.
+// The Studio: a teleprinter (design spec: pages, Studio). One body. The
+// head plate has the engraved name at the left, the platen in the middle
+// with the live preview rising out of it at real size, and the printer
+// lamp at the right. The code editor is behind a window across the full
+// width. The front strip, one step down, has the Template/Data switch,
+// the template counter and the key well (New, Save, Delete, Print last).
+// On a phone the key well docks at the foot of the screen.
+//
+// Behaviour:
+// - The page gives the templates and the ?template= / ?new=1 choice
+//   (app/(dashboard)/studio/page.tsx); without them it asks /templates.
+// - A 400ms-debounced, abortable POST /preview renders the draft through
+//   the real renderer; the first render goes at once.
+// - Save and Delete call /templates. Delete takes two presses, as on a
+//   slip's page: the first asks, Keep takes its place and the focus, and
+//   Delete, one key back (in Save's place), deletes.
+// - Print sends POST /jobs, then follows that job on the eased poll
+//   (components/hooks/use-eased-poll.ts) until it ends, to say Printed or
+//   Print failed. Nothing is fetched while no print is followed.
+// - Cmd/Ctrl+S saves, Cmd/Ctrl+P prints.
+// - Edits are kept per template while you step to another one and back,
+//   for this visit; the status line says "edited" until you save.
+//
+// The code editor is a transparent textarea over a highlighted copy of
+// its text (studio.css). Both layers keep the same font, size, line
+// height, padding, tab size and wrapping, or the caret drifts from the
+// text.
 
-import { useSearchParams } from 'next/navigation';
 import {
+  type ReactNode,
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
-import { jobImageSrc } from '@/app/_lib/format';
-import { Field } from '@/components/hardware/field';
-import { Led } from '@/components/hardware/led';
-import { Module } from '@/components/hardware/module';
-import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { Row } from '@/components/hardware/row';
-import { Stamp } from '@/components/hardware/stamp';
-import { ErrorText, Note } from '@/components/hardware/text';
+import { Body, Plate } from '@/components/hardware/kit/body';
+import { Counter } from '@/components/hardware/kit/counter';
+import { Engraved, Note, PageName } from '@/components/hardware/kit/engraved';
+import { Field } from '@/components/hardware/kit/field';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
+import { Lamp } from '@/components/hardware/kit/led';
+import { Platen, Screen } from '@/components/hardware/kit/screen';
+import { Slip } from '@/components/hardware/kit/slip';
+import { Switch } from '@/components/hardware/kit/switch';
 import { useEasedPoll } from '@/components/hooks/use-eased-poll';
 
-type Template = { name: string; template: string; data?: unknown };
-type Job = {
-  id: string;
-  name?: string;
-  status: string;
-  width?: number;
-  height?: number;
-  createdAt: string;
-  imageUrl?: string | null; // hosted: the PNG straight from the store
-};
+export type StudioTemplate = { name: string; template: string; data?: unknown };
+type Job = { id: string; status: string };
+type Preview = { url: string; width: number; height: number };
+type Status = { kind: 'idle' | 'ok' | 'error'; text: string };
+type Tok = readonly [cls: string, text: string];
+type Draft = { tpl: string; data: string };
 
-// ---- syntax highlighting (ported verbatim) ----
+// ---- syntax highlighting: tokens, then one block per line ----
 
-const escHtml = (s: string) =>
+const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// HTML + Liquid: liquid tags/outputs, comments, quoted strings, tag
-// names/brackets, numbers. One linear pass — first alternative to match
-// at a position wins.
-function highlightTemplateSrc(src: string): string {
-  const re =
-    /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\})|(<!--[\s\S]*?-->)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(<\/?[a-zA-Z][a-zA-Z0-9-]*|\/?>)|(\b\d+(?:\.\d+)?\b)/g;
-  let out = '';
+// HTML + Liquid: Liquid tags and outputs, comments, tag names and
+// brackets, attribute names, quoted strings. One pass; the first
+// alternative to match at a position wins.
+const TEMPLATE_RE =
+  /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\})|(<!--[\s\S]*?-->)|(<\/?[a-zA-Z][a-zA-Z0-9-]*|\/?>)|(\b[a-zA-Z][a-zA-Z0-9:-]*(?==))|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g;
+
+// Inside a string (a style attribute): property names dim, Liquid marked.
+const STRING_RE = /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\})|([a-z-]+)(?=:)/g;
+
+function stringToks(s: string, out: Tok[]) {
   let last = 0;
-  let m = re.exec(src);
-  while (m) {
-    out += escHtml(src.slice(last, m.index));
-    const cls = m[1]
-      ? 'tok-liquid'
-      : m[2]
-        ? 'tok-comment'
-        : m[3]
-          ? 'tok-string'
-          : m[4]
-            ? 'tok-tag'
-            : 'tok-num';
-    out += `<span class="${cls}">${escHtml(m[0])}</span>`;
-    last = re.lastIndex;
-    m = re.exec(src);
+  for (const m of s.matchAll(STRING_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(['t-str', s.slice(last, at)]);
+    out.push([m[1] ? 't-liq t-liq--in' : 't-prop', m[0]]);
+    last = at + m[0].length;
   }
-  return out + escHtml(src.slice(last));
+  if (last < s.length) out.push(['t-str', s.slice(last)]);
 }
 
-// JSON: keys (string before a colon), strings, literals, numbers.
-function highlightJsonSrc(src: string): string {
-  const re =
-    /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
-  let out = '';
+function templateToks(src: string): Tok[] {
+  const out: Tok[] = [];
   let last = 0;
-  let m = re.exec(src);
-  while (m) {
-    out += escHtml(src.slice(last, m.index));
+  for (const m of src.matchAll(TEMPLATE_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(['', src.slice(last, at)]);
+    if (m[5]) stringToks(m[5], out);
+    else
+      out.push([
+        m[1] ? 't-liq' : m[2] ? 't-com' : m[3] ? 't-tag' : 't-attr',
+        m[0],
+      ]);
+    last = at + m[0].length;
+  }
+  if (last < src.length) out.push(['', src.slice(last)]);
+  return out;
+}
+
+// JSON: keys (a string before a colon), strings, literals, numbers.
+const JSON_RE =
+  /("(?:[^"\\]|\\.)*")(\s*:)|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+
+function jsonToks(src: string): Tok[] {
+  const out: Tok[] = [];
+  let last = 0;
+  for (const m of src.matchAll(JSON_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(['', src.slice(last, at)]);
     if (m[1] !== undefined) {
-      out += `<span class="tok-key">${escHtml(m[1])}</span>${escHtml(m[2])}`;
-    } else if (m[3] !== undefined) {
-      out += `<span class="tok-string">${escHtml(m[3])}</span>`;
-    } else if (m[4] !== undefined) {
-      out += `<span class="tok-lit">${escHtml(m[4])}</span>`;
-    } else {
-      out += `<span class="tok-num">${escHtml(m[5])}</span>`;
-    }
-    last = re.lastIndex;
-    m = re.exec(src);
+      out.push(['t-key', m[1]]);
+      out.push(['', m[2]]);
+    } else if (m[3] !== undefined) out.push(['t-str', m[3]]);
+    else if (m[4] !== undefined) out.push(['t-lit', m[4]]);
+    else out.push(['t-num', m[5]]);
+    last = at + m[0].length;
   }
-  return out + escHtml(src.slice(last));
+  if (last < src.length) out.push(['', src.slice(last)]);
+  return out;
 }
 
-// `now` is when the list arrived (state, set after mount), so rendering
-// never reads the clock.
-function timeAgo(iso: string, now: number): string {
-  const s = Math.floor((now - new Date(iso).getTime()) / 1000);
-  if (s < 5) return 'Now';
-  if (s < 60) return `${s} s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)} m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  return `${Math.floor(s / 86400)} d ago`;
+// One block per line of the source, so a line number can stand at the
+// start of each line (CSS counter) and a wrapped line keeps its number on
+// its first row. A token that runs over a line break is split there.
+function linesHtml(toks: readonly Tok[]): string {
+  const open = '<span class="st-ln"><span class="st-tx">';
+  let html = open;
+  for (const [cls, text] of toks) {
+    const parts = text.split('\n');
+    for (let i = 0; i < parts.length; i++) {
+      if (i > 0) html += `</span></span>${open}`;
+      const part = parts[i];
+      if (part)
+        html += cls ? `<span class="${cls}">${esc(part)}</span>` : esc(part);
+    }
+  }
+  return `${html}</span></span>`;
 }
 
+// The server cannot know the keyboard: it renders Ctrl, and a Mac
+// switches to ⌘ after hydration (no hydration mismatch).
 const subscribeNever = () => () => {};
 const isMacClient = () => /Mac/i.test(navigator.userAgent);
 
-// a failed fetch throws a browser TypeError ("Failed to fetch", "Load
-// failed"…) that varies by browser — show one stable phrase instead
+// A failed fetch throws a browser TypeError ("Failed to fetch", "Load
+// failed"...) that varies by browser: show one stable phrase instead.
 function fetchErrText(err: unknown): string {
   return err instanceof TypeError ? 'No connection' : (err as Error).message;
 }
 
+const dataText = (data: unknown) =>
+  data == null
+    ? ''
+    : typeof data === 'string'
+      ? data
+      : JSON.stringify(data, null, 2);
+
+const lineCount = (s: string) => s.split('\n').length;
+
+// JSON with its object keys sorted: the store keeps data as jsonb, which
+// reorders keys, so "edited" compares values, not text.
+function canon(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    const keys = Object.keys(o).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canon(o[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+function sameData(src: string, data: unknown): boolean {
+  try {
+    return canon(src.trim() ? JSON.parse(src) : {}) === canon(data ?? {});
+  } catch {
+    return false;
+  }
+}
+
+// POST /templates: the templates after the save, or null (the toast says
+// why).
+async function apiSave(
+  name: string,
+  template: string,
+  data: unknown,
+  say: (msg: string) => void,
+): Promise<StudioTemplate[] | null> {
+  const resp = await fetch('/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, template, data }),
+  });
+  const body = await resp.json().catch(() => ({}));
+  if (resp.status === 403 && body.readOnly) {
+    say('Saving is not enabled on the hosted version yet.');
+    return null;
+  }
+  if (!resp.ok) {
+    say(body.error || 'Not saved. Try again.');
+    return null;
+  }
+  return body as StudioTemplate[];
+}
+
 const DEFAULT_TPL =
+  // impeccable-disable-next-line design-system-font -- receipt font for the renderer, not page type
   '<div style="display:flex;flex-direction:column;width:576px;font-family:Sans;background:#fff;color:#000;padding:24px">\n  <div style="display:flex;font-size:30px;font-weight:700">{{ title }}</div>\n</div>';
 
-// ---- the overlay code editor ----
+const TOAST_MS = 2500;
+
+// ---- the code editor: a transparent textarea over the highlighted text ----
 
 function CodeEditor({
   label,
   value,
   onChange,
-  highlight,
+  tokens,
   placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  highlight: (src: string) => string;
+  tokens: (src: string) => Tok[];
   placeholder: string;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
+  const hlRef = useRef<HTMLPreElement>(null);
+  // Escape, then Tab, moves focus on (Tab alone indents)
+  const tabLeaves = useRef(false);
+  const html = useMemo(() => linesHtml(tokens(value)), [value, tokens]);
+  const hintId = useId();
 
-  const syncScroll = () => {
+  const sync = useCallback(() => {
     const ta = taRef.current;
-    const pre = preRef.current;
-    if (!ta || !pre) return;
-    pre.scrollTop = ta.scrollTop;
-    pre.scrollLeft = ta.scrollLeft;
-  };
+    const hl = hlRef.current;
+    if (!ta || !hl) return;
+    hl.scrollTop = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+  }, []);
+
+  // the highlighted copy changed: keep it at the textarea's scroll
+  useLayoutEffect(() => {
+    if (html) sync();
+  }, [html, sync]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== 'Tab') return;
+    if (e.key === 'Escape') {
+      tabLeaves.current = true;
+      return;
+    }
+    if (e.key !== 'Tab' || e.shiftKey || tabLeaves.current) {
+      tabLeaves.current = false;
+      return;
+    }
     e.preventDefault();
-    const ta = e.currentTarget;
-    const s = ta.selectionStart;
-    const end = ta.selectionEnd;
-    onChange(`${value.substring(0, s)}  ${value.substring(end)}`);
-    requestAnimationFrame(() => {
-      const el = taRef.current;
-      if (el) el.selectionStart = el.selectionEnd = s + 2;
-    });
+    // insertText keeps the browser's undo history
+    if (!document.execCommand('insertText', false, '  ')) {
+      const ta = e.currentTarget;
+      const s = ta.selectionStart;
+      onChange(`${value.slice(0, s)}  ${value.slice(ta.selectionEnd)}`);
+      requestAnimationFrame(() => {
+        const el = taRef.current;
+        if (el) el.selectionStart = el.selectionEnd = s + 2;
+      });
+    }
   }
 
   return (
-    <div className="code-wrap">
-      {/* trailing newline keeps the last line aligned when scrolled to
-          bottom; the html is the output of the escaping highlighter above */}
+    <div className="st-code">
       <pre
-        ref={preRef}
-        className="code-hl"
+        ref={hlRef}
+        className="st-hl"
         aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: `${highlight(value)}\n` }}
+        // the output of the escaping highlighter above
+        dangerouslySetInnerHTML={{ __html: html }}
       />
+      <span id={hintId} className="sr-only">
+        Tab adds two spaces. Press Escape, then Tab, to leave the editor.
+      </span>
       <textarea
         ref={taRef}
+        className="st-ta"
         aria-label={label}
+        aria-describedby={hintId}
         wrap="off"
         spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
         placeholder={placeholder}
         value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          requestAnimationFrame(syncScroll);
-        }}
-        onScroll={syncScroll}
+        onChange={(e) => onChange(e.target.value)}
+        onScroll={sync}
         onKeyDown={onKeyDown}
       />
     </div>
@@ -188,118 +302,142 @@ function CodeEditor({
 
 // ---- the studio ----
 
-export function StudioEditor() {
-  const searchParams = useSearchParams();
+export function StudioEditor({
+  initialTemplates,
+  initialName,
+  startNew,
+  lamp,
+}: {
+  /** null: the page could not read them; the editor asks /templates. */
+  initialTemplates: StudioTemplate[] | null;
+  /** ?template=: opened if it exists, else the first template. */
+  initialName: string;
+  /** ?new=1: open New template. */
+  startNew: boolean;
+  /** The printer's lamp, streamed by the page. */
+  lamp: ReactNode;
+}) {
+  const first = useMemo(() => {
+    const list = initialTemplates ?? [];
+    return list.find((t) => t.name === initialName) ?? list[0] ?? null;
+  }, [initialTemplates, initialName]);
 
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [currentName, setCurrentName] = useState('');
+  const [templates, setTemplates] = useState<StudioTemplate[]>(
+    initialTemplates ?? [],
+  );
+  const [currentName, setCurrentName] = useState(first?.name ?? '');
   const [tab, setTab] = useState<'template' | 'data'>('template');
-  const [tplSrc, setTplSrc] = useState('');
-  const [dataSrc, setDataSrc] = useState('');
-  const [jsonError, setJsonError] = useState('');
-  const [status, setStatus] = useState<{ cls: string; text: string }>({
-    cls: '',
-    text: 'Ready',
+  const [tplSrc, setTplSrc] = useState(first?.template ?? '');
+  const [dataSrc, setDataSrc] = useState(dataText(first?.data));
+  const [status, setStatus] = useState<Status>({
+    kind: 'idle',
+    text: first?.template.trim() ? 'Rendering' : '',
   });
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [previewSize, setPreviewSize] = useState<[number, number] | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [toast, setToast] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalName, setModalName] = useState('');
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobsAt, setJobsAt] = useState(0);
+  const [newOpen, setNewOpen] = useState(startNew);
+  const [newName, setNewName] = useState('');
   const [printing, setPrinting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [followed, setFollowed] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+  const previewUrl = useRef('');
+  const firstPreview = useRef(true);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const trackingJobId = useRef<string | null>(null);
-  const booted = useRef(false);
+  const drafts = useRef(new Map<string, Draft>());
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const keepId = useId();
 
-  function showToast(msg: string) {
+  const showToast = useCallback((msg: string, ms = TOAST_MS) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(''), 2500);
-  }
-
-  // parse the data editor; empty = {}, invalid = null (error bar shows why)
-  const parseData = useCallback((): unknown | null => {
-    const raw = dataSrc.trim();
-    if (!raw) {
-      setJsonError('');
-      return {};
-    }
-    try {
-      const d = JSON.parse(raw);
-      setJsonError('');
-      return d;
-    } catch (err) {
-      setJsonError(`Data: ${(err as Error).message}`);
-      return null;
-    }
-  }, [dataSrc]);
-
-  const loadTemplate = useCallback((list: Template[], name: string) => {
-    const t = list.find((x) => x.name === name);
-    if (!t) return;
-    setCurrentName(name);
-    setTplSrc(t.template || '');
-    setDataSrc(
-      typeof t.data === 'string' ? t.data : JSON.stringify(t.data, null, 2),
-    );
-    setJsonError('');
+    toastTimer.current = setTimeout(() => setToast(''), ms);
   }, []);
 
-  // ---- boot: fetch templates, honor ?template= and ?new=1 ----
-  useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
-    (async () => {
-      let list: Template[] = [];
-      try {
-        list = await (await fetch('/templates')).json();
-      } catch {
-        list = [];
-      }
-      setTemplates(list);
-      const wanted = searchParams.get('template');
-      const name =
-        wanted && list.some((t) => t.name === wanted)
-          ? wanted
-          : list.length
-            ? list[0].name
-            : '';
-      if (name) loadTemplate(list, name);
-      if (searchParams.get('new')) setModalOpen(true);
-    })();
-  }, [searchParams, loadTemplate]);
+  // any other action answers the Delete question with Keep
+  const disarm = useCallback(() => setConfirming(false), []);
 
-  // ---- debounced abortable preview ----
+  const saved = templates.find((t) => t.name === currentName);
+  const dirty = useMemo(
+    () =>
+      !!saved && (saved.template !== tplSrc || !sameData(dataSrc, saved.data)),
+    [saved, tplSrc, dataSrc],
+  );
+
+  // show a template: its draft from this visit if there is one
+  const show = useCallback((t: StudioTemplate | undefined) => {
+    if (!t) return;
+    const draft = drafts.current.get(t.name);
+    setCurrentName(t.name);
+    setTplSrc(draft?.tpl ?? t.template ?? '');
+    setDataSrc(draft?.data ?? dataText(t.data));
+  }, []);
+
+  function switchTo(name: string) {
+    disarm();
+    if (saved && dirty)
+      drafts.current.set(saved.name, { tpl: tplSrc, data: dataSrc });
+    else if (saved) drafts.current.delete(saved.name);
+    show(templates.find((t) => t.name === name));
+  }
+
+  // ---- the page could not read the templates: ask /templates ----
   useEffect(() => {
+    if (initialTemplates) return;
+    let live = true;
+    (async () => {
+      try {
+        const list: StudioTemplate[] = await (await fetch('/templates')).json();
+        if (!live || !Array.isArray(list)) return;
+        setTemplates(list);
+        show(list.find((t) => t.name === initialName) ?? list[0]);
+      } catch {
+        if (live) showToast('Templates did not load. Reload the page.');
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [initialTemplates, initialName, show, showToast]);
+
+  // ---- New template: a modal dialog ----
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (newOpen && !d.open) d.showModal();
+    if (!newOpen && d.open) d.close();
+  }, [newOpen]);
+
+  // ---- debounced, abortable preview; the first one goes at once ----
+  useEffect(() => {
+    const wait = firstPreview.current ? 0 : 400;
+    firstPreview.current = false;
     const timer = setTimeout(async () => {
       if (!tplSrc.trim()) {
-        setStatus({ cls: '', text: 'Ready' });
-        setPreviewUrl((old) => {
-          if (old) URL.revokeObjectURL(old);
-          return '';
-        });
+        abortRef.current?.abort();
+        setStatus({ kind: 'idle', text: 'Nothing to preview' });
+        setPreview(null);
         return;
       }
-      const raw = dataSrc.trim();
       let data: unknown = {};
-      if (raw) {
+      if (dataSrc.trim()) {
         try {
-          data = JSON.parse(raw);
-        } catch {
-          setStatus({ cls: 'error', text: 'Fix the data to see a preview' });
+          data = JSON.parse(dataSrc);
+        } catch (err) {
+          setStatus({ kind: 'error', text: `Data: ${(err as Error).message}` });
           return;
         }
       }
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
-      setStatus({ cls: '', text: 'Rendering' });
+      // an old error goes; a size line stays until the new one comes
+      setStatus((s) =>
+        s.kind === 'ok' ? s : { kind: 'idle', text: 'Rendering' },
+      );
       try {
         const resp = await fetch('/preview', {
           method: 'POST',
@@ -311,128 +449,188 @@ export function StudioEditor() {
           const err = await resp
             .json()
             .catch(() => ({ error: 'Preview failed' }));
-          setStatus({ cls: 'error', text: err.error || 'Preview failed' });
+          setStatus({ kind: 'error', text: err.error || 'Preview failed' });
           return;
         }
         const blob = await resp.blob();
-        const w = Number(resp.headers.get('X-Image-Width') || 576);
-        const h = Number(resp.headers.get('X-Image-Height') || 100);
-        const url = URL.createObjectURL(blob);
-        setPreviewUrl((old) => {
-          if (old) URL.revokeObjectURL(old);
-          return url;
-        });
-        setPreviewSize([w, h]);
-        setStatus({ cls: 'active', text: `${w} × ${h} px · 1-bit` });
+        const width = Number(resp.headers.get('X-Image-Width') || 576);
+        const height = Number(resp.headers.get('X-Image-Height') || 100);
+        setPreview({ url: URL.createObjectURL(blob), width, height });
+        setStatus({ kind: 'ok', text: `${width} × ${height} px · 1-bit` });
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
-        setStatus({ cls: 'error', text: fetchErrText(err) });
+        setStatus({ kind: 'error', text: fetchErrText(err) });
       }
-    }, 400);
+    }, wait);
     return () => clearTimeout(timer);
   }, [tplSrc, dataSrc]);
 
-  // ---- recent jobs: the eased poll (components/hooks/use-eased-poll.ts) ----
+  // free the last preview's image when a new one replaces it
+  useEffect(() => {
+    const old = previewUrl.current;
+    previewUrl.current = preview?.url ?? '';
+    if (old && old !== previewUrl.current) URL.revokeObjectURL(old);
+  }, [preview]);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+
+  // ---- the print just sent: followed on the eased poll until it ends ----
   const loadJobs = useCallback(async () => {
+    const id = trackingJobId.current;
+    if (!id) return;
     try {
       const resp = await fetch('/jobs?limit=10');
       if (!resp.ok) return;
       const list: Job[] = await resp.json();
-      setJobs(list);
-      setJobsAt(Date.now());
-      if (trackingJobId.current) {
-        const tracked = list.find((j) => j.id === trackingJobId.current);
-        if (tracked?.status === 'done') {
-          showToast('Printed');
-          trackingJobId.current = null;
-        } else if (tracked?.status === 'failed') {
-          showToast('Print failed');
-          trackingJobId.current = null;
-        }
+      const job = list.find((j) => j.id === id);
+      if (!job || trackingJobId.current !== id) return;
+      setFollowed(job.status);
+      const end =
+        job.status === 'done'
+          ? 'Printed'
+          : job.status === 'failed'
+            ? 'Print failed'
+            : job.status === 'canceled'
+              ? 'Print canceled'
+              : '';
+      if (end) {
+        showToast(end);
+        trackingJobId.current = null;
+        setFollowed(null);
       }
     } catch {
-      // server hiccup — keep the last list
+      // a server hiccup: try again on the next tick
     }
-  }, []);
+  }, [showToast]);
 
-  const { refresh: refreshJobs } = useEasedPoll(loadJobs, { immediate: true });
+  const { resume: followNow } = useEasedPoll(loadJobs);
 
   // ---- actions ----
 
-  async function apiSave(name: string, template: string, data: unknown) {
-    const resp = await fetch('/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, template, data }),
-    });
-    const body = await resp.json();
-    if (resp.status === 403 && body.readOnly) {
-      showToast('Saving is not enabled on the hosted version yet.');
-      return null;
-    }
-    if (!resp.ok) {
-      showToast(body.error || 'Save failed');
-      return null;
-    }
-    return body as Template[];
-  }
+  // the data editor as JSON: empty is {}, invalid is null (toast says why)
+  const parseData = useCallback(
+    (doing: string): unknown | null => {
+      if (!dataSrc.trim()) return {};
+      try {
+        return JSON.parse(dataSrc);
+      } catch {
+        showToast(`Fix the data before ${doing}`);
+        return null;
+      }
+    },
+    [dataSrc, showToast],
+  );
 
   const save = useCallback(async () => {
-    if (!currentName) return showToast('No template selected');
-    const data = parseData();
-    if (data === null) return showToast('Fix the data before saving');
-    const result = await apiSave(currentName, tplSrc, data);
-    if (result) {
+    disarm();
+    if (!currentName) return showToast('No template to save');
+    const data = parseData('saving');
+    if (data === null) return;
+    try {
+      const result = await apiSave(currentName, tplSrc, data, showToast);
+      if (!result) return;
+      drafts.current.delete(currentName);
       setTemplates(result);
-      showToast(`Saved "${currentName}"`);
+      showToast(`Saved ${currentName}`);
+    } catch (err) {
+      showToast(`Not saved: ${fetchErrText(err)}`);
     }
-  }, [currentName, tplSrc, parseData]);
+  }, [currentName, tplSrc, parseData, disarm, showToast]);
 
-  async function doDelete() {
-    if (!currentName) return;
-    if (!confirm(`Delete "${currentName}"?`)) return;
-    const resp = await fetch(
-      `/templates?name=${encodeURIComponent(currentName)}`,
-      {
+  async function deleteNow() {
+    const name = currentName;
+    setDeleting(true);
+    try {
+      const resp = await fetch(`/templates?name=${encodeURIComponent(name)}`, {
         method: 'DELETE',
-      },
-    );
-    const body = await resp.json();
-    if (resp.status === 403 && body.readOnly) {
-      showToast('Deleting is not enabled on the hosted version yet.');
-      return;
+      });
+      const body = await resp.json();
+      if (resp.status === 403 && body.readOnly) {
+        showToast('Deleting is not enabled on the hosted version yet.');
+        return;
+      }
+      if (!resp.ok) {
+        showToast(body.error || 'Not deleted. Try again.');
+        return;
+      }
+      drafts.current.delete(name);
+      const list = body as StudioTemplate[];
+      setTemplates(list);
+      if (list.length) show(list[0]);
+      else {
+        setCurrentName('');
+        setTplSrc('');
+        setDataSrc('');
+      }
+      showToast(`Deleted ${name}`);
+    } catch (err) {
+      showToast(`Not deleted: ${fetchErrText(err)}`);
+    } finally {
+      setDeleting(false);
+      setConfirming(false);
     }
-    if (!resp.ok) {
-      showToast(body.error || 'Delete failed');
-      return;
-    }
-    setTemplates(body);
-    const next = body.length ? body[0].name : '';
-    if (next) loadTemplate(body, next);
-    else {
-      setCurrentName('');
-      setTplSrc('');
-      setDataSrc('');
-    }
-    showToast('Deleted');
+  }
+
+  // Delete asks first. Keep then stands where Delete was (a second click
+  // lands on it) and takes the focus; Escape keeps too.
+  function askDelete() {
+    if (!currentName) return;
+    setToast('');
+    setConfirming(true);
+  }
+
+  useEffect(() => {
+    if (!confirming) return;
+    document.getElementById(keepId)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirming(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirming, keepId]);
+
+  function openNew() {
+    disarm();
+    setNewName('');
+    setNewOpen(true);
   }
 
   async function createTemplate() {
-    const name = modalName.trim();
+    const name = newName.trim();
     if (!name) return;
-    setModalOpen(false);
-    const result = await apiSave(name, DEFAULT_TPL, { title: name });
-    if (result) {
+    setNewOpen(false);
+    try {
+      const result = await apiSave(
+        name,
+        DEFAULT_TPL,
+        { title: name },
+        showToast,
+      );
+      if (!result) return;
+      if (saved && dirty) {
+        drafts.current.set(saved.name, { tpl: tplSrc, data: dataSrc });
+      }
       setTemplates(result);
-      loadTemplate(result, name);
-      showToast(`Created "${name}"`);
+      show(result.find((t) => t.name === name));
+      setTab('template');
+      showToast(`Created ${name}`);
+    } catch (err) {
+      showToast(`Not created: ${fetchErrText(err)}`);
     }
   }
 
   const print = useCallback(async () => {
+    disarm();
     if (!tplSrc.trim()) return showToast('Nothing to print');
-    const data = parseData();
-    if (data === null) return showToast('Fix the data before printing');
+    const data = parseData('printing');
+    if (data === null) return;
     setPrinting(true);
     try {
       const resp = await fetch('/jobs', {
@@ -448,8 +646,9 @@ export function StudioEditor() {
       const body = await resp.json();
       if (resp.ok) {
         trackingJobId.current = body.id;
+        setFollowed('queued');
         showToast('Sent to the printer');
-        refreshJobs();
+        followNow();
       } else {
         showToast(body.error || 'Not sent. Try again.');
       }
@@ -458,16 +657,17 @@ export function StudioEditor() {
     } finally {
       setPrinting(false);
     }
-  }, [tplSrc, currentName, parseData, refreshJobs]);
+  }, [tplSrc, currentName, parseData, followNow, disarm, showToast]);
 
   // ---- keyboard shortcuts ----
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if (!(e.ctrlKey || e.metaKey) || dialogRef.current?.open) return;
+      const k = e.key.toLowerCase();
+      if (k === 's') {
         e.preventDefault();
         save();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      } else if (k === 'p') {
         e.preventDefault();
         print();
       }
@@ -476,236 +676,187 @@ export function StudioEditor() {
     return () => document.removeEventListener('keydown', onKey);
   }, [save, print]);
 
-  // The server cannot know the keyboard: it renders Ctrl, and a Mac
-  // switches to ⌘ after hydration (no hydration mismatch).
   const isMac = useSyncExternalStore(subscribeNever, isMacClient, () => false);
 
+  const options = useMemo(
+    () => templates.map((t) => ({ value: t.name, label: t.name })),
+    [templates],
+  );
+
+  const source = tab === 'template' ? tplSrc : dataSrc;
+  const message = confirming
+    ? `Delete ${currentName}? Press Delete again.`
+    : toast;
+  const what = tab === 'template' ? 'Liquid' : 'JSON';
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* toolbar: the template, its keys, then the red print key */}
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-        <Field
-          as="select"
-          label="Template"
-          className="w-[260px] max-sm:w-full"
-          value={currentName}
-          onChange={(e) => loadTemplate(templates, e.target.value)}
-        >
-          {templates.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
-            </option>
-          ))}
-        </Field>
-        <KeyGroup>
-          <PushKey
-            onClick={() => {
-              setModalName('');
-              setModalOpen(true);
-            }}
-          >
-            New
-          </PushKey>
-          <PushKey onClick={save}>Save</PushKey>
-          <PushKey onClick={doDelete}>Delete</PushKey>
-        </KeyGroup>
-        <div className="grow" />
-        <Note className="hw-ink pb-3.5 max-lg:hidden">
-          {isMac ? '⌘S save · ⌘P print' : 'Ctrl+S save · Ctrl+P print'}
-        </Note>
-        <KeyGroup>
-          <PushKey variant="print" onClick={print} disabled={printing}>
-            Print
-          </PushKey>
-        </KeyGroup>
-      </div>
-
-      {/* the code takes the rest of the width; the stage holds the paper
-          at its true 576px (648px with the printer edge's 12px overhang) */}
-      <div className="grid gap-6 min-[1200px]:grid-cols-[minmax(360px,1fr)_minmax(0,648px)]">
-        <Module
-          number="01"
-          title="Code"
-          flush
-          className="h-[70vh] min-h-[420px]"
-          bodyClassName="min-h-0 flex-1"
-        >
-          <div className="px-4 pt-3.5 pb-3">
-            <KeyGroup>
-              {(['template', 'data'] as const).map((t) => (
-                <PushKey
-                  key={t}
-                  size="compact"
-                  down={tab === t}
-                  aria-pressed={tab === t}
-                  onClick={() => setTab(t)}
-                >
-                  {t === 'template' ? 'Template' : 'Data'}
-                </PushKey>
-              ))}
-            </KeyGroup>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4">
-            {tab === 'template' ? (
-              <CodeEditor
-                label="Template"
-                value={tplSrc}
-                onChange={setTplSrc}
-                highlight={highlightTemplateSrc}
-                placeholder="Liquid and HTML"
-              />
+    <div className="st">
+      <Body className="st-console">
+        <div className="st-top">
+          <PageName className="st-name">Studio</PageName>
+          <Platen className="st-platen">
+            {/* the paper window: from the top of the page down to the
+                platen; a long receipt scrolls in it */}
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must take focus so the keyboard can scroll it */}
+            <section className="st-feed" aria-label="Preview" tabIndex={0}>
+              {preview ? (
+                // the paper is masked to its torn top: the focus ring
+                // goes on this plain wrapper
+                <div className="st-paper">
+                  <Slip
+                    tear="top"
+                    exact
+                    src={preview.url}
+                    alt={`Preview of ${currentName || 'the receipt'}`}
+                    imageWidth={preview.width}
+                    imageHeight={preview.height}
+                  />
+                </div>
+              ) : null}
+            </section>
+          </Platen>
+          <div className="st-lamp">
+            {followed === 'inflight' ? (
+              <Lamp state="printing">Printing</Lamp>
             ) : (
-              <CodeEditor
-                label="Data"
-                value={dataSrc}
-                onChange={setDataSrc}
-                highlight={highlightJsonSrc}
-                placeholder='{"title": "Hello"}'
-              />
+              lamp
             )}
-            {jsonError ? <ErrorText>{jsonError}</ErrorText> : null}
           </div>
-        </Module>
+        </div>
 
-        <section
-          aria-label="Preview"
-          className="flex min-w-0 flex-col min-[1200px]:h-[70vh] min-[1200px]:min-h-[420px]"
-        >
-          <div className="flex min-h-[28px] items-center gap-2.5 px-3 pb-3">
-            <Led state={status.cls === 'error' ? 'error' : 'offline'} />
+        <Screen kind="editor" className="st-window" screenClassName="st-screen">
+          {tab === 'template' ? (
+            <CodeEditor
+              key="template"
+              label="Template"
+              value={tplSrc}
+              onChange={setTplSrc}
+              tokens={templateToks}
+              placeholder="Liquid and HTML"
+            />
+          ) : (
+            <CodeEditor
+              key="data"
+              label="Data"
+              value={dataSrc}
+              onChange={setDataSrc}
+              tokens={jsonToks}
+              placeholder='{"title": "Hello"}'
+            />
+          )}
+          <div className="st-status">
+            <span>
+              {what} · {lineCount(source)} lines{dirty ? ' · edited' : ''}
+            </span>
             <span
               role="status"
-              className={
-                status.cls === 'error'
-                  ? 'hw-error hw-ink'
-                  : 'hw-mono hw-ink text-sm'
-              }
+              className={status.kind === 'error' ? 'st-err' : undefined}
             >
               {status.text}
             </span>
+            <span className="st-hint">
+              {isMac ? '⌘S save · ⌘P print' : 'Ctrl+S save · Ctrl+P print'}
+            </span>
           </div>
-          <div className="min-h-0 flex-1 px-3 pb-8 min-[1200px]:overflow-y-auto">
-            <PrinterEdge className="sticky top-0 -ml-3 w-[calc(100%+24px)]" />
-            <PaperRoll>
-              {previewUrl ? (
-                <PaperSlip
-                  exact
-                  fed
-                  tear="new"
-                  src={previewUrl}
-                  alt="Preview of the receipt"
-                  width={previewSize?.[0]}
-                  height={previewSize?.[1]}
-                />
+        </Screen>
+
+        <div className="pk-seam st-front">
+          <Switch
+            variant="mode"
+            legends={['Template', 'Data']}
+            label="Show data"
+            checked={tab === 'data'}
+            onChange={(on) => setTab(on ? 'data' : 'template')}
+            className="st-mode"
+          />
+          <Counter
+            label="Template"
+            options={options}
+            value={currentName}
+            onChange={switchTo}
+            nameWidth={132}
+            disabled={options.length === 0}
+            className="st-counter"
+          />
+          <div className="st-dock">
+            {/* messages: a live region that is always there, so it is
+                announced */}
+            <div role="status" className="st-toast-at">
+              {message ? (
+                <div className="pk-body st-toast">
+                  <Note as="span">{message}</Note>
+                </div>
+              ) : null}
+            </div>
+            <KeyWell label="Template actions" className="st-keys">
+              <Key key="new" legend="New" onClick={openNew} />
+              {confirming ? (
+                <>
+                  <Key
+                    key="confirm"
+                    legend="Delete"
+                    onClick={deleteNow}
+                    disabled={deleting}
+                  />
+                  <Key
+                    key="keep"
+                    id={keepId}
+                    legend="Keep"
+                    onClick={disarm}
+                    disabled={deleting}
+                  />
+                </>
               ) : (
-                <PaperSlip fed tear="new">
-                  <p className="m-0 py-14 text-center text-[#4a4741]">
-                    Choose a template or start typing to see it here.
-                  </p>
-                </PaperSlip>
+                <>
+                  <Key key="save" legend="Save" onClick={save} />
+                  <Key key="delete" legend="Delete" onClick={askDelete} />
+                </>
               )}
-            </PaperRoll>
-          </div>
-        </section>
-      </div>
-
-      {/* the newest prints: refreshed on the eased cadence */}
-      {/* all ten rows, no inner scroll: a box of whole rows cannot hold
-          rows whose thumbnails differ in height */}
-      <Module number="02" title="Recent prints" flush>
-        <div>
-          {jobs.length ? (
-            jobs.map((j, i) => (
-              <Row
-                key={j.id}
-                className="flex-wrap items-start justify-start gap-4"
-              >
-                <span className="hw-thumb max-h-[86px] w-[64px]">
-                  <img src={jobImageSrc(j)} loading="lazy" alt="" />
-                </span>
-                <span className="flex min-w-0 flex-[1_1_180px] flex-col">
-                  <span className="truncate font-semibold">
-                    {j.name || j.id}
-                  </span>
-                  <span className="hw-row-sub">
-                    {j.width} × {j.height} <span className="hw-unit">px</span>
-                  </span>
-                </span>
-                <span className="ml-auto flex shrink-0 items-center justify-end gap-x-4 pt-0.5">
-                  <JobState status={j.status} alt={i % 2 === 1} />
-                  <span className="hw-mono text-sm text-ink-muted">
-                    {timeAgo(j.createdAt, jobsAt)}
-                  </span>
-                </span>
-              </Row>
-            ))
-          ) : (
-            <Row>
-              <Note>No prints yet. Press Print to send one.</Note>
-            </Row>
-          )}
-        </div>
-      </Module>
-
-      {/* toast: a live region that is always there, so it is announced */}
-      <div
-        role="status"
-        className="pointer-events-none fixed top-4 left-1/2 z-50 -translate-x-1/2"
-      >
-        {toast ? (
-          <div className="hw-module hw-panel px-4 py-2.5 text-sm font-semibold">
-            {toast}
-          </div>
-        ) : null}
-      </div>
-
-      {/* new template */}
-      {modalOpen ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="new-template-title"
-            className="w-full max-w-[380px]"
-          >
-            <Module number="03" title="New template" id="new-template-title">
-              <Field
-                label="Name"
-                autoFocus
-                value={modalName}
-                onChange={(e) => setModalName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') createTemplate();
-                  if (e.key === 'Escape') setModalOpen(false);
-                }}
-                autoComplete="off"
+              <Key
+                key="print"
+                legend="Print"
+                print
+                onClick={print}
+                disabled={printing}
               />
-              <KeyGroup className="self-end">
-                <PushKey onClick={() => setModalOpen(false)}>Cancel</PushKey>
-                <PushKey onClick={createTemplate}>Create</PushKey>
-              </KeyGroup>
-            </Module>
+            </KeyWell>
           </div>
         </div>
-      ) : null}
+      </Body>
+
+      <dialog
+        ref={dialogRef}
+        className="st-dialog"
+        aria-labelledby="st-new-title"
+        onClose={() => setNewOpen(false)}
+      >
+        <Body
+          as="form"
+          className="st-dialog-body"
+          onSubmit={(e) => {
+            e.preventDefault();
+            createTemplate();
+          }}
+        >
+          <Plate head>
+            <Engraved as="h2" id="st-new-title">
+              New template
+            </Engraved>
+          </Plate>
+          <Plate seam className="flex flex-col gap-6">
+            <Field
+              label="Name"
+              autoComplete="off"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <KeyWell label="New template" className="self-end">
+              <Key legend="Cancel" onClick={() => setNewOpen(false)} />
+              <Key legend="Create" type="submit" />
+            </KeyWell>
+          </Plate>
+        </Body>
+      </dialog>
     </div>
   );
-}
-
-// A recent print's state: a stamp once it ended, the red LED while a
-// printer holds it, red "Waiting" while it waits (red rules: printing,
-// failures, waiting jobs).
-function JobState({ status, alt }: { status: string; alt: boolean }) {
-  if (status === 'done') return <Stamp state="printed" alt={alt} />;
-  if (status === 'failed') return <Stamp state="failed" alt={alt} />;
-  if (status === 'canceled') return <Stamp state="canceled" alt={alt} />;
-  if (status === 'inflight') {
-    return (
-      <span className="flex items-center gap-2 font-semibold text-red">
-        <Led state="printing" />
-        Printing
-      </span>
-    );
-  }
-  return <span className="font-semibold text-red">Waiting</span>;
 }

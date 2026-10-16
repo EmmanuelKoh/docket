@@ -1,12 +1,15 @@
 'use client';
 
-// The sign-in form: email and password against Better Auth. A refused
-// sign-in shows a red line under the key.
+// The sign-in plates: email and password against Better Auth. The Sign in
+// key stays down while the request runs. A refused sign-in shows a red
+// line in the front plate, beside the key.
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Field } from '@/components/hardware/field';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
+import { Plate } from '@/components/hardware/kit/body';
+import { Note } from '@/components/hardware/kit/engraved';
+import { Field } from '@/components/hardware/kit/field';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
 import { authClient } from '@/lib/auth-client';
 
 // "Invalid email or password" -> "Invalid email or password."
@@ -44,38 +47,45 @@ export function LoginForm() {
 
   return (
     <form
-      className="flex flex-col gap-4"
+      className="contents"
       onSubmit={(e) => {
         e.preventDefault();
-        signIn(new FormData(e.currentTarget));
+        if (!busy) signIn(new FormData(e.currentTarget));
       }}
     >
-      <Field
-        label="Email"
-        type="email"
-        name="email"
-        autoComplete="email"
-        autoFocus
-        required
-        spellCheck={false}
-      />
-      <Field
-        label="Password"
-        type="password"
-        name="password"
-        autoComplete="current-password"
-        required
-      />
-      <KeyGroup className="mt-2 flex">
-        <PushKey type="submit" className="flex-1" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </PushKey>
-      </KeyGroup>
-      {error ? (
-        <p role="alert" className="hw-error">
-          {error}
-        </p>
-      ) : null}
+      <Plate seam className="flex flex-col gap-[22px] pt-[26px] pb-[28px]">
+        <Field
+          label="Email"
+          type="email"
+          name="email"
+          autoComplete="email"
+          autoFocus
+          required
+          spellCheck={false}
+        />
+        <Field
+          label="Password"
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          required
+        />
+      </Plate>
+      <Plate seam className="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          {error ? (
+            <Note tone="red" role="alert">
+              {error}
+            </Note>
+          ) : null}
+          <span role="status" className="sr-only">
+            {busy ? 'Signing in' : ''}
+          </span>
+        </div>
+        <KeyWell>
+          <Key legend="Sign in" type="submit" width={124} down={busy} />
+        </KeyWell>
+      </Plate>
     </form>
   );
 }

@@ -1,13 +1,15 @@
 // History: every job that ended, newest first (design spec: pages,
-// History). The title has the count at the right and the filter keys
-// (All, Printed, Failed, Canceled). Jobs are grouped by the day they
-// printed in the viewer's time zone, one module per day, numbered from
-// the newest day. Each row opens its record (components/history-list.tsx).
-// Filtering and paging are search params (?filter=, ?page=), 20 rows per
-// page. No poll: the page shows the state at load.
+// History). The deck (the receipt counter, the filter keys All, Printed,
+// Failed, Canceled, and Reprint), then one record sheet per day the jobs
+// printed, in the viewer's time zone, numbered from the newest day. The
+// markup is components/history-view.tsx; each entry opens its record in
+// place (components/history-list.tsx). Filtering and paging are search
+// params (?filter=, ?page=), 20 entries per page. No poll: the page shows
+// the state at load.
 //
-// Reads, all in one go: jobs.list (every ended job, with attempts) and
-// slips.list (to name each job's source).
+// Reads, all in one go: jobs.list (every ended job, with attempts),
+// slips.list (to name each job's source) and the printer for the lamp
+// (shared with the nav unit's printer line through React cache).
 
 import './history.css';
 import type { Metadata } from 'next';
@@ -20,16 +22,15 @@ import {
   type JobSummary,
   jobImageSrc,
 } from '@/app/_lib/format';
+import { printerStateText, printerSummary } from '@/app/_lib/printer-data';
 import {
   jobSourceLabels,
   type SlipPair,
   sourceLabel,
 } from '@/app/_lib/slip-data';
 import { clockLabel, dayKey, dayLabel, viewerTimeZone } from '@/app/_lib/time';
-import { Module } from '@/components/hardware/module';
-import { PageTitle } from '@/components/hardware/page-title';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { HistoryList, type HistoryRow } from '@/components/history-list';
+import type { HistoryRow } from '@/components/history-list';
+import { type HistoryDay, HistoryView } from '@/components/history-view';
 import { jobsList } from '@/lib/ops/jobs.js';
 import { slipsList } from '@/lib/ops/slips.js';
 
@@ -48,8 +49,6 @@ const FILTERS = [
 // When a job printed: a printer took it then (claimedAt). A job no
 // printer took (canceled while it waited) shows when it was made.
 const printedAt = (j: JobSummary) => j.claimedAt ?? j.createdAt;
-
-const plateNumber = (n: number) => String(n).padStart(2, '0');
 
 function historyRow(
   j: JobSummary,
@@ -84,7 +83,7 @@ export default async function HistoryPage({
     ? (params.filter as string)
     : 'all';
 
-  const [jobs, pairs, tz] = await Promise.all([
+  const [jobs, pairs, tz, printer] = await Promise.all([
     jobsList(caller, {
       limit: 1000,
       status: filter === 'all' ? HISTORY_STATUSES : [filter],
@@ -92,12 +91,17 @@ export default async function HistoryPage({
     }) as Promise<JobSummary[]>,
     slipsList(caller) as Promise<SlipPair[]>,
     viewerTimeZone(),
+    // the lamp only: a failed read leaves it out rather than the page
+    printerSummary(caller).catch((err) => {
+      console.error('[history printer]', err);
+      return null;
+    }),
   ]);
   const labels = jobSourceLabels(pairs);
   const now = Date.now();
 
   // Newest print first. Days are numbered from the newest, across pages,
-  // so a day split over two pages keeps its number.
+  // so a day split over two pages keeps its number (and its sheet's lie).
   const all = [...jobs].sort(
     (a, b) => Date.parse(printedAt(b)) - Date.parse(printedAt(a)),
   );
@@ -114,12 +118,7 @@ export default async function HistoryPage({
     Math.max(1, parseInt(params.page || '1', 10) || 1),
     pages,
   );
-  const days: {
-    key: string;
-    label: string;
-    number: number;
-    rows: HistoryRow[];
-  }[] = [];
+  const days: HistoryDay[] = [];
   for (const j of all.slice((page - 1) * PER_PAGE, page * PER_PAGE)) {
     const key = dayOf.get(j.id) as string;
     let day = days.at(-1);
@@ -143,77 +142,34 @@ export default async function HistoryPage({
   const current = FILTERS.find((f) => f.value === filter) ?? FILTERS[0];
 
   return (
-    <>
-      <PageTitle
-        className="history-head"
-        aside={
-          <span className="uppercase">
-            {all.length} {all.length === 1 ? 'receipt' : 'receipts'}
-          </span>
-        }
-        actions={
-          <nav aria-label="Filter">
-            <KeyGroup className="history-filter">
-              {FILTERS.map((f) => (
-                <PushKey
-                  key={f.value}
-                  href={
-                    f.value === 'all'
-                      ? '/history'
-                      : `/history?filter=${f.value}`
-                  }
-                  down={f.value === filter}
-                >
-                  {f.label}
-                </PushKey>
-              ))}
-            </KeyGroup>
-          </nav>
-        }
-      >
-        History
-      </PageTitle>
-
-      {days.length ? (
-        <div className="flex flex-col gap-[30px]">
-          {days.map((day) => (
-            <Module
-              key={day.key}
-              number={plateNumber(day.number)}
-              title={day.label}
-              flush
-            >
-              <HistoryList rows={day.rows} />
-            </Module>
-          ))}
-        </div>
-      ) : (
-        <p className="hw-ink m-0">{current.empty}</p>
-      )}
-
-      {pages > 1 ? (
-        <nav
-          aria-label="Pages"
-          className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3"
-        >
-          <KeyGroup>
-            <PushKey href={pageHref(page - 1)} disabled={page <= 1}>
-              Newer
-            </PushKey>
-            <PushKey href={pageHref(page + 1)} disabled={page >= pages}>
-              Older
-            </PushKey>
-          </KeyGroup>
-          <span className="hw-mono hw-ink text-[15px]">
-            <span aria-hidden="true">
-              {page} / {pages}
-            </span>
-            <span className="sr-only">
-              Page {page} of {pages}
-            </span>
-          </span>
-        </nav>
-      ) : null}
-    </>
+    <HistoryView
+      // a new filter or page starts with no record open
+      key={`${filter}:${page}`}
+      count={all.length}
+      filters={FILTERS.map((f) => ({
+        label: f.label,
+        href: f.value === 'all' ? '/history' : `/history?filter=${f.value}`,
+        current: f.value === filter,
+      }))}
+      lamp={
+        printer
+          ? printer.name
+            ? { state: printer.state, text: printerStateText(printer.state) }
+            : { state: 'offline', text: 'No printer' }
+          : null
+      }
+      days={days}
+      empty={{ title: current.label, text: current.empty }}
+      pager={
+        pages > 1
+          ? {
+              page,
+              pages,
+              newer: page > 1 ? pageHref(page - 1) : null,
+              older: page < pages ? pageHref(page + 1) : null,
+            }
+          : null
+      }
+    />
   );
 }

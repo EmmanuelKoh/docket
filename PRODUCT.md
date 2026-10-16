@@ -37,7 +37,7 @@ The printer stays simple and the server does the work: every receipt is rendered
 
 ## Capabilities and Constraints
 
-- Pages today, as keys in the panel: Home, Slips (with a page for each slip), Studio, Photo, Tape, History, Printer, and Users (admins only). Queue has no key: the Printer modules on Home and Printer link to it while jobs wait. Login and Invite are outside the panel.
+- Pages today, as lever keys on the nav unit: Home, Slips (with a page for each slip), Studio, Photo, Tape, History, Printer, and Users (admins only). Queue has no key: the Printer page's Queue key links to it, and Home's printer links to it while jobs wait. Login and Invite are outside the nav unit.
 - Terminology the product uses: receipt, job, print, slip (the user-facing name for a plugin or template; "Plugins" is a stale name), Studio, Queue, History, Printer, account, invite.
 - Printer output is 1-bit at 576 dots wide; previews are the same pixels the printer receives.
 - Hosting is metered (Vercel, Upstash, Neon free tiers). The UI must not poll heavily.
@@ -46,8 +46,8 @@ The printer stays simple and the server does the work: every receipt is rendered
 ## Brand Commitments
 
 - Name: DOCKET.
-- The dashboard is the printer's own control deck (direction E, approved 2026-10-15): a printed graph-paper ground (a cutting mat in dark), painted panels with black label plates, matte lever keys and push keys, an LED in a black collar, a ribbed slide switch, rubber stamps, and the real receipts at true size under the printer's front edge. The faces are Big Shoulders, Hanken Grotesk and Martian Mono.
-- Each accent has fixed jobs (docs/design-spec.md, accent rules). Red: the current page, printing, failures, waiting jobs and the one print key on a screen. Green: the online LED. Orange: the ON mark of a slide switch.
+- The dashboard is the printer's own control deck. Each tool page is one machine with its controls built into the housing (the units direction, approved 2026-10-16). The parts: a printed graph-paper ground (a cutting mat in dark); bodies in Leica satin silver (light) or black paint (dark) with engraved, paint-filled lettering; a nav unit of lever keys that rides a track with knurled rollers; tape-deck keys in one well with the red print key last; counter windows with thumbwheels; slide switches; the lime LED; rubber stamps; and the real receipts at real size (a 320px slip, the print at 288px), standing out of a platen. Studio is a teleprinter, Photo is one camera body, and Home's printer is the status unit. The faces are Big Shoulders, Hanken Grotesk and Martian Mono.
+- Each accent has fixed jobs (docs/design-spec.md, accent rules). Red: the current page, printing, failures, waiting jobs, the one print key in a well, the red dot of Photo's Capture release, and Tape's live audio and selection. Green: the online LED. Orange: the ON mark of a slide switch.
 - Copy is plain and short, written by a person: no jargon, no internal names, no em dashes, no file paths or endpoint names in the interface.
 
 ## Evidence on Hand
@@ -66,5 +66,5 @@ The printer stays simple and the server does the work: every receipt is rendered
 
 ## Accessibility & Inclusion
 
-- Readable text sizes on phone and laptop: body text is 16px, secondary text is 14px or larger, and 12px is only for mono legends in capitals.
+- Readable text sizes on phone and laptop: body text is 16px, secondary text is 14px or larger, and sizes from 10.5px to 12px are only for engraved legends in capitals on hardware parts.
 - Sufficient contrast in light and dark themes, including red on both.

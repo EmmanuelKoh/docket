@@ -9,7 +9,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { SlideSwitch } from '@/components/hardware/slide-switch';
+import { Switch } from '@/components/hardware/kit/switch';
 import { cn } from '@/components/utils';
 
 export function SlipSwitch({
@@ -40,17 +40,18 @@ export function SlipSwitch({
     router.refresh();
   }
 
+  const failed = () => setError('Not saved. Try again.');
   return (
     <span className={cn('inline-flex flex-col items-end', className)}>
-      <SlideSwitch
+      <Switch
         checked={enabled}
         label={title}
         disabled={disabled}
         onToggle={save}
-        onError={() => setError('Not saved. Try again.')}
+        onError={failed}
       />
       {error ? (
-        <span role="alert" className="hw-error text-right">
+        <span role="alert" className="pk-note pk-note--red text-right">
           {error}
         </span>
       ) : null}

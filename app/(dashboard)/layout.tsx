@@ -1,9 +1,10 @@
-// The dashboard shell: session gate, the panel (main navigation, see
-// components/app-sidebar.tsx) and the content column, the only <main>.
-// The session check (a signed cookie, no store read) is the only thing
-// the shell waits for: the panel's printer line streams in inside
+// The dashboard shell: session gate, the nav unit on its track (main
+// navigation, see components/app-sidebar.tsx) and the content column, the
+// only <main>. The session check (a signed cookie, no store read) is the
+// only thing the shell waits for: the nav's printer line streams in inside
 // Suspense, and loading.tsx fills the content column until the page is
-// ready. The root layout already lays the printed ground under it.
+// ready. The root layout already lays the printed ground under it (the
+// track and the unit sit on it).
 
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
@@ -21,7 +22,7 @@ export default async function DashboardLayout({
   if (!caller) redirect('/login');
 
   return (
-    <div className="hw-shell">
+    <div className="pk-shell">
       <a href={`#${MAIN_ID}`} className="hw-skip">
         Skip to content
       </a>

@@ -1,0 +1,359 @@
+/* app/(dashboard)/home.css: Home's page rules over the parts kit
+   (app/kit.css, components/hardware/kit/slip.css). Port of the approved
+   Home lab (units-refine, 2026-10-16). The matching torn edges of the
+   slips on the mat are generated into home-tears.css.
+
+   The printer is the status unit: the newest slip rises out of the platen
+   in its top edge, its caption printed on the unit just under the platen.
+   The slips torn off earlier lie on the mat, newest first, across then
+   down. The desk lays out by its own width (a container query), so it
+   follows the content column, not the window:
+   - 1060px and wider: two columns of slips, the printer at the right
+     (352px wide, 384px from 1092px);
+   - 740px and wider: one column of slips beside the printer;
+   - narrower: one column, the printer with the newest slip first. */
+
+@layer components {
+  .hm-page {
+    container-type: inline-size;
+  }
+
+  /* one lamp over the desk, up and to the left: everything on it falls
+     off a little toward the far corner (over the whole shell, the nav
+     unit and its track too) */
+  .pk-shell:has(.hm-page)::after {
+    content: "";
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    background: radial-gradient(
+      140% 120% at 8% 0%,
+      rgba(40, 36, 30, 0) 35%,
+      rgba(40, 36, 30, 0.03) 70%,
+      rgba(40, 36, 30, 0.05) 100%
+    );
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+
+  html[data-theme="dark"] .pk-shell:has(.hm-page)::after {
+    background: radial-gradient(
+      140% 120% at 8% 0%,
+      rgba(0, 0, 0, 0) 35%,
+      rgba(0, 0, 0, 0.06) 70%,
+      rgba(0, 0, 0, 0.1) 100%
+    );
+  }
+
+  /* ---------- the desk: TODAY and the date, the printer, the slips ---------- */
+
+  .hm-desk {
+    --hm-unit-w: min(100%, 384px);
+    display: grid;
+    grid-template-columns: var(--hm-unit-w);
+    grid-template-areas:
+      "head"
+      "side"
+      "prints";
+    align-items: start;
+    row-gap: 22px;
+  }
+
+  .hm-head {
+    grid-area: head;
+    /* a caption line tall (the stamp's box) */
+    min-height: 21.3px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  /* the page name, as every machine engraves its own, here inked on the
+     mat */
+  .hm-title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    translate: 0.3px 0;
+  }
+
+  .hm-head .hm-date {
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 500;
+    font-size: 11.5px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--hw-caption-time-ink, currentColor);
+  }
+
+  /* ---------- slips on the mat ---------- */
+
+  .hm-prints {
+    grid-area: prints;
+    display: grid;
+    grid-template-columns: 320px;
+    justify-content: center;
+    align-items: start;
+    gap: 40px 32px;
+    margin-top: 18px;
+  }
+
+  .hm-item {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .hm-cap {
+    padding-left: 2px;
+  }
+
+  .hm-more {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin: -8px 0 0 4px;
+    font-size: 15px;
+  }
+
+  /* a receipt longer than 1100 dots is torn off there */
+  .pk-slip.hm-long {
+    max-height: 594px;
+    overflow: clip;
+  }
+
+  /* a torn slip lies on the mat. Thermal paper keeps the roll's curl, so
+     its ends lift a little: both ends turn from the light and throw a
+     softer shadow than the middle. */
+  .hm-lie {
+    position: relative;
+    z-index: 0;
+  }
+
+  .hm-lie::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 3px;
+    right: 3px;
+    bottom: -4.5px;
+    height: 26px;
+    border-radius: 50% / 45%;
+    background: rgba(34, 31, 26, 0.17);
+    filter: blur(4.5px);
+    pointer-events: none;
+  }
+
+  html[data-theme="dark"] .hm-lie::before {
+    background: rgba(0, 0, 0, 0.42);
+  }
+
+  .hm-lie > .pk-slip::before {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    background:
+      linear-gradient(
+        rgba(44, 40, 34, 0.085),
+        rgba(44, 40, 34, 0.035) 8%,
+        rgba(44, 40, 34, 0.008) 24%,
+        rgba(44, 40, 34, 0) 50%,
+        rgba(44, 40, 34, 0.012) 80%,
+        rgba(44, 40, 34, 0.045) 95%,
+        rgba(44, 40, 34, 0.07)
+      ),
+      linear-gradient(90deg, rgba(44, 40, 34, 0) 60%, rgba(44, 40, 34, 0.025));
+    pointer-events: none;
+  }
+
+  /* a job a printer holds now: the red LED and the word, in red */
+  .hm-printing {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--red);
+  }
+
+  /* ---------- the printer: one body, the platen in its top edge ---------- */
+
+  .pk-body.hm-unit {
+    --pk-body-x: 20px;
+    grid-area: side;
+    width: var(--hm-unit-w);
+    padding: 0;
+    /* room for the slip standing up out of the platen, so its torn top is
+       level with the tops of the slips on the mat: the slip's foot sits
+       12.5px above the platen's bottom, the platen 18px below the unit's
+       top */
+    margin-top: calc(var(--hm-slip-h, 26.5px) - 26.5px);
+  }
+
+  .hm-feedrow {
+    display: flex;
+    justify-content: center;
+    padding-top: 18px;
+  }
+
+  .hm-platen {
+    --pk-platen-w: min(352px, calc(100% - 20px));
+  }
+
+  /* the newest slip's caption, printed on the unit just under the
+     platen: below its slip and in line with its left edge, as on the mat */
+  .hm-cap--fed {
+    position: relative;
+    z-index: 1;
+    margin: 14px 0 0;
+    padding-left: max(2px, calc((100% - 320px) / 2 + 2px));
+  }
+
+  .hm-unit .hm-printing {
+    color: var(--pk-red-fill);
+  }
+
+  .hm-plate--printer {
+    padding-bottom: 24px;
+  }
+
+  .hm-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  /* a long name engraves on two lines, as LEICA over M6; the lamp stays
+     level with the first */
+  .hm-name {
+    min-width: 0;
+    line-height: 1.32;
+    overflow-wrap: anywhere;
+  }
+
+  .hm-lamp {
+    height: 25px;
+    padding-right: 1px;
+  }
+
+  /* LAST SEEN [1][2] SEC: two digit drums, the unit engraved outside */
+  .hm-seen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 11px;
+    min-height: 36px;
+    margin-top: 18px;
+  }
+
+  .hm-seen .hm-seen-counter {
+    gap: 10px;
+  }
+
+  .hm-link {
+    color: var(--pk-fill);
+    font-weight: 600;
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+
+  .hm-link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .hm-link:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .hm-seen .hm-waiting {
+    margin-left: auto;
+    color: var(--pk-red-fill);
+  }
+
+  /* slips plate: one row per slip on a 48px pitch, its switch at the
+     right */
+  .hm-plate--slips {
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+
+  .hm-plate--slips .pk-switch-row {
+    gap: 9px;
+  }
+
+  /* ---------- widths ---------- */
+
+  /* one column of slips beside the printer */
+  @container (min-width: 740px) {
+    .hm-desk {
+      --hm-unit-w: 384px;
+      grid-template-columns: auto var(--hm-unit-w);
+      grid-template-areas:
+        "head ."
+        "prints side";
+      justify-content: space-between;
+      column-gap: 36px;
+      row-gap: 26px;
+    }
+
+    .hm-head {
+      align-self: baseline;
+    }
+
+    .hm-prints {
+      justify-content: start;
+      margin-top: 0;
+    }
+
+    .hm-more {
+      margin-top: -4px;
+    }
+
+    /* nothing on the mat: the printer under the heading */
+    .hm-desk--bare {
+      grid-template-columns: var(--hm-unit-w);
+      grid-template-areas:
+        "head"
+        "side";
+      justify-content: start;
+    }
+  }
+
+  /* two columns of slips, across then down. Between 1060px and 1091px
+     (a 1440px window beside the nav unit) the printer is 32px narrower
+     and a long name engraves on two lines. */
+  @container (min-width: 1060px) {
+    .hm-desk {
+      --hm-unit-w: 352px;
+    }
+
+    .hm-prints {
+      grid-template-columns: repeat(2, 320px);
+    }
+  }
+
+  @container (min-width: 1092px) {
+    .hm-desk {
+      --hm-unit-w: 384px;
+    }
+  }
+
+  @media (max-width: 875px) {
+    .pk-body.hm-unit {
+      --pk-body-x: 16px;
+    }
+  }
+}

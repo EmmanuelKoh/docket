@@ -1,5 +1,5 @@
 // tests/eased-poll.test.ts — the cadence the Queue list and the Studio's
-// recent jobs poll at (components/hooks/use-eased-poll.ts pollStep): 3s
+// print follower poll at (components/hooks/use-eased-poll.ts pollStep): 3s
 // while the person is active, 30s after two idle minutes, nothing after
 // thirty. The hook only runs pollStep on its 3s timer while the tab is
 // visible and counts pointer, key and tab-return events as activity.

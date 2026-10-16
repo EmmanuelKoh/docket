@@ -164,8 +164,8 @@ shape op results for display. Scripts call ops with `systemCaller`
 
 ## The dashboard
 
-The dashboard is a Next.js app (React, Tailwind, and the hardware kit in
-`components/hardware/` with its styles in `app/hardware.css`), styled per
+The dashboard is a Next.js app (React, Tailwind, and the parts kit in
+`components/hardware/kit/` with its styles in `app/kit.css`), styled per
 `docs/design-spec.md`.
 
 **Accounts.** Email and password (Better Auth on Postgres). Signup is by
@@ -188,8 +188,8 @@ and write is scoped to the signed-in owner.
 | Printer | Printer status, and the printers: pair, share, leave, remove |
 | Users | Admins only: accounts and invite links |
 
-**Polling.** The Queue page and the Studio's recent-jobs strip re-fetch
-every 3 seconds while you use the page
+**Polling.** The Queue page re-fetches every 3 seconds while you use the
+page, and so does the Studio while a print it sent is not done
 (`components/hooks/use-eased-poll.ts`). After two idle minutes they slow
 to every 30 seconds, and after thirty minutes they stop until you click or
 type. The Printer page refreshes every 3 seconds while a pairing is
@@ -586,7 +586,7 @@ exactly the dots the bytes print, and that a second render is identical.
   A new module also goes into `lib/ops/index.js`. Then a route or page
   calls it.
 - A route or page: a thin adapter over ops (see "Adapters"). A page gets
-  a key in the panel's key bank (`components/app-sidebar.tsx`) and
+  a key in the nav unit's key bank (`components/app-sidebar.tsx`) and
   `docs/design-spec.md`. Deploy wiring lives in `next.config.mjs`: a route
   that renders (it loads `render/fonts/`) or seeds templates (it reads
   `reference/`) needs an `outputFileTracingIncludes` entry, or Vercel
@@ -714,7 +714,7 @@ app/                       The Next.js app: pages and route adapters
   templates/ preview/ jobs/      Studio and Photo JSON routes
   api/                     Dashboard JSON routes
   _lib/                    Caller from the session, OpError to HTTP, view models
-components/                React components (the hardware kit in hardware/, the Tape tool in tape/)
+components/                React components (the parts kit in hardware/kit/, the Tape tool in tape/)
 lib/
   ops/                     Operations: every product action as (caller, input) -> output
     define.js caller.js    defineOperation, OpError, the Caller values
