@@ -1,0 +1,2681 @@
+/* app/kit.css: the parts kit. Every page is built from these parts: one
+   machine body per tool, its controls set into the housing.
+
+   One family: a Leica satin silver body in light, Leica black paint in
+   dark, engraved paint-filled lettering, tape-deck keys in one well (the
+   red print key last), a counter window with a thumbwheel, slide switches,
+   short sliders, the Leica push key, the Capture release, the LED, the
+   printer block, the teleprinter platen, screens and fields behind windows
+   cut through the plate, record sheets, and the nav unit on its track.
+
+   Light: one source above the screen, a little to the left. The sprites in
+   public/hardware/kit and public/hardware/nav are rendered offline in an
+   oblique view with that light (each PNG names its generator:
+   `impeccable embed-prompt --read <file>`; the generators are in
+   .claude/skills/realism-lab/renderers/units).
+
+   Light by default; dark under html[data-theme="dark"]. The paper slip
+   and its torn ends are in components/hardware/kit/slip.css, which loads
+   with the Slip and Thumb components. app/hardware.css holds what this
+   kit keeps from the E design as it was: the ground, printed ink, the
+   skip link and the rubber stamp.
+
+   app/globals.css imports this file with a plain @import; every rule sits
+   in @layer components, so Tailwind utilities still win. */
+
+@layer components {
+  :root {
+    /* body finish: Leica satin chrome */
+    --pk-face: #dadad6;
+    --pk-face-grain: url(/hardware/kit/grain-light.png);
+    --pk-face-tone: url(/hardware/kit/tone-light.png);
+    --pk-body-edge: url(/hardware/kit/body-light.png);
+    --pk-seam: url(/hardware/kit/seam-light.png);
+    --pk-seam-lip: none;
+    --pk-leather: url(/hardware/kit/leather-light.png);
+    --pk-leather-size: 150px;
+
+    /* engraving: cut into the plate, filled with paint */
+    --pk-fill: #191918;
+    --pk-fill-soft: #3b3a37;
+    --pk-engr-shadow:
+      0 0.55px 0 rgba(255, 255, 255, 0.5), 0 -0.4px 0.2px rgba(30, 30, 28, 0.22);
+    --pk-red-fill: #a8281b;
+    --pk-focus: #161616;
+    --pk-rule: rgba(25, 25, 24, 0.34);
+    --pk-rule-lip: rgba(255, 255, 255, 0.55);
+    /* paint wear inside the engraving: dense, with a few thin spots */
+    --pk-wear: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='w' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='13' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.3 0 0 0 1.82'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23w)'/%3E%3C/svg%3E");
+
+    /* tape-deck keys */
+    --pk-well: url(/hardware/kit/well-light.png);
+    --pk-key-up: url(/hardware/kit/key-up-light.png);
+    --pk-key-down: url(/hardware/kit/key-down-light.png);
+    --pk-key-red-up: url(/hardware/kit/key-red-up-light.png);
+    --pk-key-red-down: url(/hardware/kit/key-red-down-light.png);
+    --pk-strip: #161615;
+    --pk-strip-ink: #ebe8e1;
+    --pk-strip-off-ink: #77746d;
+    --pk-strip-edge:
+      0 0.6px 0 rgba(255, 255, 255, 0.55), 0 -0.5px 0.3px rgba(0, 0, 0, 0.18);
+    --pk-key-filter-off: saturate(0.6) brightness(0.985) contrast(0.92);
+
+    /* counter and thumbwheel */
+    --pk-window-frame: url(/hardware/kit/counter-light.png);
+    --pk-drum: #1c1b19;
+    --pk-drum-ink: #e9e5dc;
+    --pk-wheel: url(/hardware/kit/wheel-light.png);
+    --pk-wheel-b: url(/hardware/kit/wheel-b-light.png);
+
+    /* switch, slider, push key, release */
+    --pk-sw-slot: url(/hardware/kit/swslot-light.png);
+    --pk-sw-slot-paint: url(/hardware/kit/swslot-paint-light.png);
+    --pk-sw-cap: url(/hardware/kit/switch-cap-light.png);
+    --pk-fslot: url(/hardware/kit/fslot-light.png);
+    --pk-fcap: url(/hardware/kit/fcap-light.png);
+    --pk-lkey-up: url(/hardware/kit/lkey-up-light.png);
+    --pk-lkey-down: url(/hardware/kit/lkey-down-light.png);
+    --pk-lkey-wide-up: url(/hardware/nav/lkeyw-up-light.png);
+    --pk-lkey-wide-down: url(/hardware/nav/lkeyw-down-light.png);
+    --pk-shutter-up: url(/hardware/kit/shutter-up-light.png);
+    --pk-shutter-down: url(/hardware/kit/shutter-down-light.png);
+    --pk-shutter-off: url(/hardware/kit/shutter-inactive-light.png);
+
+    /* LED */
+    --pk-led-collar: url(/hardware/kit/led-collar-light.png);
+
+    /* printer, platen, paper */
+    --pk-printer-l: url(/hardware/kit/printer-L-light.png);
+    --pk-printer-m: url(/hardware/kit/printer-M-light.png);
+    --pk-printer-r: url(/hardware/kit/printer-R-light.png);
+    --pk-platen: url(/hardware/kit/platen-light.png);
+    --pk-tearbar: url(/hardware/kit/tearbar-light.png);
+    --pk-paper-grain: url(/hardware/paper-grain.png);
+    --pk-slip-shadow: drop-shadow(0 0 0.35px rgba(34, 31, 26, 0.22))
+      drop-shadow(0 0.75px 0.75px rgba(34, 31, 26, 0.12))
+      drop-shadow(0 2px 3px rgba(34, 31, 26, 0.08));
+    --pk-thumb-shadow: drop-shadow(0 0 0.35px rgba(40, 36, 28, 0.3))
+      drop-shadow(0 0.6px 0.6px rgba(40, 36, 28, 0.16))
+      drop-shadow(0 1.5px 2px rgba(40, 36, 28, 0.07));
+    --pk-paper-light: brightness(1);
+
+    /* screens and fields */
+    --pk-screen-frame: url(/hardware/kit/window-light.png);
+    --pk-eink: #dcdad3;
+    --pk-eink-ink: #23221f;
+    --pk-eink-dim: #5e5b55;
+    --pk-eink-faint: #8b877f;
+    --pk-eink-red: #a8291f;
+    --pk-eink-filter: none;
+    --pk-eink-grain: url(/hardware/kit/eink-grain.png);
+    --pk-lcd-grain: url(/hardware/kit/lcd-grain.png);
+    --pk-field-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2323221f' stroke-width='1.6'/%3E%3C/svg%3E");
+
+    /* record sheets: uncoated stock, a shade whiter than the mat */
+    --pk-sheet-ink: #1f1e1c;
+    --pk-sheet-ink-blend: multiply;
+    --pk-sheet-ink-spread: 0 0 0.35px currentColor;
+    --pk-sheet-rule: rgba(40, 38, 34, 0.42);
+    --pk-sheet-rule-2: rgba(40, 38, 34, 0.21);
+    --pk-sheet-band: #2b2a27;
+    --pk-sheet-band-ink: #f3f1ec;
+    --pk-sheet-band-blend: multiply;
+    --pk-sheet-fibre: url(/hardware/paper-grain.png);
+    --pk-sheet-wash: 35%;
+    --pk-sheet-cockle: url(/hardware/kit/cockle-light.png);
+    --pk-sheet-edge:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.9),
+      inset 0.5px 0 0 rgba(255, 255, 255, 0.5),
+      inset 0 -0.5px 0 rgba(60, 50, 34, 0.06);
+    --pk-sheet-light:
+      linear-gradient(
+        104deg,
+        rgba(255, 255, 255, 0.5) 0,
+        rgba(255, 255, 255, 0.12) 30%,
+        rgba(255, 255, 255, 0) 55%,
+        rgba(60, 50, 34, 0.025) 100%
+      ),
+      linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 120px);
+    --pk-sheet-shadow:
+      0 0 0 0.5px rgba(40, 36, 28, 0.16), 0 0.5px 0.6px rgba(40, 36, 28, 0.22),
+      0 1.5px 2px rgba(40, 36, 28, 0.09), 0 4px 8px -3px rgba(40, 36, 28, 0.1);
+    --pk-sheet-lift: rgba(40, 36, 28, 0.3);
+    --pk-sheet-curl-lit: rgba(255, 255, 255, 0.5);
+    --pk-sheet-curl-shade: rgba(60, 50, 34, 0.06);
+    /* pencil graphite rubbed under a line */
+    --pk-sheet-hover: rgba(98, 96, 90, 0.075);
+    --pk-sheet-hover-blend: multiply;
+    /* solid ink on uncoated stock: fine pinholes where the fibre did not take it */
+    --pk-sheet-band-mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.03' numOctaves='3' seed='19' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .1 0 0 0 .94'/%3E%3C/filter%3E%3Crect width='360' height='360' filter='url(%23n)'/%3E%3C/svg%3E")
+      0 0 / 360px repeat,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='1' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.3 0 0 0 1.16'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")
+      0 0 / 120px repeat;
+
+    /* nav unit */
+    --pk-nav-lever-up: url(/hardware/nav/lever-up-light.png);
+    --pk-nav-lever-rest: url(/hardware/nav/lever-rest-light.png);
+    --pk-nav-lever-down: url(/hardware/nav/lever-down-light.png);
+    --pk-nav-skey-up: url(/hardware/nav/skey-up-light.png);
+    --pk-nav-skey-rest: url(/hardware/nav/skey-rest-light.png);
+    --pk-nav-skey-down: url(/hardware/nav/skey-down-light.png);
+    --pk-nav-flag-off: url(/hardware/nav/flag-off-light.png);
+    --pk-nav-flag-on: url(/hardware/nav/flag-on-light.png);
+    --pk-nav-flagh-off: url(/hardware/nav/flagh-off-light.png);
+    --pk-nav-flagh-on: url(/hardware/nav/flagh-on-light.png);
+    /* the wordmark's wear: the kit's noise (same seed and scale), but the
+       thinnest paint stays at 90% or more */
+    --pk-nav-mark-wear: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='w' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='13' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.5 0 0 0 1.32'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23w)'/%3E%3C/svg%3E");
+    --pk-nav-mark-shadow:
+      0 0.7px 0 rgba(255, 255, 255, 0.55), 0 -0.5px 0.25px rgba(30, 30, 28, 0.3);
+    /* pad-printed legend ink on the cream keys */
+    --pk-nav-legend: #2c2a26;
+    --pk-nav-legend-spread: 0 0 0.45px rgba(44, 42, 38, 0.6);
+
+    /* the track the nav unit rides on */
+    --tk-track: url(/hardware/nav/track-light.png);
+    --tk-screw-a: url(/hardware/nav/tscrew-a-light.png);
+    --tk-screw-b: url(/hardware/nav/tscrew-b-light.png);
+    --tk-screw-c: url(/hardware/nav/tscrew-c-light.png);
+    --tk-roller-top: url(/hardware/nav/roller-top-light.png);
+    --tk-roller-bot: url(/hardware/nav/roller-bot-light.png);
+    --tk-knurl-mix: 0.7;
+    --tk-occ-1: rgba(38, 34, 28, 0.1);
+    --tk-occ-2: rgba(38, 34, 28, 0.26);
+    --tk-occ-3: rgba(38, 34, 28, 0.42);
+  }
+
+  html[data-theme="dark"] {
+    --pk-face: #1c1c1c;
+    --pk-face-grain: url(/hardware/kit/grain-dark.png);
+    --pk-face-tone: url(/hardware/kit/tone-dark.png);
+    --pk-body-edge: url(/hardware/kit/body-dark.png);
+    --pk-seam: url(/hardware/kit/seam-dark.png);
+    --pk-seam-lip: linear-gradient(
+      90deg,
+      rgba(255, 250, 240, 0.02),
+      rgba(255, 250, 240, 0.09) 30%,
+      rgba(255, 250, 240, 0.05) 70%,
+      rgba(255, 250, 240, 0.02)
+    );
+    --pk-leather: url(/hardware/kit/leather-dark.png);
+
+    --pk-fill: #e4e1d9;
+    --pk-fill-soft: #b9b5ac;
+    --pk-engr-shadow:
+      0 -0.5px 0.2px rgba(0, 0, 0, 0.9), 0 0.5px 0 rgba(255, 255, 255, 0.05);
+    --pk-red-fill: #e2604a;
+    --pk-focus: #ece9e2;
+    --pk-rule: rgba(0, 0, 0, 0.85);
+    --pk-rule-lip: rgba(255, 255, 255, 0.07);
+
+    --pk-well: url(/hardware/kit/well-dark.png);
+    --pk-key-up: url(/hardware/kit/key-up-dark.png);
+    --pk-key-down: url(/hardware/kit/key-down-dark.png);
+    --pk-key-red-up: url(/hardware/kit/key-red-up-dark.png);
+    --pk-key-red-down: url(/hardware/kit/key-red-down-dark.png);
+    --pk-strip: #0c0c0c;
+    --pk-strip-ink: #dedad2;
+    --pk-strip-off-ink: #6d6a64;
+    --pk-strip-edge:
+      0 0.6px 0 rgba(255, 255, 255, 0.06), 0 -0.5px 0.3px rgba(0, 0, 0, 0.6);
+    --pk-key-filter-off: saturate(0.6) brightness(0.9) contrast(0.9);
+
+    --pk-window-frame: url(/hardware/kit/counter-dark.png);
+    --pk-drum: #161514;
+    --pk-drum-ink: #e2ded5;
+    --pk-wheel: url(/hardware/kit/wheel-dark.png);
+    --pk-wheel-b: url(/hardware/kit/wheel-b-dark.png);
+
+    --pk-sw-slot: url(/hardware/kit/swslot-dark.png);
+    --pk-sw-slot-paint: url(/hardware/kit/swslot-paint-dark.png);
+    --pk-sw-cap: url(/hardware/kit/switch-cap-dark.png);
+    --pk-fslot: url(/hardware/kit/fslot-dark.png);
+    --pk-fcap: url(/hardware/kit/fcap-dark.png);
+    --pk-lkey-up: url(/hardware/kit/lkey-up-dark.png);
+    --pk-lkey-down: url(/hardware/kit/lkey-down-dark.png);
+    --pk-lkey-wide-up: url(/hardware/nav/lkeyw-up-dark.png);
+    --pk-lkey-wide-down: url(/hardware/nav/lkeyw-down-dark.png);
+    --pk-shutter-up: url(/hardware/kit/shutter-up-dark.png);
+    --pk-shutter-down: url(/hardware/kit/shutter-down-dark.png);
+    --pk-shutter-off: url(/hardware/kit/shutter-inactive-dark.png);
+
+    --pk-led-collar: url(/hardware/kit/led-collar-dark.png);
+
+    --pk-printer-l: url(/hardware/kit/printer-L-dark.png);
+    --pk-printer-m: url(/hardware/kit/printer-M-dark.png);
+    --pk-printer-r: url(/hardware/kit/printer-R-dark.png);
+    --pk-platen: url(/hardware/kit/platen-dark.png);
+    --pk-tearbar: url(/hardware/kit/tearbar-dark.png);
+    --pk-slip-shadow: drop-shadow(0 0 0.4px rgba(0, 0, 0, 0.5))
+      drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))
+      drop-shadow(0 2.5px 4px rgba(0, 0, 0, 0.3));
+    --pk-thumb-shadow: drop-shadow(0 0 0.4px rgba(0, 0, 0, 0.6))
+      drop-shadow(0 0.8px 0.8px rgba(0, 0, 0, 0.4))
+      drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+    --pk-paper-light: brightness(0.93) sepia(0.04);
+
+    --pk-screen-frame: url(/hardware/kit/window-dark.png);
+    --pk-eink-filter: brightness(0.84) contrast(1.04);
+    --pk-field-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23d5d1c7' stroke-width='1.6'/%3E%3C/svg%3E");
+
+    /* black card stock, printed in a light ink */
+    --pk-sheet-ink: #e0dcd3;
+    --pk-sheet-ink-blend: normal;
+    --pk-sheet-ink-spread: 0 0 0.3px currentColor;
+    --pk-sheet-rule: rgba(224, 220, 211, 0.3);
+    --pk-sheet-rule-2: rgba(224, 220, 211, 0.15);
+    --pk-sheet-band: #121110;
+    --pk-sheet-band-ink: #dcd8cf;
+    --pk-sheet-band-blend: normal;
+    --pk-sheet-fibre: url(/hardware/kit/fibre-dark.png);
+    --pk-sheet-wash: 50%;
+    --pk-sheet-cockle: url(/hardware/kit/cockle-dark.png);
+    --pk-sheet-edge:
+      inset 0 0.5px 0 rgba(255, 248, 236, 0.1),
+      inset 0.5px 0 0 rgba(255, 248, 236, 0.05),
+      inset 0 -0.5px 0 rgba(0, 0, 0, 0.25);
+    --pk-sheet-light:
+      linear-gradient(
+        104deg,
+        rgba(255, 248, 236, 0.045) 0,
+        rgba(255, 248, 236, 0.012) 35%,
+        rgba(0, 0, 0, 0) 60%,
+        rgba(0, 0, 0, 0.06) 100%
+      ),
+      linear-gradient(rgba(255, 248, 236, 0.02), rgba(255, 248, 236, 0) 120px);
+    --pk-sheet-shadow:
+      0 0 0 0.5px rgba(0, 0, 0, 0.55), 0 0.5px 0.8px rgba(0, 0, 0, 0.5),
+      0 2px 3px rgba(0, 0, 0, 0.3), 0 5px 10px -3px rgba(0, 0, 0, 0.3);
+    --pk-sheet-lift: rgba(0, 0, 0, 0.6);
+    --pk-sheet-curl-lit: rgba(255, 248, 236, 0.035);
+    --pk-sheet-curl-shade: rgba(0, 0, 0, 0.12);
+    --pk-sheet-hover: rgba(236, 230, 218, 0.045);
+    --pk-sheet-hover-blend: normal;
+
+    --pk-nav-lever-up: url(/hardware/nav/lever-up-dark.png);
+    --pk-nav-lever-rest: url(/hardware/nav/lever-rest-dark.png);
+    --pk-nav-lever-down: url(/hardware/nav/lever-down-dark.png);
+    --pk-nav-skey-up: url(/hardware/nav/skey-up-dark.png);
+    --pk-nav-skey-rest: url(/hardware/nav/skey-rest-dark.png);
+    --pk-nav-skey-down: url(/hardware/nav/skey-down-dark.png);
+    --pk-nav-flag-off: url(/hardware/nav/flag-off-dark.png);
+    --pk-nav-flag-on: url(/hardware/nav/flag-on-dark.png);
+    --pk-nav-flagh-off: url(/hardware/nav/flagh-off-dark.png);
+    --pk-nav-flagh-on: url(/hardware/nav/flagh-on-dark.png);
+    --pk-nav-mark-shadow:
+      0 -0.6px 0.25px rgba(0, 0, 0, 0.95), 0 0.6px 0 rgba(255, 255, 255, 0.06);
+    --pk-nav-legend: #dcd8cf;
+    --pk-nav-legend-spread: 0 0 0.45px rgba(220, 216, 207, 0.45);
+
+    --tk-track: url(/hardware/nav/track-dark.png);
+    --tk-screw-a: url(/hardware/nav/tscrew-a-dark.png);
+    --tk-screw-b: url(/hardware/nav/tscrew-b-dark.png);
+    --tk-screw-c: url(/hardware/nav/tscrew-c-dark.png);
+    --tk-roller-top: url(/hardware/nav/roller-top-dark.png);
+    --tk-roller-bot: url(/hardware/nav/roller-bot-dark.png);
+    --tk-knurl-mix: 0.85;
+    --tk-occ-1: rgba(0, 0, 0, 0.2);
+    --tk-occ-2: rgba(0, 0, 0, 0.42);
+    --tk-occ-3: rgba(0, 0, 0, 0.6);
+  }
+
+  /* ======================================================================
+     Body: a slab with a satin face, a rolled edge all round, a front face
+     and a contact shadow. The element is the face; the edge sprite reaches
+     26px out (31.5px below) through border-image-outset, so leave that
+     room round a body (the page gutters do).
+     ====================================================================== */
+  .pk-body {
+    --pk-body-x: 30px;
+    position: relative;
+    box-sizing: border-box;
+    border: 0 solid transparent;
+    border-radius: 12px;
+    background-color: var(--pk-face);
+    background-image: var(--pk-face-tone), var(--pk-face-grain);
+    background-size:
+      max(100%, 1400px) max(100%, 900px),
+      200px 200px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: soft-light, normal;
+    border-image-source: var(--pk-body-edge);
+    border-image-slice: 96 96 107 96;
+    border-image-width: 48px 48px 53.5px 48px;
+    border-image-outset: 26px 26px 31.5px 26px;
+    border-image-repeat: stretch;
+    color: var(--pk-fill);
+  }
+
+  /* A plate that joins the one above it: the upper plate's rolled front
+     edge, a dark gap, this plate a hair lower. Put it on the lower plate;
+     the seam runs along its top edge, from 7px above it to 7px below. */
+  .pk-seam {
+    position: relative;
+  }
+
+  .pk-seam::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -7px;
+    height: 14px;
+    background:
+      var(--pk-seam-lip) 0 8.2px / 100% 0.6px no-repeat,
+      var(--pk-seam) 0 0 / 48px 14px repeat-x;
+    pointer-events: none;
+  }
+
+  /* Plates: the body's content rows. A head plate holds the engraved name
+     and the lamp (58px tall); other plates pad 22px top and bottom. Both
+     sit on the body's content edges (--pk-body-x from each side). */
+  .pk-plate {
+    padding: 22px var(--pk-body-x);
+  }
+
+  .pk-plate-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 58px;
+    padding: 0 var(--pk-body-x);
+  }
+
+  .pk-plate-title {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  /* a plate's number, engraved small before its name */
+  .pk-plate-num {
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--pk-fill-soft);
+    text-shadow: var(--pk-engr-shadow);
+    -webkit-mask: var(--pk-wear) 0 0 / 120px repeat;
+    mask: var(--pk-wear) 0 0 / 120px repeat;
+  }
+
+  /* the LED and its engraved state, together */
+  .pk-lamp {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* the last letter's tracking would push the word off the edge */
+  .pk-lamp > :last-child {
+    margin-right: -0.15em;
+  }
+
+  /* Leatherette (vulcanite) set into the body: the plate is cut away round
+     it, its chamfered edge shading the leather a little. */
+  .pk-leather {
+    position: relative;
+    border-radius: 4px;
+    background: var(--pk-leather) 0 0 / var(--pk-leather-size) repeat;
+  }
+
+  .pk-leather::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 0 solid transparent;
+    border-image: var(--pk-screen-frame) 42 fill / 14px / 8px stretch;
+    pointer-events: none;
+  }
+
+  /* ---- Engraving: cut into the plate and paint-filled ---- */
+  .pk-engr {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 11.5px;
+    line-height: 1;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--pk-fill);
+    text-shadow: var(--pk-engr-shadow);
+    -webkit-mask: var(--pk-wear) 0 0 / 120px repeat;
+    mask: var(--pk-wear) 0 0 / 120px repeat;
+  }
+
+  /* The page name, engraved larger (it is the h1) */
+  .pk-name {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--pk-fill);
+    text-shadow: var(--pk-engr-shadow);
+    -webkit-mask: var(--pk-wear) 0 0 / 160px repeat;
+    mask: var(--pk-wear) 0 0 / 160px repeat;
+  }
+
+  .pk-engr--soft {
+    color: var(--pk-fill-soft);
+  }
+
+  .pk-engr--red {
+    color: var(--pk-red-fill);
+  }
+
+  /* Text printed on the plate in sentence case: notes, hints, a row's
+     detail. Engraving is for names and legends; this is for reading. */
+  .pk-note {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--pk-fill-soft);
+    text-shadow: var(--pk-engr-shadow);
+  }
+
+  .pk-note--red {
+    font-weight: 600;
+    color: var(--pk-red-fill);
+  }
+
+  /* ---- Rows on a plate: name and detail at the left, a control at the
+     right, on a 48px pitch. Ruled rows carry an engraved line between. ---- */
+  .pk-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+  }
+
+  .pk-rows--ruled > .pk-row {
+    padding: 12px 0;
+  }
+
+  .pk-rows--ruled > .pk-row + .pk-row {
+    background:
+      linear-gradient(
+        var(--pk-rule) 0 0.6px,
+        var(--pk-rule-lip) 0.6px 1.2px,
+        transparent 1.2px
+      )
+      0 0 / 100% 1.2px no-repeat;
+  }
+
+  .pk-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .pk-row-sub {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+  }
+
+  /* ======================================================================
+     Tape-deck keys: one well cut through the plate, the keys standing in
+     it, a black legend strip above. The red print key goes last. Latching
+     keys use aria-pressed; a key held down by state uses .is-down.
+     .pk-keys--compact is the same well at 72% for row actions.
+     ====================================================================== */
+  .pk-keys {
+    --pk-strip-h: 20px;
+    position: relative;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    margin: 0;
+    padding: 22px 5px 3px;
+    border: 0;
+    isolation: isolate;
+  }
+
+  /* the legend strip, printed black, inlaid flush */
+  .pk-keys::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 1.5px;
+    right: 1.5px;
+    top: 0;
+    height: var(--pk-strip-h);
+    border-radius: 1.5px;
+    background: var(--pk-strip);
+    box-shadow:
+      var(--pk-strip-edge),
+      0 0 0.4px var(--pk-strip);
+  }
+
+  /* the well: opening, chamfer, walls and the black floor */
+  .pk-keys::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 3px;
+    right: 3px;
+    top: 24.84px;
+    bottom: 3px;
+    border: 0 solid transparent;
+    border-image: var(--pk-well) 42 fill / 14px / 8px stretch;
+  }
+
+  .pk-keys--compact {
+    zoom: 0.72;
+  }
+
+  .pk-key {
+    --w: 88px;
+    position: relative;
+    flex: none;
+    display: block;
+    width: var(--w);
+    height: 45.84px;
+    padding: 0;
+    border: 0;
+    /* the down cap, out of sight, so it is loaded before the first press
+       (else the key shows black until it arrives) */
+    background: var(--pk-key-down) -9999px 0 / 1px 1px no-repeat;
+    cursor: pointer;
+    color: var(--pk-strip-ink);
+    font: inherit;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pk-key--print {
+    --w: 104px;
+    background-image: var(--pk-key-red-down);
+  }
+
+  /* each key a hair off the next in moulding, its legend a fraction off */
+  .pk-key:nth-child(4n + 1) {
+    --pk-tone: brightness(1.004);
+    --nudge: 0.3px -0.2px;
+  }
+
+  .pk-key:nth-child(4n + 2) {
+    --pk-tone: brightness(0.992) hue-rotate(-2deg);
+    --nudge: 0 0.3px;
+  }
+
+  .pk-key:nth-child(4n + 3) {
+    --pk-tone: brightness(1.008);
+    --nudge: -0.3px 0;
+  }
+
+  .pk-key:nth-child(4n + 4) {
+    --pk-tone: brightness(0.997);
+    --nudge: 0.2px 0.2px;
+  }
+
+  /* the cap: a 3-slice sprite, clipped at the well's front lip */
+  .pk-key-cap {
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: -4px;
+    height: 56.25px;
+    border: 0 solid transparent;
+    border-image: var(--pk-key-up) 0 80 fill / 0 20px / 0 round;
+    clip-path: inset(0 0 6.41px 0);
+    filter: var(--pk-tone, none);
+    transition: transform 0.06s ease-out;
+  }
+
+  .pk-key--print .pk-key-cap {
+    border-image-source: var(--pk-key-red-up);
+  }
+
+  /* the finger rests on it */
+  .pk-key:not(:disabled, [aria-disabled="true"]):hover .pk-key-cap {
+    transform: translateY(0.5px);
+  }
+
+  /* down: pressed, latched (aria-pressed) or held by state (.is-down); the
+     down sprite carries its own darkening and the neighbours' shadow */
+  .pk-key:not(:disabled, [aria-disabled="true"]):active .pk-key-cap,
+  .pk-key[aria-pressed="true"] .pk-key-cap,
+  .pk-key[aria-current] .pk-key-cap,
+  .pk-key.is-down .pk-key-cap {
+    transform: none;
+    border-image-source: var(--pk-key-down);
+  }
+
+  .pk-key--print:not(:disabled, [aria-disabled="true"]):active .pk-key-cap,
+  .pk-key--print[aria-pressed="true"] .pk-key-cap,
+  .pk-key--print.is-down .pk-key-cap {
+    border-image-source: var(--pk-key-red-down);
+  }
+
+  .pk-key:disabled,
+  .pk-key[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  .pk-key:disabled .pk-key-cap,
+  .pk-key[aria-disabled="true"] .pk-key-cap {
+    filter: var(--pk-tone, none) var(--pk-key-filter-off);
+  }
+
+  /* the legend, printed on the strip above the key */
+  .pk-key-legend {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -22px;
+    height: var(--pk-strip-h, 20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 10.5px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--pk-strip-ink);
+    text-shadow: 0 0 0.4px currentColor;
+    -webkit-mask: var(--pk-wear) 0 0 / 90px repeat;
+    mask: var(--pk-wear) 0 0 / 90px repeat;
+    translate: var(--nudge, 0 0);
+  }
+
+  /* compact: the legend keeps its printed size */
+  .pk-keys--compact .pk-key-legend {
+    font-size: 14.5px;
+    letter-spacing: 0.12em;
+  }
+
+  .pk-key:disabled .pk-key-legend,
+  .pk-key[aria-disabled="true"] .pk-key-legend {
+    color: var(--pk-strip-off-ink);
+  }
+
+  .pk-key:focus-visible {
+    outline: none;
+  }
+
+  .pk-key:focus-visible::after {
+    content: "";
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    top: -24px;
+    bottom: -1.5px;
+    border-radius: 3px;
+    box-shadow: 0 0 0 2px var(--pk-focus);
+    pointer-events: none;
+  }
+
+  .pk-keys--compact .pk-key:focus-visible::after {
+    box-shadow: 0 0 0 2.8px var(--pk-focus);
+  }
+
+  /* a key well across its body: the keys share the width (phones) */
+  .pk-keys--fill {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .pk-keys--fill > .pk-key {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+
+  .pk-keys--fill .pk-key-legend {
+    letter-spacing: 0.07em;
+  }
+
+  /* ======================================================================
+     Counter window and thumbwheel: drums behind a window in the plate; the
+     knurled wheel beside it steps them. Click the wheel's top or bottom
+     half (or scroll, or arrow keys); click the window for the list.
+     ====================================================================== */
+  .pk-counter {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .pk-counter-window {
+    position: relative;
+    display: flex;
+    gap: 1.5px;
+    height: 36px;
+    padding: 3px;
+    box-sizing: border-box;
+    border-radius: 2.5px;
+    background: #090908;
+  }
+
+  .pk-counter-window::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 0 solid transparent;
+    border-image: var(--pk-window-frame) 33 fill / 11px / 6px stretch;
+    pointer-events: none;
+  }
+
+  /* drums print plain zeros, in the sans, tabular. The min-width is the
+     figure's room, the padding goes round it (30px a digit, as the labs) */
+  .pk-drum {
+    position: relative;
+    overflow: hidden;
+    box-sizing: content-box;
+    min-width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border-radius: 1px;
+    background-color: var(--pk-drum);
+    color: var(--pk-drum-ink);
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 17px;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+
+  /* a name drum: the name reads on from the number, left-aligned */
+  .pk-drum--name {
+    justify-content: flex-start;
+    text-align: left;
+    padding: 0 12px;
+    font-size: 15px;
+    letter-spacing: 0.1em;
+  }
+
+  /* the drum's curvature: falling away top and bottom, lit from above */
+  .pk-drum::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      rgba(0, 0, 0, 0.92) 0,
+      rgba(0, 0, 0, 0.55) 15%,
+      rgba(0, 0, 0, 0.1) 33%,
+      rgba(255, 250, 240, 0.06) 42%,
+      rgba(255, 250, 240, 0.02) 55%,
+      rgba(0, 0, 0, 0.14) 66%,
+      rgba(0, 0, 0, 0.62) 86%,
+      rgba(0, 0, 0, 0.95) 100%
+    );
+  }
+
+  .pk-drum > span {
+    position: relative;
+    white-space: nowrap;
+    text-shadow: 0 0 0.4px rgba(233, 229, 220, 0.6);
+  }
+
+  .pk-drum > .pk-drum-prev,
+  .pk-drum > .pk-drum-next {
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    opacity: 0.3;
+    filter: blur(0.35px);
+  }
+
+  .pk-drum--name > .pk-drum-prev,
+  .pk-drum--name > .pk-drum-next {
+    left: 12px;
+    text-align: left;
+  }
+
+  .pk-drum > .pk-drum-prev {
+    top: -1.5px;
+    transform: scaleY(0.24);
+    transform-origin: 50% 0;
+  }
+
+  .pk-drum > .pk-drum-next {
+    bottom: -1.5px;
+    transform: scaleY(0.24);
+    transform-origin: 50% 100%;
+  }
+
+  .pk-counter-window > select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  .pk-counter-window:focus-within {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 3px;
+  }
+
+  /* the wheel: a knurled black wheel rising through its own slot */
+  .pk-wheel {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: 27px;
+    height: 46px;
+    border-radius: 3px;
+    background: #090908;
+  }
+
+  .pk-wheel::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    background: var(--pk-wheel) -2.5px -3px / 26px 46px no-repeat;
+  }
+
+  .pk-wheel.is-b::before {
+    background-image: var(--pk-wheel-b);
+  }
+
+  .pk-wheel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 0 solid transparent;
+    border-image: var(--pk-window-frame) 33 fill / 11px / 6px stretch;
+    pointer-events: none;
+  }
+
+  .pk-wheel > button {
+    position: absolute;
+    left: -8px;
+    right: -8px;
+    height: 50%;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .pk-wheel > button:first-child {
+    top: -4px;
+  }
+
+  .pk-wheel > button:last-child {
+    bottom: -4px;
+  }
+
+  .pk-wheel > button:disabled {
+    cursor: not-allowed;
+  }
+
+  .pk-wheel > button:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 0;
+    border-radius: 3px;
+  }
+
+  /* ======================================================================
+     Slide switch: the ribbed cap in a slot cut through the plate.
+     .pk-switch (a mode: Template/Data) has a plain floor; .pk-switch--onoff
+     paints the orange ON mark under the cap's OFF place.
+     ====================================================================== */
+  .pk-switch {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pk-switch-track {
+    position: relative;
+    display: block;
+    width: 52px;
+    height: 22px;
+    border-radius: 4px;
+  }
+
+  .pk-switch-track::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: var(--pk-sw-slot) 0 0 / 56px 26px no-repeat;
+  }
+
+  .pk-switch--onoff .pk-switch-track::before {
+    background-image: var(--pk-sw-slot-paint);
+  }
+
+  .pk-switch-cap {
+    position: absolute;
+    top: 0;
+    left: 1px;
+    width: 27px;
+    height: 22px;
+    background: var(--pk-sw-cap) 0 0 / 27px 22px no-repeat;
+    transition: left 0.12s ease-out;
+  }
+
+  .pk-switch[aria-checked="true"] .pk-switch-cap {
+    left: 24px;
+  }
+
+  .pk-switch:enabled:hover .pk-switch-cap {
+    left: 2px;
+  }
+
+  .pk-switch:enabled:active .pk-switch-cap {
+    left: 5px;
+  }
+
+  .pk-switch[aria-checked="true"]:enabled:hover .pk-switch-cap {
+    left: 23px;
+  }
+
+  .pk-switch[aria-checked="true"]:enabled:active .pk-switch-cap {
+    left: 20px;
+  }
+
+  .pk-switch[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .pk-switch:disabled {
+    cursor: not-allowed;
+  }
+
+  .pk-switch:disabled .pk-switch-cap {
+    filter: brightness(0.92) contrast(0.85);
+  }
+
+  .pk-switch:focus-visible {
+    outline: none;
+  }
+
+  .pk-switch:focus-visible .pk-switch-track {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 3px;
+    border-radius: 5px;
+  }
+
+  /* a labelled switch: engraved names either side */
+  .pk-switch-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ======================================================================
+     Slider: a short slot cut through the plate, a ribbed cap with a white
+     index line, engraved end (and centre) marks. <input type="range">
+     ====================================================================== */
+  .pk-fader {
+    --pk-tick: color-mix(in srgb, var(--pk-fill) 70%, transparent);
+    display: block;
+    width: 150px;
+    height: 40px;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background:
+      linear-gradient(var(--pk-tick), var(--pk-tick)) 12px 50% / 1px 12px
+      no-repeat,
+      linear-gradient(var(--pk-tick), var(--pk-tick)) calc(100% - 12px) 50% /
+      1px 12px no-repeat;
+    cursor: ew-resize;
+  }
+
+  .pk-fader--centered {
+    background:
+      linear-gradient(var(--pk-tick), var(--pk-tick)) 12px 50% / 1px 12px
+      no-repeat,
+      linear-gradient(var(--pk-tick), var(--pk-tick)) 50% 50% / 1px 20px
+      no-repeat,
+      linear-gradient(var(--pk-tick), var(--pk-tick)) calc(100% - 12px) 50% /
+      1px 12px no-repeat;
+  }
+
+  .pk-fader::-webkit-slider-runnable-track {
+    height: 14.5px;
+    border: 0 solid transparent;
+    border-image: var(--pk-fslot) 0 48 fill / 0 12px / 0 stretch;
+  }
+
+  .pk-fader::-moz-range-track {
+    height: 14.5px;
+    border: 0 solid transparent;
+    border-image: var(--pk-fslot) 0 48 fill / 0 12px / 0 stretch;
+  }
+
+  .pk-fader::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px;
+    height: 36.25px;
+    margin-top: -13.05px;
+    border: 0;
+    background: var(--pk-fcap) 0 0 / 26px 36.25px no-repeat;
+  }
+
+  .pk-fader::-moz-range-thumb {
+    width: 26px;
+    height: 36.25px;
+    border: 0;
+    border-radius: 0;
+    background: var(--pk-fcap) 0 0 / 26px 36.25px no-repeat;
+  }
+
+  .pk-fader:focus-visible {
+    outline: none;
+  }
+
+  .pk-fader:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: -4px;
+    border-radius: 5px;
+  }
+
+  .pk-fader:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: -4px;
+  }
+
+  .pk-fader:disabled {
+    cursor: not-allowed;
+  }
+
+  .pk-fader:disabled::-webkit-slider-thumb {
+    filter: brightness(0.85) contrast(0.8);
+  }
+
+  /* ======================================================================
+     Leica push key: one satin key (black paint in dark) in its own slot,
+     its name engraved on it. --wide is the 96px key (Sign out).
+     ====================================================================== */
+  .pk-lkey {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 81px;
+    height: 31px;
+    padding: 0 0 2px;
+    border: 0;
+    border-radius: 5px;
+    background: var(--pk-lkey-up) -8px -9px / 96.75px 46.75px no-repeat;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* the hit area grows to 44px */
+  .pk-lkey::before {
+    content: "";
+    position: absolute;
+    inset: -7px -4px;
+  }
+
+  .pk-lkey > .pk-engr {
+    font-size: 10.5px;
+    translate: var(--nudge, 0.3px -0.2px);
+  }
+
+  .pk-lkey--wide {
+    width: 96px;
+    background-image: var(--pk-lkey-wide-up);
+    background-size: 112.75px 46.75px;
+  }
+
+  .pk-lkey:not(:disabled):active,
+  .pk-lkey.is-down {
+    background-image: var(--pk-lkey-down);
+  }
+
+  .pk-lkey--wide:not(:disabled):active,
+  .pk-lkey--wide.is-down {
+    background-image: var(--pk-lkey-wide-down);
+  }
+
+  .pk-lkey:not(:disabled):active > .pk-engr,
+  .pk-lkey.is-down > .pk-engr {
+    transform: translateY(1.2px);
+  }
+
+  .pk-lkey:disabled {
+    cursor: not-allowed;
+  }
+
+  .pk-lkey:disabled > .pk-engr {
+    color: var(--pk-fill-soft);
+  }
+
+  .pk-lkey:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 3px;
+    border-radius: 5px;
+  }
+
+  /* ======================================================================
+     Capture: the soft release on its stepped collar, red dot on the cap.
+     :disabled shows it locked (matte, the dot dull), not faded.
+     ====================================================================== */
+  .pk-shutter {
+    position: relative;
+    flex: none;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+  }
+
+  .pk-shutter::before {
+    content: "";
+    position: absolute;
+    left: -10.4px;
+    top: -18.4px;
+    width: 76.8px;
+    height: 83.2px;
+    background: var(--pk-shutter-up) 0 0 / 76.8px 83.2px no-repeat;
+    pointer-events: none;
+  }
+
+  .pk-shutter:enabled:active::before,
+  .pk-shutter.is-down::before {
+    background-image: var(--pk-shutter-down);
+  }
+
+  .pk-shutter:disabled {
+    cursor: not-allowed;
+  }
+
+  .pk-shutter:disabled::before {
+    background-image: var(--pk-shutter-off);
+  }
+
+  .pk-shutter:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 2px;
+  }
+
+  /* ======================================================================
+     LED: a 3 mm diffused lens in a black collar. Lime is the online LED
+     only; red is printing or a failure.
+     ====================================================================== */
+  .pk-led {
+    position: relative;
+    flex: none;
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+  }
+
+  .pk-led::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: -5px;
+    width: 23px;
+    height: 23px;
+    background: var(--pk-led-collar) 0 0 / 23px 23px no-repeat;
+  }
+
+  .pk-led::after {
+    content: "";
+    position: absolute;
+    left: 3.4px;
+    top: 4.37px;
+    width: 6.2px;
+    height: 6.2px;
+    border-radius: 50%;
+    background:
+      radial-gradient(
+        circle at 50% 28%,
+        rgba(200, 226, 150, 0) 56%,
+        rgba(200, 226, 150, 0.6) 80%,
+        rgba(200, 226, 150, 0) 100%
+      ),
+      radial-gradient(circle at 46% 40%, #6f8a40 0, #5a7534 50%, #3f5523 100%);
+    box-shadow: inset 0 0.6px 0.6px rgba(0, 0, 0, 0.5);
+  }
+
+  .pk-led--on::after {
+    background:
+      radial-gradient(
+        circle at 50% 46%,
+        rgba(250, 255, 228, 0.95) 0,
+        rgba(226, 255, 160, 0.7) 24%,
+        rgba(180, 250, 90, 0) 62%
+      ),
+      radial-gradient(
+        circle at 50% 50%,
+        #c4f544 0,
+        #9be41f 55%,
+        #78c412 85%,
+        #5a9c0a 100%
+      );
+    box-shadow:
+      inset 0 0 0.6px 0.2px rgba(60, 100, 0, 0.35),
+      0 0 1.5px 0.4px rgba(170, 236, 50, 0.5);
+  }
+
+  .pk-led--red::after {
+    background:
+      radial-gradient(
+        circle at 50% 28%,
+        rgba(236, 176, 160, 0) 56%,
+        rgba(236, 176, 160, 0.5) 80%,
+        rgba(236, 176, 160, 0) 100%
+      ),
+      radial-gradient(circle at 46% 40%, #8e4636 0, #763326 50%, #521f15 100%);
+  }
+
+  .pk-led--red-on::after {
+    background:
+      radial-gradient(
+        circle at 50% 46%,
+        rgba(255, 240, 216, 0.95) 0,
+        rgba(255, 188, 140, 0.7) 24%,
+        rgba(255, 120, 80, 0) 62%
+      ),
+      radial-gradient(
+        circle at 50% 50%,
+        #ff5a36 0,
+        #f23a1e 55%,
+        #d52811 85%,
+        #b01b0a 100%
+      );
+    box-shadow:
+      inset 0 0 0.6px 0.2px rgba(120, 10, 0, 0.35),
+      0 0 1.5px 0.4px rgba(250, 70, 40, 0.45);
+  }
+
+  /* ======================================================================
+     Printer block: the terminal printer's front edge at the real-size slip,
+     340px for a 320px slip. The slip feeds out from under the tear bar.
+     ====================================================================== */
+  .pk-printer {
+    position: relative;
+    width: 340px;
+  }
+
+  .pk-printer-edge {
+    position: relative;
+    z-index: 2;
+    height: 70px;
+    box-sizing: border-box;
+    padding: 0 28px;
+    background-image:
+      var(--pk-printer-l), var(--pk-printer-r), var(--pk-printer-m);
+    background-position:
+      left top,
+      right top,
+      left top;
+    background-size:
+      28px 70px,
+      28px 70px,
+      24px 70px;
+    background-repeat:
+      no-repeat,
+      no-repeat,
+      round no-repeat;
+    background-origin: border-box, border-box, content-box;
+    background-clip: border-box, border-box, content-box;
+    pointer-events: none;
+  }
+
+  .pk-printer > .pk-slip {
+    z-index: 1;
+    margin: -10.6px 0 0 10px;
+  }
+
+  /* ======================================================================
+     Teleprinter platen: the slot in the plate the slip rises out of, the
+     rubber roller in it, the steel tear bar over the paper (darker steel,
+     its fine teeth only as lit tips). The slip stands up out of it,
+     absolutely placed, so the body's layout does not move.
+     ====================================================================== */
+  .pk-platen {
+    position: relative;
+    width: var(--pk-platen-w, 352px);
+    max-width: 100%;
+    height: 21px;
+  }
+
+  .pk-platen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 0 solid transparent;
+    border-image: var(--pk-platen) 0 64 fill / 0 16px / 0 stretch;
+  }
+
+  .pk-platen > .pk-slip {
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    bottom: 12.5px;
+    translate: -50% 0;
+  }
+
+  /* the foot of the slip, down in the slot: above the bar the paper turns
+     only a little from the light; the dark contact line is in the sprite */
+  .pk-platen > .pk-slip::before {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 14px;
+    background: linear-gradient(
+      rgba(16, 14, 12, 0),
+      rgba(16, 14, 12, 0.025) 30%,
+      rgba(16, 14, 12, 0.06) 48%,
+      rgba(16, 14, 12, 0.3) 62%,
+      rgba(16, 14, 12, 0.72) 76%,
+      rgba(16, 14, 12, 0.86)
+    );
+    pointer-events: none;
+  }
+
+  .pk-platen::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    right: 0;
+    top: -4.161px;
+    height: 14.25px;
+    border: 0 solid transparent;
+    border-image: var(--pk-tearbar) 0 64 fill / 0 16px / 0 round;
+    pointer-events: none;
+  }
+
+  /* ======================================================================
+     Screens: a window cut through the plate, the display set behind it.
+     --eink (light e-ink), --dark (dark screen), --lcd (photo LCD);
+     --editor is e-ink in light and the dark screen in dark.
+     ====================================================================== */
+  .pk-window {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    padding: var(--pk-bezel, 0);
+    background: #0a0a09;
+  }
+
+  .pk-window::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 0 solid transparent;
+    border-image: var(--pk-screen-frame) 42 fill / 14px / 8px stretch;
+    pointer-events: none;
+  }
+
+  /* the display fills the window (give the window its height) */
+  .pk-screen {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+  }
+
+  /* the medium itself, over the content: e-ink capsules, LCD cells */
+  .pk-screen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* the cover glass: the room's reflection, faint and matte */
+  .pk-screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background:
+      var(--pk-face-tone) 0 0 / max(100%, 1400px) max(100%, 900px) no-repeat;
+    mix-blend-mode: soft-light;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .pk-screen--eink,
+  .pk-screen--editor {
+    background: var(--pk-eink);
+    color: var(--pk-eink-ink);
+    filter: var(--pk-eink-filter);
+    text-shadow: 0 0 0.35px
+      color-mix(in srgb, var(--pk-eink-ink) 70%, transparent);
+  }
+
+  .pk-screen--eink::before,
+  .pk-screen--editor::before {
+    background: var(--pk-eink-grain) 0 0 / 160px repeat;
+    mix-blend-mode: multiply;
+  }
+
+  .pk-screen--dark,
+  .pk-screen--lcd,
+  html[data-theme="dark"] .pk-screen--editor {
+    background: #121211;
+    color: #d5d1c7;
+    text-shadow: 0 0 0.6px rgba(225, 220, 208, 0.45);
+    filter: none;
+  }
+
+  .pk-screen--dark::before,
+  .pk-screen--lcd::before,
+  html[data-theme="dark"] .pk-screen--editor::before {
+    background: var(--pk-lcd-grain) 0 0 / 160px repeat;
+    mix-blend-mode: screen;
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+  }
+
+  .pk-screen--lcd {
+    background: #060606;
+  }
+
+  /* ======================================================================
+     Field: an engraved name over a small screen set in a thin recess in
+     the plate (the Photo caption's well: the window frame's inner bevel,
+     no black bezel), the text typed on the screen (e-ink in light, the
+     dark screen in dark). Inputs, selects and text areas.
+     ====================================================================== */
+  .pk-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .pk-field-window {
+    position: relative;
+    display: block;
+    border-radius: 4px;
+  }
+
+  /* the screen's medium over the typed text */
+  .pk-field-window::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 2px;
+    background: var(--pk-eink-grain) 0 0 / 160px repeat;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+
+  html[data-theme="dark"] .pk-field-window::before {
+    background-image: var(--pk-lcd-grain);
+    mix-blend-mode: screen;
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+  }
+
+  /* the recess: the screen frame's bevel over the screen's edge */
+  .pk-field-window::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border: 0 solid transparent;
+    border-image: var(--pk-screen-frame) 42 fill / 14px / 8px stretch;
+    pointer-events: none;
+  }
+
+  .pk-field-window:focus-within {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 3px;
+  }
+
+  .pk-field-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    height: 40px;
+    margin: 0;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 2px;
+    outline: none;
+    background: var(--pk-eink);
+    color: var(--pk-eink-ink);
+    filter: var(--pk-eink-filter);
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 1.3;
+    text-shadow: 0 0 0.35px
+      color-mix(in srgb, var(--pk-eink-ink) 70%, transparent);
+    caret-color: var(--pk-eink-red);
+  }
+
+  html[data-theme="dark"] .pk-field-input {
+    background-color: #121211;
+    color: #d5d1c7;
+    filter: none;
+    text-shadow: 0 0 0.6px rgba(225, 220, 208, 0.45);
+    caret-color: #e2604a;
+  }
+
+  .pk-field-input::placeholder {
+    color: var(--pk-eink-dim);
+    opacity: 1;
+  }
+
+  html[data-theme="dark"] .pk-field-input::placeholder {
+    color: #8f8b83;
+  }
+
+  /* a value the browser filled in stays on the screen's medium */
+  .pk-field-input:-webkit-autofill {
+    -webkit-text-fill-color: var(--pk-eink-ink);
+    box-shadow: inset 0 0 0 40px var(--pk-eink);
+    transition: background-color 600000s 0s;
+  }
+
+  html[data-theme="dark"] .pk-field-input:-webkit-autofill {
+    -webkit-text-fill-color: #d5d1c7;
+    box-shadow: inset 0 0 0 40px #121211;
+  }
+
+  .pk-field-input::selection {
+    background: color-mix(in srgb, var(--pk-eink-red) 30%, transparent);
+  }
+
+  select.pk-field-input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 36px;
+    background-image: var(--pk-field-chevron);
+    background-position: right 13px center;
+    background-size: 12px 8px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+
+  textarea.pk-field-input {
+    height: auto;
+    min-height: 96px;
+    padding: 10px 14px;
+    resize: vertical;
+    line-height: 1.45;
+  }
+
+  .pk-field-input:read-only:not(select) {
+    color: var(--pk-eink-dim);
+  }
+
+  .pk-field-input:disabled {
+    color: var(--pk-eink-faint);
+    cursor: not-allowed;
+  }
+
+  /* a wrong value: the screen underlines it in red */
+  .pk-field-input[aria-invalid="true"] {
+    box-shadow: inset 0 -2px 0 var(--pk-eink-red);
+  }
+
+  html[data-theme="dark"] .pk-field-input[aria-invalid="true"] {
+    box-shadow: inset 0 -2px 0 #e2604a;
+  }
+
+  /* ======================================================================
+     Record sheet: a log sheet of uncoated stock on the mat. A printed band
+     with its number and label, entries with printed dashed rules between,
+     a corner lifting a little off the mat. Each sheet lies a little
+     differently (--pk-sheet-rot, --pk-sheet-dx, --pk-sheet-n).
+     ====================================================================== */
+  .pk-sheet {
+    --pk-sheet-stock: var(--pk-sheet-stock-l, #f3f1ec);
+    --pk-sheet-x: 44px;
+    position: relative;
+    isolation: isolate;
+    padding: 36px var(--pk-sheet-x) 30px;
+    rotate: var(--pk-sheet-rot, 0deg);
+    translate: var(--pk-sheet-dx, 0) 0;
+    color: var(--pk-sheet-ink);
+    box-shadow: var(--pk-sheet-shadow);
+  }
+
+  html[data-theme="dark"] .pk-sheet {
+    --pk-sheet-stock: var(--pk-sheet-stock-d, #2b2a27);
+  }
+
+  /* the sheet: stock, its fibre, the waviness it took on, the room light */
+  .pk-sheet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--pk-sheet-stock);
+    background-image:
+      var(--pk-sheet-curl, linear-gradient(transparent, transparent)),
+      var(--pk-sheet-light), var(--pk-sheet-cockle),
+      linear-gradient(
+        color-mix(
+            in srgb,
+            var(--pk-sheet-stock) var(--pk-sheet-wash),
+            transparent
+          )
+          0 0
+      ),
+      var(--pk-sheet-fibre);
+    background-size:
+      auto,
+      auto,
+      768px 768px,
+      auto,
+      256px 256px;
+    background-position:
+      0 0,
+      0 0,
+      calc(var(--pk-sheet-n, 0) * -263px) calc(var(--pk-sheet-n, 0) * -181px),
+      0 0,
+      calc(var(--pk-sheet-n, 0) * -97px) calc(var(--pk-sheet-n, 0) * -61px);
+    box-shadow: var(--pk-sheet-edge);
+    pointer-events: none;
+  }
+
+  /* the lifted corner: its shadow widens on the mat there, and the curl
+     takes the light differently from the flat sheet */
+  .pk-sheet::after {
+    content: "";
+    position: absolute;
+    z-index: -2;
+    border-radius: 50%;
+    background: var(--pk-sheet-lift);
+    filter: blur(5px);
+    pointer-events: none;
+  }
+
+  .pk-sheet--lift-br {
+    --pk-sheet-curl: radial-gradient(
+      150px 64px at 100% 100%,
+      var(--pk-sheet-curl-lit),
+      transparent
+    );
+  }
+
+  .pk-sheet--lift-br::after {
+    right: 2px;
+    bottom: -1px;
+    width: 38%;
+    height: 26px;
+    transform: translate(4px, 2.5px) skewX(-18deg);
+    -webkit-mask: linear-gradient(90deg, transparent, #000 70%);
+    mask: linear-gradient(90deg, transparent, #000 70%);
+  }
+
+  .pk-sheet--lift-bl {
+    --pk-sheet-curl: radial-gradient(
+      130px 58px at 0 100%,
+      var(--pk-sheet-curl-shade),
+      transparent
+    );
+  }
+
+  .pk-sheet--lift-bl::after {
+    left: 2px;
+    bottom: -1px;
+    width: 30%;
+    height: 22px;
+    transform: translate(6px, 3px) skewX(14deg);
+    -webkit-mask: linear-gradient(270deg, transparent, #000 75%);
+    mask: linear-gradient(270deg, transparent, #000 75%);
+  }
+
+  .pk-sheet--lift-tr {
+    --pk-sheet-curl: radial-gradient(
+      110px 70px at 100% 0,
+      var(--pk-sheet-curl-lit),
+      transparent
+    );
+  }
+
+  .pk-sheet--lift-tr::after {
+    right: -2px;
+    top: 4px;
+    width: 20px;
+    height: 30%;
+    transform: translate(4px, 4px) skewY(10deg);
+    -webkit-mask: linear-gradient(180deg, #000 20%, transparent);
+    mask: linear-gradient(180deg, #000 20%, transparent);
+  }
+
+  /* the band, printed solid: the label knocks out of it in light */
+  .pk-sheet-head {
+    position: relative;
+    margin: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    height: 30px;
+    padding: 0 12px 0 11px;
+    background: var(--pk-sheet-band);
+    color: var(--pk-sheet-band-ink);
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    mix-blend-mode: var(--pk-sheet-band-blend);
+    -webkit-mask: var(--pk-sheet-band-mask);
+    -webkit-mask-composite: source-in;
+    mask: var(--pk-sheet-band-mask);
+    mask-composite: intersect;
+  }
+
+  .pk-sheet-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-sheet-row {
+    position: relative;
+  }
+
+  /* the rule between entries, printed: two dash trains of co-prime period
+     laid over each other, so dash length and density drift along it */
+  .pk-sheet-row + .pk-sheet-row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        var(--pk-sheet-rule) 0 3px,
+        transparent 3px 6.1px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        var(--pk-sheet-rule-2) 0 2.6px,
+        transparent 2.6px 7.3px
+      );
+    mix-blend-mode: var(--pk-sheet-ink-blend);
+    -webkit-mask: var(--hw-ink-mask);
+    mask: var(--hw-ink-mask);
+  }
+
+  /* typed entries: the ink takes into the stock */
+  .pk-sheet-ink {
+    mix-blend-mode: var(--pk-sheet-ink-blend);
+    text-shadow: var(--pk-sheet-ink-spread);
+    -webkit-mask: var(--hw-ink-mask);
+    mask: var(--hw-ink-mask);
+  }
+
+  /* a quieter typed line (a source, a detail) */
+  .pk-sheet-sub {
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: color-mix(in srgb, var(--pk-sheet-ink) 60%, var(--pk-sheet-stock));
+  }
+
+  /* a whole entry as the target (a button or a link): hover rubs a faint
+     pencil-grey wash under the line */
+  .pk-sheet-line {
+    position: relative;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pk-sheet-line::after {
+    content: "";
+    position: absolute;
+    inset: 1px -20px 0;
+    background: var(--pk-sheet-hover);
+    mix-blend-mode: var(--pk-sheet-hover-blend);
+    -webkit-mask:
+      linear-gradient(
+        90deg,
+        transparent,
+        #000 22px,
+        #000 calc(100% - 26px),
+        transparent
+      ),
+      linear-gradient(transparent, #000 7px, #000 calc(100% - 9px), transparent),
+      var(--hw-ink-mask);
+    -webkit-mask-composite: source-in, source-in;
+    mask:
+      linear-gradient(
+        90deg,
+        transparent,
+        #000 22px,
+        #000 calc(100% - 26px),
+        transparent
+      ),
+      linear-gradient(transparent, #000 7px, #000 calc(100% - 9px), transparent),
+      var(--hw-ink-mask);
+    mask-composite: intersect, intersect;
+    opacity: 0;
+    transition: opacity 0.12s ease-out;
+    pointer-events: none;
+  }
+
+  .pk-sheet-line:hover::after {
+    opacity: 1;
+  }
+
+  .pk-sheet-line:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  @media (max-width: 639px) {
+    .pk-body {
+      --pk-body-x: 16px;
+    }
+
+    .pk-plate-head {
+      min-height: 54px;
+    }
+
+    .pk-sheet {
+      --pk-sheet-x: 14px;
+      padding: 16px var(--pk-sheet-x) 18px;
+      translate: calc(var(--pk-sheet-dx, 0px) / 2) 0;
+      rotate: calc(var(--pk-sheet-rot, 0deg) * 0.4);
+    }
+
+    .pk-sheet-line::after {
+      inset: 1px -8px 0;
+    }
+  }
+
+  /* ======================================================================
+     Shell: the nav unit and the content column side by side; the track
+     runs the full height of the page under the unit. At 875px and below
+     the unit lies across the top.
+     ====================================================================== */
+  .pk-shell {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    min-height: 100dvh;
+  }
+
+  /* ======================================================================
+     Nav unit (wide, 876px and up): a column unit at the left, riding the
+     track. DOCKET and the version engraved into the top plate; a well with
+     the long lever keys, each with its indicator window in the plate
+     beside it (red flag for the current page); a seam; the foot plate with
+     the printer LED, its name and state, the Dark switch and Sign out. A
+     lever pivots under the plate at its left end, so the current page's
+     key has its far end dipped into the well.
+     ====================================================================== */
+
+  /* the dock: holds the unit at the left while the page scrolls; scrolls
+     on its own when the window is short */
+  .pk-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    flex: none;
+    box-sizing: border-box;
+    width: 284px;
+    height: 100dvh;
+    padding: 26px 0 50px 46px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .pk-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pk-nav-unit {
+    width: 222px;
+  }
+
+  /* ---- the top plate: maker's mark and version, engraved ---- */
+  .pk-nav-brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 22px 18px 24px 19px;
+  }
+
+  /* the wordmark, cut deep into the plate and paint-filled (.pk-mark: the
+     same mark on a unit outside the shell, Login and Invite) */
+  .pk-nav-mark,
+  .pk-mark {
+    font-family: var(--font-display);
+    font-weight: 640;
+    font-size: 31px;
+    line-height: 0.8;
+    letter-spacing: 0.04em;
+    color: var(--pk-fill);
+    text-shadow: var(--pk-nav-mark-shadow);
+    -webkit-mask: var(--pk-nav-mark-wear) 0 0 / 160px repeat;
+    mask: var(--pk-nav-mark-wear) 0 0 / 160px repeat;
+    translate: 0.2px 0;
+  }
+
+  /* the version, engraved small like a body number */
+  .pk-nav-version {
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 500;
+    font-size: 10.5px;
+    line-height: 1;
+    letter-spacing: 0.06em;
+    color: var(--pk-fill-soft);
+    text-shadow: var(--pk-engr-shadow);
+    -webkit-mask: var(--pk-wear) 0 0 / 120px repeat;
+    mask: var(--pk-wear) 0 0 / 120px repeat;
+    translate: 0 -1px;
+  }
+
+  /* ---- the key bank: flag windows in the plate, the well, the levers ---- */
+  .pk-nav-bank {
+    --pk-nav-pitch: 45px;
+    position: relative;
+    isolation: isolate;
+    margin: 0 18px 0 16px;
+    padding: 0 0 22px 18px;
+  }
+
+  /* the well: one opening for all the keys (the kit's well, 9-slice) */
+  .pk-nav-bank::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 18px;
+    right: 0;
+    top: 0;
+    height: calc(var(--pk-nav-pitch) * (var(--pk-nav-n, 8) - 1) + 42.5px);
+    border: 0 solid transparent;
+    border-image: var(--pk-well) 42 fill / 14px / 8px stretch;
+  }
+
+  /* the keys stand in the well; its front lip hides the last one's skirt
+     below the plate */
+  .pk-nav-keys {
+    box-sizing: border-box;
+    height: calc(var(--pk-nav-pitch) * (var(--pk-nav-n, 8) - 1) + 42.5px);
+    padding: 2px 0 0 2px;
+    clip-path: inset(-14px -40px 0 -40px);
+  }
+
+  .pk-nav-key {
+    position: relative;
+    display: block;
+    width: 166px;
+    height: var(--pk-nav-pitch);
+    color: var(--pk-nav-legend);
+    text-decoration: none;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* the cap: one sprite per state; the key box is the lever's plan at the
+     plate's level, the sprite reaches 5px out and 8.22px above it */
+  .pk-nav-cap {
+    position: absolute;
+    left: -5px;
+    top: -8.22px;
+    width: 176px;
+    height: 63px;
+    background: var(--pk-nav-lever-up) 0 0 / 176px 63px no-repeat;
+    filter: var(--pk-tone, none);
+    pointer-events: none;
+  }
+
+  .pk-nav-key:hover .pk-nav-cap {
+    background-image: var(--pk-nav-lever-rest);
+  }
+
+  .pk-nav-key[aria-current="page"] .pk-nav-cap,
+  .pk-nav-key:active .pk-nav-cap {
+    background-image: var(--pk-nav-lever-down);
+  }
+
+  /* the legend, pad-printed on the face; it tilts with the lever (pivot
+     10px left of the key, under the plate) */
+  .pk-nav-legend {
+    position: absolute;
+    left: 15px;
+    top: -3.2px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--pk-nav-legend);
+    text-shadow: var(--pk-nav-legend-spread);
+    opacity: 0.92;
+    -webkit-mask: var(--pk-wear) var(--wear-at, 0 0) / 90px repeat;
+    mask: var(--pk-wear) var(--wear-at, 0 0) / 90px repeat;
+    translate: var(--nudge, 0 0);
+    transform-origin: -25px 50%;
+  }
+
+  .pk-nav-key:hover .pk-nav-legend {
+    transform: skewY(0.5deg);
+  }
+
+  .pk-nav-key[aria-current="page"] .pk-nav-legend,
+  .pk-nav-key:active .pk-nav-legend {
+    transform: skewY(2.1deg);
+  }
+
+  /* the indicator window in the plate beside the key: a black drum, turned
+     to its red flag for the current page */
+  .pk-nav-flag {
+    position: absolute;
+    left: -22px;
+    top: 3.8px;
+    width: 14px;
+    height: 26px;
+    background: var(--pk-nav-flag-off) 0 0 / 14px 26px no-repeat;
+    pointer-events: none;
+  }
+
+  .pk-nav-key[aria-current="page"] .pk-nav-flag {
+    background-image: var(--pk-nav-flag-on);
+  }
+
+  /* focus: a ring round the key face and skirt, over the neighbours */
+  .pk-nav-key:focus-visible::after {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    left: -1px;
+    right: -1px;
+    top: -4.4px;
+    height: 45.6px;
+    border-radius: 3.5px;
+    box-shadow: 0 0 0 2px var(--pk-focus);
+    pointer-events: none;
+  }
+
+  /* ---- the foot plate, a hair lower behind a seam ---- */
+  .pk-nav-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 20px 18px 18px 19px;
+  }
+
+  /* the printer: LED in its collar, the name and state engraved beside it;
+     the LED sits on the flag windows' vertical */
+  .pk-nav-status {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 40px;
+    margin-left: -4.5px;
+  }
+
+  .pk-nav-printer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .pk-nav-printer > .pk-engr {
+    font-size: 10.5px;
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pk-nav-printer > .pk-engr--soft {
+    font-size: 9.5px;
+  }
+
+  /* the Dark switch: name, then OFF switch ON */
+  .pk-nav-theme {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .pk-nav-theme .pk-switch-row {
+    gap: 9px;
+  }
+
+  .pk-nav-theme .pk-engr {
+    font-size: 10.5px;
+  }
+
+  .pk-nav-signout {
+    align-self: flex-end;
+    margin-top: 8px;
+  }
+
+  /* ======================================================================
+     The track (wide only): a 60px satin track screwed to the mat, the full
+     height of the page (it scrolls with the page), with a 10px slot. The
+     unit's carriage rides it on two small knurled rollers, one just above
+     and one just below the unit; they turn as the page scrolls
+     (scroll-driven, still under reduced motion). Page x: track 127..187,
+     slot centre 157 (the unit's centre).
+     ====================================================================== */
+  .tk-track,
+  .tk-roller,
+  .tk-contact {
+    display: none;
+  }
+
+  @media (min-width: 876px) {
+    /* the tile is 68px: 3px of mat, the track, 5px for its shadow */
+    .tk-track {
+      display: block;
+      position: absolute;
+      z-index: 0;
+      left: 124px;
+      top: 0;
+      bottom: 0;
+      width: 68px;
+      overflow: clip;
+      pointer-events: none;
+      background: var(--tk-track) 0 0 / 68px 200px repeat-y;
+    }
+
+    /* countersunk screws in pairs, one in each lip, a calm interval apart */
+    .tk-screw {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      margin: -5px 0 0 -5px;
+      background: var(--tk-screw-a) 0 0 / 10px 10px no-repeat;
+    }
+
+    .tk-screw.l {
+      left: 15.25px;
+    }
+
+    .tk-screw.r {
+      left: 50.75px;
+    }
+
+    .tk-screw.b {
+      background-image: var(--tk-screw-b);
+    }
+
+    .tk-screw.c {
+      background-image: var(--tk-screw-c);
+    }
+
+    /* the unit stays out of the stacking order (no z-index), so its rollers
+       and contact shadows (z-index -1) paint under its body and over the
+       track */
+    .pk-nav-unit {
+      position: relative;
+    }
+
+    /* the rollers: wheel, axle and the carriage's fork; the lower fork runs
+       on under the unit. Places are measured from the sprites. */
+    .tk-roller {
+      display: block;
+      position: absolute;
+      z-index: -1;
+      left: calc(50% - 11px);
+      width: 24px;
+      pointer-events: none;
+    }
+
+    .tk-roller.t {
+      top: -24.5px;
+      height: 28.8px;
+      background: var(--tk-roller-top) 0 0 / 100% 100% no-repeat;
+    }
+
+    .tk-roller.b {
+      top: calc(100% - 1.59px);
+      height: 48.2px;
+      background: var(--tk-roller-bot) 0 0 / 100% 100% no-repeat;
+    }
+
+    /* the knurl: a ridge strip over the wheel's tread, masked to it and
+       faded where the tread turns away, warped so the ridges crowd toward
+       the ends of the visible arc (the SVG filter is set inline by the nav:
+       Turbopack cannot take a fragment-only url() in a stylesheet); it
+       travels with the scroll */
+    .tk-knurl {
+      position: absolute;
+      inset: 0;
+      background: url(/hardware/nav/knurl.png) 0 0 / 100% 10px repeat;
+      mix-blend-mode: overlay;
+      opacity: var(--tk-knurl-mix);
+    }
+
+    .tk-roller.t .tk-knurl {
+      -webkit-mask:
+        url(/hardware/nav/roller-top-knurl.png) 0 0 / 100% 100% no-repeat;
+      mask: url(/hardware/nav/roller-top-knurl.png) 0 0 / 100% 100% no-repeat;
+    }
+
+    .tk-roller.b .tk-knurl {
+      -webkit-mask:
+        url(/hardware/nav/roller-bot-knurl.png) 0 0 / 100% 100% no-repeat;
+      mask: url(/hardware/nav/roller-bot-knurl.png) 0 0 / 100% 100% no-repeat;
+    }
+
+    @supports (animation-timeline: scroll()) {
+      @media (prefers-reduced-motion: no-preference) {
+        .tk-knurl {
+          animation: tk-roll linear both;
+          animation-timeline: scroll(root block);
+        }
+      }
+    }
+
+    /* where the unit sits on the track: occlusion along its back (top) edge
+       and, deeper, along the foot of its front face, over the track and the
+       forks */
+    .tk-contact {
+      display: block;
+      position: absolute;
+      z-index: -1;
+      left: calc(50% - 32px);
+      width: 64px;
+      pointer-events: none;
+      -webkit-mask: linear-gradient(
+        90deg,
+        transparent,
+        #000 3px,
+        #000 61px,
+        transparent
+      );
+      mask: linear-gradient(
+        90deg,
+        transparent,
+        #000 3px,
+        #000 61px,
+        transparent
+      );
+    }
+
+    .tk-contact.t {
+      top: -9px;
+      height: 10px;
+      background: linear-gradient(
+        transparent,
+        var(--tk-occ-1) 60%,
+        var(--tk-occ-2) 90%,
+        var(--tk-occ-3)
+      );
+    }
+
+    .tk-contact.b {
+      top: calc(100% + 4.59px);
+      height: 14px;
+      background: linear-gradient(
+        var(--tk-occ-3),
+        var(--tk-occ-2) 2px,
+        var(--tk-occ-1) 6px,
+        transparent
+      );
+    }
+  }
+
+  /* the roller's surface travels 1.177 times as far as the page scrolls
+     (the nav sets --pk-roll-to to the page's scroll range) */
+  @keyframes tk-roll {
+    from {
+      background-position: 0 0;
+    }
+
+    to {
+      background-position: 0 calc(var(--pk-roll-to, 1500px) * 1.177);
+    }
+  }
+
+  /* ======================================================================
+     Narrow (875px and below): the same unit as a slim top bar: DOCKET and
+     the printer LED, the keys as one sideways strip (flag windows above
+     them; the strip scrolls and snaps to whole keys, a part key showing at
+     its end), then the Dark switch and Sign out.
+     ====================================================================== */
+  @media (max-width: 875px) {
+    .pk-shell {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .pk-nav {
+      position: relative;
+      width: auto;
+      height: auto;
+      padding: 10px 16px 12px;
+      overflow: visible;
+    }
+
+    .pk-nav-unit {
+      width: auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "brand status"
+        "bank bank"
+        "theme signout";
+      align-items: center;
+      padding: 0 14px;
+    }
+
+    .pk-nav-brand {
+      grid-area: brand;
+      justify-content: flex-start;
+      gap: 9px;
+      padding: 12px 0 4px 1px;
+    }
+
+    .pk-nav-mark {
+      font-size: 25px;
+    }
+
+    .pk-nav-foot {
+      display: contents;
+    }
+
+    .pk-nav-foot::before {
+      display: none;
+    }
+
+    .pk-nav-status {
+      grid-area: status;
+      min-height: 0;
+      gap: 9px;
+      margin-left: 0;
+      padding: 12px 1px 4px 0;
+    }
+
+    .pk-nav-printer {
+      gap: 4px;
+    }
+
+    .pk-nav-printer > .pk-engr {
+      font-size: 9.5px;
+    }
+
+    .pk-nav-printer > .pk-engr--soft {
+      font-size: 9px;
+    }
+
+    .pk-nav-theme {
+      grid-area: theme;
+      justify-content: flex-start;
+      gap: 12px;
+      padding: 0 0 6px 1px;
+    }
+
+    .pk-nav-signout {
+      grid-area: signout;
+      align-self: center;
+      justify-self: end;
+      margin: 0 1px 6px 0;
+    }
+
+    /* the strip: flag windows in the plate, the keys in one long well */
+    .pk-nav-bank {
+      --pk-nav-gap: 2px;
+      grid-area: bank;
+      container: pk-nav-strip / inline-size;
+      margin: 0;
+      padding: 0;
+    }
+
+    .pk-nav-bank::after {
+      left: 0;
+      right: 0;
+      top: 15px;
+      height: 41px;
+    }
+
+    /* the well's end walls again, over the strip: a key scrolled part way
+       passes under the plate's lip */
+    .pk-nav-bank::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      left: -8px;
+      right: -8px;
+      top: 7px;
+      height: 57px;
+      border: 0 solid transparent;
+      border-image: var(--pk-well) 42 / 14px / 0 stretch;
+      -webkit-mask: linear-gradient(
+        90deg,
+        #000 8.6px,
+        transparent 10.6px calc(100% - 10.6px),
+        #000 calc(100% - 8.6px)
+      );
+      mask: linear-gradient(
+        90deg,
+        #000 8.6px,
+        transparent 10.6px calc(100% - 10.6px),
+        #000 calc(100% - 8.6px)
+      );
+      pointer-events: none;
+    }
+
+    /* one row that scrolls sideways under the plate and snaps to whole
+       keys; part of the next key always shows at the end of the well */
+    .pk-nav-keys {
+      --pk-nav-kw: calc((100cqi - 4px - 4 * var(--pk-nav-gap)) / 4.3);
+      display: flex;
+      gap: var(--pk-nav-gap);
+      height: auto;
+      padding: 0 2px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      scroll-padding: 0 2px;
+      scrollbar-width: none;
+      clip-path: none;
+    }
+
+    .pk-nav-keys::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pk-nav-key {
+      flex: none;
+      width: var(--pk-nav-kw);
+      height: 59px;
+      scroll-snap-align: start;
+    }
+
+    /* the key box: plan at the plate's level, 17px down (below the flags) */
+    .pk-nav-cap {
+      left: -4px;
+      right: -4px;
+      top: calc(17px - 7.22px);
+      width: auto;
+      height: 51px;
+      background: none;
+      border: 0 solid transparent;
+      border-image: var(--pk-nav-skey-up) 0 80 fill / 0 20px / 0 round;
+      clip-path: inset(0 0 calc(51px - 7.22px - 39px) 0);
+    }
+
+    .pk-nav-key:hover .pk-nav-cap {
+      background: none;
+      border-image-source: var(--pk-nav-skey-rest);
+    }
+
+    .pk-nav-key[aria-current="page"] .pk-nav-cap,
+    .pk-nav-key:active .pk-nav-cap {
+      background: none;
+      border-image-source: var(--pk-nav-skey-down);
+    }
+
+    .pk-nav-legend {
+      left: 0;
+      right: 0;
+      top: calc(17px - 3.22px);
+      height: 36px;
+      justify-content: center;
+      font-size: 11px;
+      letter-spacing: 0.13em;
+      transform-origin: 50% -9px;
+    }
+
+    .pk-nav-key:hover .pk-nav-legend {
+      transform: translateY(0.55px);
+    }
+
+    .pk-nav-key[aria-current="page"] .pk-nav-legend,
+    .pk-nav-key:active .pk-nav-legend {
+      transform: translateY(1.85px) scaleY(0.995);
+    }
+
+    .pk-nav-flag {
+      left: calc(50% - 13px);
+      top: 0;
+      width: 26px;
+      height: 13.6px;
+      background: var(--pk-nav-flagh-off) 0 0 / 26px 13.6px no-repeat;
+    }
+
+    .pk-nav-key[aria-current="page"] .pk-nav-flag {
+      background-image: var(--pk-nav-flagh-on);
+    }
+
+    .pk-nav-key:focus-visible::after {
+      left: -1px;
+      right: -1px;
+      top: calc(17px - 4.4px);
+      height: 38px;
+    }
+  }
+
+  /* keys in the strip get wider as the unit widens: a part key at the end
+     until all eight fit */
+  @container pk-nav-strip (min-width: 430px) {
+    .pk-nav-keys {
+      --pk-nav-kw: calc((100cqi - 4px - 5 * var(--pk-nav-gap)) / 5.3);
+    }
+  }
+
+  @container pk-nav-strip (min-width: 520px) {
+    .pk-nav-keys {
+      --pk-nav-kw: calc((100cqi - 4px - 6 * var(--pk-nav-gap)) / 6.3);
+    }
+  }
+
+  @container pk-nav-strip (min-width: 610px) {
+    .pk-nav-keys {
+      --pk-nav-kw: calc((100cqi - 4px - 7 * var(--pk-nav-gap)) / 7.3);
+    }
+  }
+
+  @container pk-nav-strip (min-width: 700px) {
+    .pk-nav-keys {
+      --pk-nav-kw: calc(
+        (100cqi - 4px - (var(--pk-nav-n, 8) - 1) * var(--pk-nav-gap)) /
+        var(--pk-nav-n, 8)
+      );
+    }
+  }
+
+  /* ---- Motion and forced colours ---- */
+  @media (prefers-reduced-motion: reduce) {
+    .pk-key-cap,
+    .pk-switch-cap,
+    .pk-sheet-line::after {
+      transition: none;
+    }
+  }
+
+  /* masks and blends can hide text when the system forces colours */
+  @media (forced-colors: active) {
+    .pk-engr,
+    .pk-name,
+    .pk-plate-num,
+    .pk-key-legend,
+    .pk-nav-mark,
+    .pk-mark,
+    .pk-nav-version,
+    .pk-nav-legend,
+    .pk-sheet-head,
+    .pk-sheet-ink {
+      -webkit-mask: none;
+      mask: none;
+      mix-blend-mode: normal;
+    }
+
+    .pk-nav-key[aria-current="page"] .pk-nav-legend {
+      text-decoration: underline;
+    }
+  }
+}

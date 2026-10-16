@@ -1,12 +1,14 @@
 /* app/globals.css: the docket theme. The tokens follow the E design (the
    printer's own control deck); docs/design-spec.md says how they may be
-   used. The hardware kit (app/hardware.css) puts its rules in the
-   components layer, so utilities still apply on top of it. Keep the plain
-   @import: Turbopack drops the whole file on `@import ... layer(...)`,
+   used. app/hardware.css (the ground, printed ink and stamps kept from E)
+   and the parts kit (app/kit.css) put their rules in the components
+   layer, so utilities still apply on top of them. Keep the plain
+   @imports: Turbopack drops the whole file on `@import ... layer(...)`,
    with no error. */
 
 @import "tailwindcss";
 @import "./hardware.css";
+@import "./kit.css";
 
 @custom-variant dark (
   &:where(html[data-theme="dark"], html[data-theme="dark"] *)

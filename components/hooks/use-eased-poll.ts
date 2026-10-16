@@ -4,8 +4,9 @@
 // a function invocation and a store read, so a tab parked on a second
 // monitor must not bill around the clock. Pointer and key interaction
 // (and coming back to the tab) count as activity and resume the fast
-// cadence on the next tick; resume() does it at once. The Queue list and
-// the Studio's recent-jobs strip use it.
+// cadence on the next tick; resume() does it at once. The Queue list uses
+// it, and the Studio follows a print it sent with it (its refresh fetches
+// nothing while no print is followed).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

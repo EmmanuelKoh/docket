@@ -1,30 +1,32 @@
 'use client';
 
-// The Queue page's live view (design spec: pages, Queue). The server
-// renders the first list; this component then re-fetches /api/queue while
-// the tab is visible, at a cadence that follows the person
-// (components/hooks/use-eased-poll.ts): every 3s while they are active,
-// every 30s after two idle minutes, stopped after thirty. Any interaction
-// resumes the fast cadence; the Refresh key re-fetches at once and is the
-// way back from Paused.
+// The Queue page's live view (design spec: pages, Queue): one deck. The
+// server renders the first list; this component then re-fetches
+// /api/queue while the tab is visible, at a cadence that follows the
+// person (components/hooks/use-eased-poll.ts): every 3s while they are
+// active, every 30s after two idle minutes, stopped after thirty. Any
+// interaction resumes the fast cadence; the Refresh key re-fetches at once
+// and is the way back from Paused.
 //
-// Two modules in print order: Printing (the job a printer holds, with a
-// red LED and a Requeue key, the way back for a job stuck on a printer
+// The head plate engraves the name and the poll state; the deck plate
+// counts the waiting jobs on a counter beside the Refresh key. Then two
+// numbered plates in print order: Printing (the job a printer holds, with
+// a red LED and a Requeue key, the way back for a job stuck on a printer
 // that went away) and Waiting (the jobs in the order they will print,
-// each with a Cancel key). A row: the receipt's thumbnail on white paper,
-// its name, when it was made (viewer's time zone, formatted by the
-// server) and what made it, and any failed print attempts in red. A
-// refused action shows a red line in its row.
+// each with a Cancel key). A row: the receipt's thumbnail, its name, when
+// it was made (viewer's time zone, formatted by the server) and what made
+// it, and any failed print attempts in red. A refused action prints a red
+// line in its row.
 
-import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import type { QueueJob } from '@/app/_lib/queue-data';
-import { Led } from '@/components/hardware/led';
-import { Module } from '@/components/hardware/module';
-import { PageTitle } from '@/components/hardware/page-title';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { Row } from '@/components/hardware/row';
-import { ErrorText, Note } from '@/components/hardware/text';
+import { Body, Plate, PlateTitle } from '@/components/hardware/kit/body';
+import { CounterWindow } from '@/components/hardware/kit/counter-window';
+import { Engraved, Note, PageName } from '@/components/hardware/kit/engraved';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
+import { Lamp } from '@/components/hardware/kit/led';
+import { Row, Rows } from '@/components/hardware/kit/sheet';
+import { Thumb } from '@/components/hardware/kit/slip';
 import { useEasedPoll } from '@/components/hooks/use-eased-poll';
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -34,13 +36,47 @@ const sentence = (s: string) => {
   return /[.!?]$/.test(t) ? t : `${t}.`;
 };
 
+// "5 m" (the server's short form) -> "5 min", as the Printer page writes it
+const AGO_UNIT: Record<string, string> = {
+  s: 'sec',
+  m: 'min',
+  h: 'hr',
+  d: 'days',
+};
+const agoWords = (t: string) =>
+  t === '1 d'
+    ? '1 day'
+    : t.replace(/ ([smhd])$/, (_, u: string) => ` ${AGO_UNIT[u]}`);
+
 const POLL_TEXT = {
-  live: 'Updates every 3 s',
-  eased: 'Updates every 30 s',
+  live: 'Updates every 3 sec',
+  eased: 'Updates every 30 sec',
   paused: 'Paused',
 } as const;
 
 type Action = 'cancel' | 'requeue';
+
+// A plate's numbered name, with an engraved line running on to the plate's
+// right edge (a panel's section legend).
+function PlateHeading({
+  number,
+  children,
+}: {
+  number: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <h2 className="m-0 flex items-center gap-4">
+      <PlateTitle number={number}>
+        <Engraved>{children}</Engraved>
+      </PlateTitle>
+      <span
+        aria-hidden="true"
+        className="h-[1.2px] flex-1 bg-[linear-gradient(var(--pk-rule)_0_0.6px,var(--pk-rule-lip)_0.6px_1.2px)]"
+      />
+    </h2>
+  );
+}
 
 export function QueueList({
   initial,
@@ -129,52 +165,70 @@ export function QueueList({
       onAct={act}
     />
   );
+  const count = waiting.length;
 
   return (
-    <>
-      <PageTitle
-        aside={POLL_TEXT[mode]}
-        actions={
-          <KeyGroup>
-            <PushKey size="compact" onClick={() => resume()}>
-              Refresh
-            </PushKey>
-          </KeyGroup>
-        }
-      >
-        Queue
-      </PageTitle>
+    <Body as="section" aria-labelledby="queue-name">
+      <Plate head>
+        <PageName id="queue-name">Queue</PageName>
+        <Engraved tone="soft" className="mr-[-0.15em]">
+          {POLL_TEXT[mode]}
+        </Engraved>
+      </Plate>
 
-      <div className="flex max-w-[860px] flex-col gap-[30px]">
-        {jobs.length === 0 ? (
-          <Module number="01" title="Waiting">
-            <Note>Nothing is waiting to print.</Note>
-            <Link href="/" className="hw-link self-start">
-              Back to Home
-            </Link>
-          </Module>
-        ) : (
-          <>
-            <Module number="01" title="Printing" flush>
+      <Plate
+        seam
+        className="flex flex-wrap items-center justify-between gap-x-8 gap-y-5"
+      >
+        <span className="flex items-center gap-3">
+          <Engraved aria-hidden="true">Waiting</Engraved>
+          <CounterWindow
+            value={String(count).padStart(2, '0')}
+            label={`${count} ${count === 1 ? 'job' : 'jobs'} waiting`}
+            legend={count === 1 ? 'Job' : 'Jobs'}
+          />
+        </span>
+        <KeyWell label="Queue">
+          <Key legend="Refresh" onClick={() => resume()} />
+        </KeyWell>
+      </Plate>
+
+      {jobs.length === 0 ? (
+        <Plate seam className="flex flex-col gap-2 pb-[26px]">
+          <PlateHeading number="01">Waiting</PlateHeading>
+          <Rows>
+            <Row>
+              <Note>Nothing is waiting to print.</Note>
+            </Row>
+          </Rows>
+        </Plate>
+      ) : (
+        <>
+          <Plate seam className="flex flex-col gap-2">
+            <PlateHeading number="01">Printing</PlateHeading>
+            <Rows ruled>
               {printing.map(row)}
               {printing.length === 0 ? (
                 <Row>
                   <Note>Nothing printing.</Note>
                 </Row>
               ) : null}
-            </Module>
-            <Module number="02" title="Waiting" flush>
+            </Rows>
+          </Plate>
+          <Plate seam className="flex flex-col gap-2 pb-[26px]">
+            <PlateHeading number="02">Waiting</PlateHeading>
+            <Rows ruled>
               {waiting.map(row)}
               {waiting.length === 0 ? (
                 <Row>
                   <Note>Nothing else waiting.</Note>
                 </Row>
               ) : null}
-            </Module>
-          </>
-        )}
-      </div>
-    </>
+            </Rows>
+          </Plate>
+        </>
+      )}
+    </Body>
   );
 }
 
@@ -192,50 +246,46 @@ function QueueRow({
   onAct: (action: Action, id: string) => void;
 }) {
   return (
-    <Row className="items-start justify-start gap-4">
-      <span className="hw-thumb max-h-[150px] w-[72px] sm:w-[112px]">
-        <img
-          src={job.image}
-          alt=""
-          width={job.width}
-          height={job.height ?? undefined}
-          loading="lazy"
-          decoding="async"
-        />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-4 gap-y-3">
-        <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-1">
-          <span className="break-words font-semibold">{job.name}</span>
+    <Row className="items-start justify-start gap-5 max-[639px]:gap-4">
+      <Thumb
+        src={job.image}
+        alt=""
+        imageWidth={job.width}
+        imageHeight={job.height ?? undefined}
+        className="shrink-0"
+      />
+      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-6 gap-y-3 pt-1">
+        <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-2">
+          <span className="pk-note break-words text-[15px] font-semibold leading-snug text-[color:var(--pk-fill)]">
+            {job.name}
+          </span>
           {job.inflight ? (
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="flex items-center gap-2 font-semibold text-red">
-                <Led state="printing" />
-                Printing
-              </span>
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <Lamp state="printing">Printing</Lamp>
               {job.claimedAgo ? (
-                <Note as="span">
-                  Started <span className="hw-mono">{job.claimedAgo}</span> ago
-                </Note>
+                <Note as="span">Started {agoWords(job.claimedAgo)} ago</Note>
               ) : null}
             </span>
           ) : null}
-          <span className="hw-row-sub">
+          <Engraved tone="soft" className="pk-row-sub leading-[1.3]">
             {source ? `${job.createdTime} · ${source}` : job.createdTime}
-          </span>
+          </Engraved>
           {job.attemptsText ? (
-            <span className="hw-error">{capital(job.attemptsText)}</span>
+            <Note tone="red">{capital(job.attemptsText)}</Note>
           ) : null}
-          {error ? <ErrorText className="mt-1">{error}</ErrorText> : null}
+          {error ? (
+            <Note tone="red" role="alert">
+              {error}
+            </Note>
+          ) : null}
         </div>
-        <KeyGroup>
-          <PushKey
-            size="compact"
+        <KeyWell compact label={job.name} className="shrink-0">
+          <Key
+            legend={job.inflight ? 'Requeue' : 'Cancel'}
             disabled={busy}
             onClick={() => onAct(job.inflight ? 'requeue' : 'cancel', job.id)}
-          >
-            {job.inflight ? 'Requeue' : 'Cancel'}
-          </PushKey>
-        </KeyGroup>
+          />
+        </KeyWell>
       </div>
     </Row>
   );

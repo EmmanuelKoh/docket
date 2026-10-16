@@ -1,21 +1,30 @@
-// Users (design spec: pages, Users). Admin only: the Accounts module
-// (each account's name and email, ADMIN on an admin) and the Invites
-// module (each open invite link with its expiry date in the viewer's
-// time zone, its Copy link and Revoke keys, then the form for a new
-// one). One users.list read; the actions go through /api/users/invites
-// (users-client.tsx). Other accounts get one note, not a 404: the key
-// bank shows Users to admins only.
+// Users (design spec: pages, Users). Admin only: one body. The top plate
+// holds the engraved page name and the printer's lamp; plate 01 lists the
+// accounts (each name engraved over its email, Admin at the right for an
+// admin); plate 02 lists the open invite links (who can use each one and
+// its expiry date in the viewer's time zone, with Copy link and Revoke
+// keys); plate 03 makes a new one. One users.list read; the lamp shares
+// the nav's printer read (React cache). The actions go
+// through /api/users/invites (users-client.tsx). Other accounts get one
+// note, not a 404: the nav shows Users to admins only.
 
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { getCaller } from '@/app/_lib/caller';
+import {
+  type PrinterSummary,
+  printerStateText,
+  printerSummary,
+} from '@/app/_lib/printer-data';
 import { dayLabel, viewerTimeZone } from '@/app/_lib/time';
-import { Module } from '@/components/hardware/module';
-import { PageTitle } from '@/components/hardware/page-title';
-import { Row } from '@/components/hardware/row';
-import { Label, Note } from '@/components/hardware/text';
+import { Body, Plate } from '@/components/hardware/kit/body';
+import { Engraved, Note, PageName } from '@/components/hardware/kit/engraved';
+import { Lamp } from '@/components/hardware/kit/led';
+import { Row, Rows } from '@/components/hardware/kit/sheet';
 import { usersList } from '@/lib/ops/accounts.js';
 import { InviteRow, NewInviteForm } from './users-client';
+import { UsersPlate } from './users-plate';
 
 export const metadata: Metadata = { title: 'Users' };
 
@@ -34,41 +43,81 @@ type InviteRowData = {
   expiresAt: string;
 };
 
+/** The printer's lamp in the top plate, as the nav shows it. */
+function lampFor(p: PrinterSummary | null) {
+  return p?.name ? (
+    <Lamp state={p.state}>{printerStateText(p.state)}</Lamp>
+  ) : null;
+}
+
+function UsersBody({
+  lamp,
+  children,
+}: {
+  lamp: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Body as="section" aria-labelledby="users-name">
+      <Plate head>
+        <PageName id="users-name">Users</PageName>
+        {lamp}
+      </Plate>
+      {children}
+    </Body>
+  );
+}
+
 export default async function UsersPage() {
   const caller = await getCaller();
   if (!caller) redirect('/login');
+
+  // The lamp is the shell's printer read, shared; a failed read shows none.
+  const printer = printerSummary(caller).catch(() => null);
+
   if (caller.role !== 'admin') {
     return (
-      <>
-        <PageTitle>Users</PageTitle>
-        <div className="max-w-[860px]">
-          <Module number="01" title="Accounts">
-            <Note>Only an admin can see accounts and make invites.</Note>
-          </Module>
-        </div>
-      </>
+      <UsersBody lamp={lampFor(await printer)}>
+        <UsersPlate id="users-accounts" number="01" title="Accounts">
+          <Note className="pt-3 min-[1180px]:pt-[10px]">
+            Only an admin can see accounts and make invites.
+          </Note>
+        </UsersPlate>
+      </UsersBody>
     );
   }
 
-  const [list, tz] = await Promise.all([usersList(caller), viewerTimeZone()]);
+  const [list, tz, p] = await Promise.all([
+    usersList(caller),
+    viewerTimeZone(),
+    printer,
+  ]);
   const users: UserRow[] = list.users;
   const invites: InviteRowData[] = list.invites;
   const now = Date.now();
 
   return (
-    <>
-      <PageTitle>Users</PageTitle>
-      <div className="flex max-w-[860px] flex-col gap-[30px]">
-        <Module number="01" title="Accounts" flush>
+    <UsersBody lamp={lampFor(p)}>
+      <UsersPlate
+        id="users-accounts"
+        number="01"
+        title="Accounts"
+        className="pb-[12px]"
+      >
+        <Rows ruled>
           {users.map((u) => (
-            <Row key={u.id} className="flex-wrap gap-x-4 gap-y-1">
-              <span className="hw-row-text">
-                <span className="hw-row-title break-words">{u.name}</span>
-                <Note as="span" className="break-all">
+            <Row key={u.id} className="gap-x-6">
+              <span className="pk-row-text">
+                <span className="pk-engr break-words leading-[1.25]">
+                  {u.name}
+                </span>
+                <Note as="span" className="[overflow-wrap:anywhere]">
                   {u.email}
                 </Note>
               </span>
-              {u.role === 'admin' ? <Label>Admin</Label> : null}
+              {u.role === 'admin' ? (
+                <Engraved tone="soft">Admin</Engraved>
+              ) : null}
             </Row>
           ))}
           {users.length === 0 ? (
@@ -76,9 +125,16 @@ export default async function UsersPage() {
               <Note>No accounts yet. Make an invite below.</Note>
             </Row>
           ) : null}
-        </Module>
+        </Rows>
+      </UsersPlate>
 
-        <Module number="02" title="Invites" flush>
+      <UsersPlate
+        id="users-invites"
+        number="02"
+        title="Invites"
+        className="pb-[12px]"
+      >
+        <Rows ruled>
           {invites.map((i) => (
             <InviteRow
               key={i.token}
@@ -92,9 +148,10 @@ export default async function UsersPage() {
               <Note>No open invites.</Note>
             </Row>
           ) : null}
-          <NewInviteForm />
-        </Module>
-      </div>
-    </>
+        </Rows>
+      </UsersPlate>
+
+      <NewInviteForm />
+    </UsersBody>
   );
 }

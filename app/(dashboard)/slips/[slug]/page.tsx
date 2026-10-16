@@ -1,27 +1,40 @@
-// A slip's page (design spec: pages, Slips). Left: the slip's receipt
-// feeding out of the printer at its true size (the primary template
-// rendered with its sample data), with the red Print test key under it.
-// Right: for a plugin's slip, its Schedule and Settings modules and its
-// templates, each with a key into the Studio; for a template slip, a
-// Template module, and Delete beside the title.
+// A slip's page (design spec: pages, Slips): one machine. The slip's
+// receipt (the primary template rendered with its sample data) stands at
+// real size out of the platen in the head plate, between the engraved
+// name and the Back key with the printer lamp. The front plate says what
+// the slip is (or when a template was last saved) and carries its key
+// well, the red Print test last; a template slip's well also holds Edit
+// (into the Studio) and a two-step Delete. For a plugin's slip, the
+// Schedule and Settings plates follow (one Save), then its templates,
+// each with a key into the Studio.
 
+import '../slips.css';
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getCaller } from '@/app/_lib/caller';
+import { printerStateText, printerSummary } from '@/app/_lib/printer-data';
 import { getSlip } from '@/app/_lib/slip-data';
+import { dayLabel, viewerTimeZone } from '@/app/_lib/time';
 import { BackLink } from '@/components/back-link';
 import { DeleteTemplateButton } from '@/components/delete-template-button';
-import { Module } from '@/components/hardware/module';
-import { PageTitle } from '@/components/hardware/page-title';
-import { PaperRoll, PaperSlip, PrinterEdge } from '@/components/hardware/paper';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { Row } from '@/components/hardware/row';
-import { Note } from '@/components/hardware/text';
+import { Body, Plate, PlateTitle } from '@/components/hardware/kit/body';
+import { Note, PageName } from '@/components/hardware/kit/engraved';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
+import { Lamp } from '@/components/hardware/kit/led';
+import { Platen } from '@/components/hardware/kit/screen';
+import { Row, Rows, RowText } from '@/components/hardware/kit/sheet';
+import { Slip } from '@/components/hardware/kit/slip';
 import { PrintTestButton } from '@/components/print-test-button';
 import { SlipSystemPanel } from '@/components/slip-system-panel';
 import { slipsRegister } from '@/lib/ops/slips.js';
 
 export const metadata: Metadata = { title: 'Slips' };
+
+// "Edited today", "Edited yesterday", "Edited Tue 13 Oct"
+function editedLabel(at: number, tz: string, now: number) {
+  const day = dayLabel(at, tz, now);
+  return `Edited ${day === 'Today' || day === 'Yesterday' ? day.toLowerCase() : day}`;
+}
 
 export default async function SlipPage({
   params,
@@ -32,100 +45,99 @@ export default async function SlipPage({
   if (!caller) redirect('/login');
   const { slug } = await params;
   await slipsRegister(caller); // a new owner's plugins and their templates
-  const slip = await getSlip(caller, decodeURIComponent(slug));
+  const [slip, tz, printer] = await Promise.all([
+    getSlip(caller, decodeURIComponent(slug)),
+    viewerTimeZone(),
+    printerSummary(caller).catch(() => null),
+  ]);
   if (!slip) notFound();
+  const system = slip.kind === 'system';
+  const edited = slip.editedAt
+    ? editedLabel(slip.editedAt, tz, Date.now())
+    : '';
+  const about = slip.description || edited;
+  const templatesNumber = slip.fields?.length ? '03' : '02';
 
   return (
     <>
-      <BackLink fallback="/slips" className="-mt-3 mb-1" />
-      <PageTitle
-        className={slip.description ? 'mb-3' : undefined}
-        actions={
-          slip.kind === 'template' ? (
-            <DeleteTemplateButton name={slip.slug} />
-          ) : null
-        }
-      >
-        {slip.title}
-      </PageTitle>
-      {slip.description ? (
-        <p className="mt-0 mb-10 max-w-[60ch] text-ink-muted max-sm:mb-7">
-          {slip.description}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-start gap-x-[52px] gap-y-12">
-        <section
-          aria-label="Preview"
-          className="min-w-0 flex-[999_1_624px] min-[876px]:pl-[18px]"
-        >
-          <PrinterEdge />
-          <PaperRoll>
-            {slip.thumb ? (
-              <PaperSlip
-                src={slip.thumb}
-                alt={`${slip.primaryTemplate || slip.title} receipt`}
-                fed
-                tear="new"
-              />
-            ) : (
-              <PaperSlip fed tear="new">
-                <p className="m-0 py-14 text-center text-[#4a4741]">
-                  No template to preview yet.
-                </p>
-              </PaperSlip>
-            )}
-          </PaperRoll>
-          <div className="mt-7">
-            <PrintTestButton slug={slip.slug} />
-          </div>
-        </section>
-
-        <div className="flex min-w-[280px] flex-[1_1_360px] flex-col gap-[30px] max-[400px]:min-w-0">
-          {slip.kind === 'system' ? (
-            <>
-              <SlipSystemPanel slip={slip} />
-              <Module
-                number={slip.fields?.length ? '03' : '02'}
-                title="Templates"
-                flush
-              >
-                {slip.templates.map((name) => (
-                  <Row key={name} tight>
-                    <span className="min-w-0 truncate font-semibold">
-                      {name}
-                    </span>
-                    <KeyGroup>
-                      <PushKey
-                        size="compact"
-                        href={`/studio?template=${encodeURIComponent(name)}`}
-                      >
-                        Open in Studio
-                      </PushKey>
-                    </KeyGroup>
-                  </Row>
-                ))}
-                {slip.templates.length === 0 ? (
-                  <Row>
-                    <Note>This slip prints without a template.</Note>
-                  </Row>
-                ) : null}
-              </Module>
-            </>
-          ) : (
-            <Module number="01" title="Template">
-              <Note>Edit this template in Studio.</Note>
-              <KeyGroup className="self-start">
-                <PushKey
-                  href={`/studio?template=${encodeURIComponent(slip.slug)}`}
-                >
-                  Open in Studio
-                </PushKey>
-              </KeyGroup>
-            </Module>
-          )}
-        </div>
+      <div className="sl-rise">
+        {slip.thumb ? (
+          <Slip
+            src={slip.thumb}
+            alt={`${slip.primaryTemplate || slip.title} receipt`}
+            tear="top"
+            loading="eager"
+          />
+        ) : (
+          <Slip tear="top">
+            <p className="sl-blank">No template to preview yet.</p>
+          </Slip>
+        )}
       </div>
+
+      <Body as="article" aria-labelledby="slip-name" className="sl-body">
+        <Plate head className="sl-head">
+          <PageName id="slip-name" className="sl-name">
+            {slip.title}
+          </PageName>
+          <Platen />
+          <div className="sl-head-side">
+            <BackLink fallback="/slips" />
+            {printer?.name ? (
+              <Lamp state={printer.state}>
+                {printerStateText(printer.state)}
+              </Lamp>
+            ) : null}
+          </div>
+        </Plate>
+
+        <Plate seam className="sl-front">
+          {about ? <Note>{about}</Note> : null}
+          {system ? (
+            <PrintTestButton slug={slip.slug} />
+          ) : (
+            <PrintTestButton slug={slip.slug}>
+              <DeleteTemplateButton name={slip.slug}>
+                <Key
+                  legend="Edit"
+                  href={`/studio?template=${encodeURIComponent(slip.slug)}`}
+                />
+              </DeleteTemplateButton>
+            </PrintTestButton>
+          )}
+        </Plate>
+
+        {system ? (
+          <>
+            <SlipSystemPanel slip={slip} />
+            <Plate seam as="section" aria-labelledby="slip-templates">
+              <h2 id="slip-templates" className="sl-plate-name">
+                <PlateTitle number={templatesNumber}>
+                  <span className="pk-engr">Templates</span>
+                </PlateTitle>
+              </h2>
+              {slip.templates.length ? (
+                <Rows ruled>
+                  {slip.templates.map((name) => (
+                    <Row key={name}>
+                      <RowText title={name} />
+                      <KeyWell compact label={name}>
+                        <Key
+                          legend="Open in Studio"
+                          width={176}
+                          href={`/studio?template=${encodeURIComponent(name)}`}
+                        />
+                      </KeyWell>
+                    </Row>
+                  ))}
+                </Rows>
+              ) : (
+                <Note>This slip prints without a template.</Note>
+              )}
+            </Plate>
+          </>
+        ) : null}
+      </Body>
     </>
   );
 }

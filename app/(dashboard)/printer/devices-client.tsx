@@ -1,18 +1,18 @@
 'use client';
 
-// The Printer page's client parts: a printer's row with its keys (share,
-// remove, leave, remove a member), the form that takes a code (a printed
-// pairing code claims a new printer; a share code joins someone else's),
-// and the watcher that refreshes the page while a pairing completes.
-// Removing and leaving take two presses: the second key names what
-// happens. A refused action shows a red line in the row.
+// The Printer page's client parts: a printer's row on the Printers plate
+// with its compact keys (share, remove, leave, remove a member), the Add a
+// printer form (a printed pairing code claims a new printer; a share code
+// joins someone else's), and the watcher that refreshes the page while a
+// pairing completes. Removing and leaving take two presses: the second key
+// names what happens. A refused action prints a red line in the row.
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Field } from '@/components/hardware/field';
-import { KeyGroup, PushKey } from '@/components/hardware/push-key';
-import { Row, RowText } from '@/components/hardware/row';
-import { ErrorText, Note } from '@/components/hardware/text';
+import { Note } from '@/components/hardware/kit/engraved';
+import { Field } from '@/components/hardware/kit/field';
+import { Key, KeyWell } from '@/components/hardware/kit/keys';
+import { Row, RowText } from '@/components/hardware/kit/sheet';
 
 // "code required" -> "Code required."
 const sentence = (s: string) => {
@@ -46,7 +46,12 @@ export function PairingWatcher() {
   return null;
 }
 
-// A key that asks once: the first press shows Keep and the named action.
+// The confirming key carries the whole action ("Remove printer"), so it is
+// wider than a plain key: width in the well's own (unzoomed) px.
+const CONFIRM_W = 178;
+
+// Keys that ask once: the first press shows Keep and the named action.
+// They stand in the caller's key well, after any other keys in it.
 function TwoStep({
   label,
   confirm,
@@ -58,30 +63,28 @@ function TwoStep({
 }) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (!asking) {
-    return (
-      <PushKey size="compact" onClick={() => setAsking(true)}>
-        {label}
-      </PushKey>
-    );
-  }
+  // The first key stays the same button as it turns from the action to
+  // Keep, so it keeps the focus.
   return (
     <>
-      <PushKey size="compact" onClick={() => setAsking(false)} disabled={busy}>
-        Keep
-      </PushKey>
-      <PushKey
-        size="compact"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          await onConfirm();
-          setBusy(false);
-          setAsking(false);
-        }}
-      >
-        {confirm}
-      </PushKey>
+      <Key
+        legend={asking ? 'Keep' : label}
+        disabled={asking && busy}
+        onClick={() => setAsking(!asking)}
+      />
+      {asking ? (
+        <Key
+          legend={confirm}
+          width={CONFIRM_W}
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await onConfirm();
+            setBusy(false);
+            setAsking(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -89,7 +92,7 @@ function TwoStep({
 export type DeviceRowData = {
   id: string;
   name: string;
-  /** "Paired 3 d ago", "Shared with you", "Pairing" */
+  /** "Paired 3 days ago", "Shared with you", "Pairing" */
   sub: string;
   role: 'owner' | 'member';
   shareCode: string | null;
@@ -131,16 +134,14 @@ export function DeviceRow({ device }: { device: DeviceRowData }) {
 
   const q = `id=${encodeURIComponent(id)}`;
   return (
-    <Row className="flex-col items-stretch gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <RowText title={device.name} sub={device.sub} />
-        <KeyGroup>
+    <Row className="flex-col items-stretch gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <RowText title={device.name} sub={device.sub} className="py-1" />
+        <KeyWell compact label={device.name} className="shrink-0">
           {device.role === 'owner' ? (
             <>
               {code ? null : (
-                <PushKey size="compact" onClick={share} disabled={sharing}>
-                  Share
-                </PushKey>
+                <Key legend="Share" onClick={share} disabled={sharing} />
               )}
               <TwoStep
                 label="Remove"
@@ -157,35 +158,35 @@ export function DeviceRow({ device }: { device: DeviceRowData }) {
               }
             />
           )}
-        </KeyGroup>
+        </KeyWell>
       </div>
       {code ? (
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <Field
             label="Share code"
             readOnly
             value={code}
-            className="w-[170px]"
-            controlClassName="text-[20px] tracking-[0.12em]"
+            className="w-[176px]"
+            controlClassName="text-[20px] tracking-[0.14em] [&:read-only]:text-[color:var(--pk-eink-ink)] dark:[&:read-only]:text-[#d5d1c7]"
             onFocus={(e) => e.currentTarget.select()}
           />
-          <Note className="pb-3">
+          <Note className="max-w-[44ch] pb-2.5">
             Works once, for 15 minutes. The other account enters it on its
             Printer page.
           </Note>
         </div>
       ) : null}
       {device.role === 'owner' && device.members.length ? (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {device.members.map((m) => (
             <li
               key={m.ownerId}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+              className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
             >
               <Note as="span" className="min-w-0 break-all">
                 Also prints for {m.email}
               </Note>
-              <KeyGroup>
+              <KeyWell compact label={m.email} className="shrink-0">
                 <TwoStep
                   label="Remove"
                   confirm="Remove account"
@@ -196,12 +197,16 @@ export function DeviceRow({ device }: { device: DeviceRowData }) {
                     )
                   }
                 />
-              </KeyGroup>
+              </KeyWell>
             </li>
           ))}
         </ul>
       ) : null}
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      {error ? (
+        <Note tone="red" role="alert">
+          {error}
+        </Note>
+      ) : null}
     </Row>
   );
 }
@@ -234,7 +239,8 @@ export function ClaimDeviceForm() {
 
   return (
     <form
-      className="flex flex-col gap-4"
+      aria-labelledby="add-printer"
+      className="grid items-start gap-x-6 gap-y-5 min-[720px]:grid-cols-[minmax(0,15rem)_minmax(0,20rem)_auto]"
       onSubmit={(e) => {
         e.preventDefault();
         claim(e.currentTarget);
@@ -244,7 +250,8 @@ export function ClaimDeviceForm() {
         label="Pairing code"
         name="code"
         hint="The code the printer prints, or a share code from another account."
-        controlClassName="uppercase"
+        error={error || undefined}
+        controlClassName="uppercase tracking-[0.08em]"
         autoComplete="off"
         autoCapitalize="characters"
         spellCheck={false}
@@ -256,12 +263,9 @@ export function ClaimDeviceForm() {
         placeholder="Kitchen printer"
         autoComplete="off"
       />
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      <KeyGroup className="self-start">
-        <PushKey type="submit" disabled={busy}>
-          Pair
-        </PushKey>
-      </KeyGroup>
+      <KeyWell label="Pair" className="justify-self-start">
+        <Key legend="Pair" type="submit" disabled={busy} />
+      </KeyWell>
     </form>
   );
 }

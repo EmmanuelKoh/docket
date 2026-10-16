@@ -1,711 +1,833 @@
-/* Tape tool styles, on the E hardware kit (app/hardware.css). Every rule
-   is scoped under .tape-tool. The paper sheet uses the paper tokens from
-   components/hardware/paper.css, which page.tsx loads.
+/* Tape tool styles: one tape deck on the parts kit (app/kit.css). Every
+   rule is scoped under .tape-tool and sits in @layer components, like the
+   kit, so Tailwind utilities still win.
 
    The canvas island belongs to components/tape/tape-view.js: .tape-roll
    is an unpadded, unbordered, position: relative box with overflow-x:
    auto, holding exactly canvas.tape-paper, canvas.tape-trace and
    .tape-playhead. Never put width, height, transform, filter or zoom on
-   the roll or the canvases: the seek and selection math reads the canvas
-   rect at 0.75 px per printer dot. The paper look comes from the sheet
-   behind the roll, never from the canvas pixels. */
+   the roll or the canvases (or a transform or zoom on any box round
+   them): the seek and selection math reads the canvas rect at 0.75 px a
+   printer dot. The paper look comes from the sheet behind the roll,
+   never from the canvas pixels. */
 
-.tape-tool {
-  /* The paper canvas is 576 dots across at 0.75 px a dot (tape-view.js
-     SCALE). The margins are the 24 dots of unprinted paper each side. */
-  --tape-paper-h: 432px;
-  --tape-paper-margin: 18px;
-  --tape-tear: 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 40px 32px;
-  align-items: start;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* Wide screens: the stage, then the project column at the right */
-@media (min-width: 1200px) {
+@layer components {
   .tape-tool {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    /* the paper canvas: 576 dots across at 0.75 px a dot (tape-view.js
+       SCALE); the margins are the 24 dots of unprinted paper each side */
+    --tape-paper-h: 432px;
+    --tape-margin: 18px;
+    /* the screen above the paper, and between the paper and the trace */
+    --tape-sheet-top: 20px;
+    --tape-trace-gap: 14px;
+    --tape-osd: var(--pk-eink-dim);
+    --tape-osd-rule: rgba(35, 34, 31, 0.16);
+    --tape-osd-red: var(--pk-eink-red);
+    --tape-sheet-shadow:
+      0 0.5px 0.5px rgba(30, 28, 24, 0.22), 0 1.5px 3px rgba(30, 28, 24, 0.12);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .tape-tool[data-mode="recording"] {
-    grid-template-columns: minmax(0, 1fr);
+  /* the deck lays itself out by its own width (the nav may stand beside
+     it or above it). The container is the body, not the page root, so
+     the phone dock below can be fixed to the screen. */
+  .tape-unit {
+    container: tape / inline-size;
   }
-}
 
-/* ---- Stage ---- */
+  html[data-theme="dark"] .tape-tool {
+    --tape-osd: #9a968d;
+    --tape-osd-rule: rgba(214, 210, 200, 0.13);
+    --tape-osd-red: #e2604a;
+    --tape-sheet-shadow:
+      0 0.5px 0.6px rgba(0, 0, 0, 0.6), 0 2px 5px rgba(0, 0, 0, 0.45);
+  }
 
-.tape-stage {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
-}
+  /* the body on the same content edges as the other pages: the workbench
+     column is wider (24px gutters), so the body takes 24px more each side
+     and 8px more on top (its rolled edge reaches 26px out) */
+  @media (min-width: 876px) {
+    .tape-tool {
+      padding: 8px 24px 0;
+    }
+  }
 
-/* The line over the strip, printed on the ground */
-.tape-caption {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 16px;
-  margin: 0;
-  min-width: 0;
-}
+  /* ---- Head and window ---- */
 
-.tape-caption-name {
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
+  .tape-window-plate {
+    padding: 0 var(--pk-body-x) 26px;
+  }
 
-.tape-caption-sub,
-.tape-caption-time {
-  font-size: 15px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
+  .tape-window {
+    border-radius: 5px;
+  }
 
-/* Live audio: the one red word on the stage (Tape only) */
-.tape-rec {
-  font-family: var(--font-mono);
-  font-stretch: 82%;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--red);
-}
+  /* the screen: the editor medium (e-ink in light, the dark screen in
+     dark). Its medium and cover glass (z 1, 2) lie under the sheet (z 3)
+     and the roll (z 4), so the paper and the print rows stay exact. */
+  .tape-screen {
+    padding: calc(var(--tape-sheet-top) + var(--tape-margin)) 0 4px;
+  }
 
-/* The paper strip. The sheet lies behind the roll: white paper with the
-   paper shadow, a margin above and below the printed rows, and a torn
-   end at the right, in a strip of paper the roll does not cover. */
-.tape-frame {
-  position: relative;
-  isolation: isolate;
-}
+  .tape-tool[data-mode="empty"] .tape-screen {
+    padding: var(--tape-sheet-top) 0;
+  }
 
-.tape-tool[data-mode="loaded"] .tape-frame {
-  padding: var(--tape-paper-margin) var(--tape-tear) 0 0;
-}
+  .tape-tool[data-mode="recording"] .tape-screen {
+    padding-top: var(--tape-sheet-top);
+  }
 
-.tape-tool[data-mode="loaded"] .tape-frame[data-trace="hidden"] {
-  padding-bottom: var(--tape-paper-margin);
-}
-
-.tape-tool[data-mode="empty"] .tape-frame {
-  padding-right: var(--tape-tear);
-}
-
-.tape-sheet {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 0;
-  pointer-events: none;
-  filter: var(--hw-paper-shadow);
-}
-
-/* With the trace showing, the sheet stops under the printed rows and the
-   trace is plotted on the ground below it */
-.tape-tool[data-mode="loaded"] .tape-frame:not([data-trace="hidden"])
+  /* the paper strip, running through the window from edge to edge: white
+     paper (the same in both themes, like the canvas), its long edges
+     shading in over the unprinted margins, its shadow on the screen */
   .tape-sheet {
-  bottom: auto;
-  height: calc(var(--tape-paper-h) + 2 * var(--tape-paper-margin));
-}
-
-.tape-tool[data-mode="recording"] .tape-sheet {
-  display: none;
-}
-
-.tape-sheet-paper {
-  position: absolute;
-  inset: 0;
-  background: var(--hw-paper, #fefefe);
-  -webkit-mask:
-    var(--hw-tear-right) right / var(--tape-tear) 100% no-repeat,
-    linear-gradient(#000 0 0) left / calc(100% - var(--tape-tear) + 1px) 100%
-    no-repeat;
-  mask:
-    var(--hw-tear-right) right / var(--tape-tear) 100% no-repeat,
-    linear-gradient(#000 0 0) left / calc(100% - var(--tape-tear) + 1px) 100%
-    no-repeat;
-}
-
-/* The paper's finish, as on every slip (components/hardware/paper.css),
-   turned a quarter for a strip that runs sideways. The long top and
-   bottom edges shade in over the unprinted margin in every mode. The
-   blank strip also gets the faint bands along its length and the grain.
-   A loaded strip shows the exact print rows, so like the exact slips in
-   Studio and Photo it has no grain or bands: in the margins alone they
-   would frame the rows. Both layers sit on the sheet, under the roll, so
-   the canvases stay untouched. */
-.tape-sheet-paper::before,
-.tape-sheet-paper::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.tape-sheet-paper::before {
-  --tape-paper-edges: linear-gradient(
-    rgba(40, 36, 30, 0.05),
-    transparent var(--tape-paper-margin),
-    transparent calc(100% - var(--tape-paper-margin)),
-    rgba(40, 36, 30, 0.06)
-  );
-  background: var(--tape-paper-edges);
-}
-
-.tape-tool[data-mode="empty"] .tape-sheet-paper::before {
-  background:
-    var(--tape-paper-edges),
-    linear-gradient(
-      90deg,
-      transparent 0,
-      rgba(40, 36, 30, 0.025) 17%,
-      transparent 29%,
-      rgba(255, 255, 255, 0.05) 45%,
-      transparent 58%,
-      rgba(40, 36, 30, 0.03) 80%,
-      transparent 92%,
-      rgba(40, 36, 30, 0.04)
-    );
-}
-
-.tape-sheet-paper::after {
-  display: none;
-  background: var(--hw-paper-grain);
-  /* dark mode adds a flat warm tone to the grain layer (paper.css) */
-  background-blend-mode: multiply;
-  mix-blend-mode: var(--hw-paper-grain-blend);
-  opacity: var(--hw-paper-grain-opacity);
-}
-
-.tape-tool[data-mode="empty"] .tape-sheet-paper::after {
-  display: block;
-}
-
-.tape-roll {
-  position: relative;
-  z-index: 1;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-faint) transparent;
-}
-
-.tape-roll canvas {
-  display: block;
-  /* mouse drags scrub (the view captures them); touch drags PAN the
-     roll natively (a phone has no scrollbar) and only a tap seeks */
-  touch-action: pan-x;
-  cursor: crosshair;
-}
-
-/* The raw pitch trace is plotted on the graph-paper ground under the
-   strip. Its ink comes from --ink, --ink-faint and --red on <html>, so
-   it needs a surface that follows the theme, never the white paper. */
-.tape-tool[data-mode="loaded"] .tape-trace {
-  margin-top: calc(var(--tape-paper-margin) + 14px);
-}
-
-/* (.tape-roll canvas sets display: block; this must outrank it) */
-.tape-roll .tape-trace-hidden {
-  display: none;
-}
-
-/* The playhead is a DOM overlay, never drawn into the canvas (the canvas
-   holds the exact print rows). Ink while paused, red while audio runs. */
-.tape-playhead {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1.5px;
-  background: var(--ink-muted);
-  pointer-events: none;
-}
-
-.tape-playhead.live {
-  background: var(--red);
-}
-
-/* ---- Page modes (data-mode on .tape-tool). The canvases never unmount;
-   each mode shows its own face of the roll. ---- */
-
-/* Empty: a short blank strip carries the note; no canvases */
-.tape-tool[data-mode="empty"] .tape-paper,
-.tape-tool[data-mode="empty"] .tape-trace {
-  display: none;
-}
-
-/* Recording: the paper hides (only the real transcription writes the
-   tape) and the live trace is the screen, full height, even when the
-   View setting hides the trace on finished takes */
-.tape-tool[data-mode="recording"] .tape-paper {
-  display: none;
-}
-
-.tape-tool[data-mode="recording"] .tape-trace {
-  display: block;
-}
-
-/* The note on the blank strip. The paper is white in both themes, so the
-   type is fixed ink, not theme tokens. */
-.tape-empty {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 176px;
-  box-sizing: border-box;
-  padding: 28px 24px;
-  text-align: center;
-  color: #4a4741;
-}
-
-.tape-empty p {
-  margin: 0;
-}
-
-.tape-empty-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #161616;
-}
-
-.tape-empty-text {
-  max-width: 46ch;
-  font-size: 16px;
-}
-
-.tape-demo {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-weight: 600;
-  color: #161616;
-  text-decoration-line: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.tape-demo:hover {
-  text-decoration-thickness: 2px;
-}
-
-.tape-demo:focus-visible {
-  outline: 2px solid #161616;
-  outline-offset: 2px;
-}
-
-/* ---- Keys and lines under the strip ---- */
-
-.tape-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 18px;
-  min-width: 0;
-}
-
-.tape-line-end {
-  margin-left: auto;
-}
-
-.tape-speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.tape-speed .hw-field {
-  width: auto;
-  min-width: 96px;
-  min-height: 42px;
-}
-
-.tape-time {
-  font-size: 16px;
-  white-space: nowrap;
-}
-
-.tape-time-dur {
-  color: var(--hw-note-ink);
-}
-
-.tape-hint {
-  flex-basis: 100%;
-}
-
-.tape-hint-touch {
-  display: none;
-}
-
-.tape-inspector {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.tape-inspector > .tape-line {
-  align-self: stretch;
-}
-
-.tape-readout {
-  font-size: 16px;
-  white-space: nowrap;
-}
-
-/* The edit keys wrap on a narrow stage; each row then fills the cutout */
-.tape-edit-keys {
-  flex-wrap: wrap;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.tape-edit-keys > .hw-push {
-  flex: 1 0 auto;
-}
-
-/* Status at the left, print keys at the right, under a dashed rule */
-.tape-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 18px;
-  padding-top: 18px;
-  border-top: 1px dashed var(--hw-rule);
-}
-
-.tape-status {
-  min-width: 0;
-}
-
-.tape-bottom .tape-status {
-  flex: 1 1 220px;
-  min-height: 1.4em;
-}
-
-/* the controller writes its status lines in lower case */
-.tape-status::first-letter {
-  text-transform: uppercase;
-}
-
-.tape-print {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-left: auto;
-}
-
-/* A quiet text action (Download WAV, Discard, Undo) */
-.tape-textbtn {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  color: inherit;
-  cursor: pointer;
-}
-
-.tape-textbtn:disabled {
-  color: var(--hw-label-ink);
-  text-decoration-line: none;
-  cursor: not-allowed;
-}
-
-/* ---- Project column ---- */
-
-.tape-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  min-width: 0;
-}
-
-.tape-tool .tape-session {
-  display: flex;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.tape-session > .hw-push {
-  flex: 1 1 0;
-}
-
-/* Below the wide layout the modules share the width in columns */
-@media (max-width: 1199px) {
-  .tape-controls {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    align-items: start;
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    top: var(--tape-sheet-top);
+    height: calc(var(--tape-paper-h) + 2 * var(--tape-margin));
+    background:
+      linear-gradient(
+        rgba(40, 36, 30, 0.07),
+        rgba(40, 36, 30, 0) 5px,
+        rgba(40, 36, 30, 0) calc(100% - 5px),
+        rgba(40, 36, 30, 0.08)
+      ),
+      #fff;
+    box-shadow: var(--tape-sheet-shadow);
+    pointer-events: none;
   }
 
-  .tape-tool .tape-session {
-    grid-column: 1 / -1;
-    max-width: 420px;
-  }
-}
-
-/* Takes */
-.tape-save {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 16px 14px;
-  border-bottom: 1px dashed var(--hw-rule);
-}
-
-.tape-save-keys {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 18px;
-}
-
-.tape-takes,
-.tape-phrases {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tape-takes {
-  max-height: 420px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-.tape-take {
-  border-bottom: 1px dashed var(--hw-rule);
-}
-
-.tape-take:last-child {
-  border-bottom: 0;
-}
-
-.tape-take-row,
-.tape-phrase {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px 12px;
-  padding: 7px 14px 7px 16px;
-}
-
-.tape-take-open,
-.tape-phrase-open {
-  flex: 1 1 120px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 6px 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-
-button.tape-take-open,
-button.tape-phrase-open {
-  cursor: pointer;
-}
-
-button.tape-take-open:disabled,
-button.tape-phrase-open:disabled {
-  cursor: default;
-}
-
-button.tape-take-open:focus-visible,
-button.tape-phrase-open:focus-visible {
-  outline: 2px solid var(--hw-focus);
-  outline-offset: 2px;
-}
-
-.tape-take-name,
-.tape-phrase-name {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.2em;
-}
-
-button.tape-take-open:enabled:hover .tape-take-name,
-button.tape-phrase-open:enabled:hover .tape-phrase-name {
-  text-decoration-line: underline;
-}
-
-.tape-take-sub {
-  font-family: var(--font-mono);
-  font-stretch: 82%;
-  font-size: 14px;
-  color: var(--hw-note-ink);
-  text-transform: uppercase;
-}
-
-/* The open take's phrases, indented under its row on a dashed rule */
-.tape-phrases {
-  margin: 0 0 10px 16px;
-  border-left: 1px dashed var(--hw-rule);
-}
-
-.tape-phrase {
-  padding-top: 2px;
-  padding-bottom: 2px;
-}
-
-.tape-phrase-name {
-  font-weight: 400;
-  color: var(--hw-note-ink);
-}
-
-.tape-phrase-open[aria-current] .tape-phrase-name {
-  font-weight: 600;
-  color: inherit;
-}
-
-.tape-phrase-cut {
-  justify-content: flex-start;
-  padding-top: 6px;
-}
-
-.tape-empty-list {
-  padding: 14px 16px;
-}
-
-.tape-deleted {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 12px;
-  padding: 2px 16px 4px;
-  border-top: 1px dashed var(--hw-rule);
-}
-
-/* Key */
-.tape-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 12px;
-}
-
-/* Settings: collapsible sections on dashed rules */
-.tape-section {
-  border-bottom: 1px dashed var(--hw-rule);
-}
-
-.tape-section:last-child {
-  border-bottom: 0;
-}
-
-.tape-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
-  box-sizing: border-box;
-  padding: 7px 16px;
-  list-style: none;
-  cursor: pointer;
-}
-
-.tape-section-head::-webkit-details-marker {
-  display: none;
-}
-
-.tape-section-head:focus-visible {
-  outline: 2px solid var(--hw-focus);
-  outline-offset: -4px;
-}
-
-.tape-section-chev {
-  flex: none;
-  color: var(--hw-note-ink);
-  transition: transform 0.1s ease-out;
-}
-
-.tape-section[open] .tape-section-chev {
-  transform: rotate(180deg);
-}
-
-.tape-section-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 2px 16px 22px;
-}
-
-/* ---- Sliders: the label and its readout over the kit fader
-   (components/hardware/fader.tsx) ---- */
-
-.tape-slider {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 0 12px;
-}
-
-.tape-slider-label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.tape-slider-value {
-  font-size: 14px;
-  white-space: nowrap;
-  color: var(--hw-note-ink);
-}
-
-.tape-slider .hw-fader {
-  grid-column: 1 / -1;
-}
-
-/* ---- Touch ---- */
-
-/* Finger-sized keys on touch screens, and the hint in the device's own
-   input language */
-@media (pointer: coarse) {
-  .tape-tool .hw-push--compact {
-    min-height: 44px;
+  /* the blank strip (the same size as a loaded one) carries the note,
+     and the paper grain and faint bands along its length; a loaded strip
+     is the exact print, without them */
+  .tape-tool[data-mode="empty"] .tape-sheet {
+    background:
+      linear-gradient(
+        rgba(40, 36, 30, 0.07),
+        rgba(40, 36, 30, 0) 5px,
+        rgba(40, 36, 30, 0) calc(100% - 5px),
+        rgba(40, 36, 30, 0.08)
+      ),
+      linear-gradient(
+        90deg,
+        transparent 0,
+        rgba(40, 36, 30, 0.025) 17%,
+        transparent 29%,
+        rgba(40, 36, 30, 0.03) 80%,
+        transparent 92%
+      ),
+      var(--pk-paper-grain) 0 0 / 256px repeat,
+      #fff;
+    background-blend-mode: normal, normal, multiply, normal;
   }
 
-  .tape-tool .tape-speed .hw-field {
-    min-height: 48px;
-  }
-
-  .tape-hint-kbd {
+  .tape-tool[data-mode="recording"] .tape-sheet {
     display: none;
   }
 
-  .tape-hint-touch {
-    display: inline;
+  .tape-roll {
+    position: relative;
+    z-index: 4;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--tape-osd) transparent;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .tape-section-chev {
-    transition: none;
+  .tape-roll canvas {
+    display: block;
+    /* mouse drags scrub (the view captures them); touch drags PAN the
+       roll natively (a phone has no scrollbar) and only a tap seeks */
+    touch-action: pan-x;
+    cursor: crosshair;
+  }
+
+  /* the pitch trace on the screen, under the paper. Its ink comes from
+     --ink, --ink-faint and --red on <html>, which suit the screen of the
+     same theme (dark ink on e-ink, light ink on the dark screen). */
+  .tape-tool[data-mode="loaded"] .tape-trace {
+    margin-top: calc(var(--tape-margin) + var(--tape-trace-gap));
+  }
+
+  /* (.tape-roll canvas sets display: block; this must outrank it) */
+  .tape-roll .tape-trace-hidden {
+    display: none;
+  }
+
+  /* The playhead is a DOM overlay, never drawn into the canvas (the canvas
+     holds the exact print rows). Over the white paper it is a dark line;
+     over the screen it takes the theme's ink. Red while audio runs. */
+  .tape-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    background: linear-gradient(
+      #55524b 0 var(--tape-paper-h),
+      var(--ink-muted) var(--tape-paper-h)
+    );
+    pointer-events: none;
+  }
+
+  .tape-playhead.live {
+    background: linear-gradient(
+      #b3261e 0 var(--tape-paper-h),
+      var(--red) var(--tape-paper-h)
+    );
+  }
+
+  /* ---- Page modes (data-mode on .tape-tool). The canvases never
+     unmount; each mode shows its own face of the roll. ---- */
+
+  .tape-tool[data-mode="empty"] .tape-paper,
+  .tape-tool[data-mode="empty"] .tape-trace {
+    display: none;
+  }
+
+  /* Recording: the paper hides (only the real transcription writes the
+     tape) and the live trace is the screen, full height, even when the
+     View setting hides the trace on finished takes */
+  .tape-tool[data-mode="recording"] .tape-paper {
+    display: none;
+  }
+
+  .tape-tool[data-mode="recording"] .tape-trace {
+    display: block;
+  }
+
+  /* The note printed on the blank strip, at the strip's real width (the
+     576 dots of the print and their margins, as a loaded tape): mono,
+     left at the start of the strip, in thermal ink a little soft at the
+     edge. The paper is white in both themes, so the ink is fixed, not
+     theme tokens. */
+  .tape-empty {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    height: calc(var(--tape-paper-h) + 2 * var(--tape-margin));
+    box-sizing: border-box;
+    padding: var(--tape-margin) 40px;
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    color: #1d1c1a;
+    text-shadow: 0 0 0.6px rgba(22, 22, 22, 0.55);
+  }
+
+  .tape-empty p {
+    margin: 0;
+  }
+
+  .tape-empty-title {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .tape-empty-text {
+    max-width: 44ch;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* the display's status line, under the trace */
+  .tape-osd {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    height: 30px;
+    margin: 8px 16px 0;
+    border-top: 1px solid var(--tape-osd-rule);
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 500;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    color: var(--tape-osd);
+  }
+
+  .tape-tool[data-mode="loaded"][data-trace="hidden"] .tape-osd {
+    margin-top: calc(var(--tape-margin) + 10px);
+  }
+
+  .tape-osd-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* live audio on the screen: the one red word (red rule 6) */
+  .tape-osd-rec {
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tape-osd-red);
+  }
+
+  .tape-truncated {
+    margin-top: 12px;
+  }
+
+  /* ---- Plates under the window ---- */
+
+  /* a control with its name on the legend line: the name level with the
+     key wells' legend strips, the control level with their caps */
+  .tape-grp {
+    display: grid;
+    grid-template-rows: 20px 48.84px;
+    row-gap: 2px;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .tape-grp-name {
+    white-space: nowrap;
+  }
+
+  .tape-grp-ctl {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  /* the tape counter: a colon and a point printed on the window */
+  .tape-counter-sep {
+    align-self: center;
+    width: 6px;
+    text-align: center;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--pk-drum-ink);
+    opacity: 0.8;
+  }
+
+  /* the counter's drums are a little narrower than a choice's */
+  .tape-counter .pk-drum {
+    min-width: 13px;
+  }
+
+  /* Record's indicator: a 3 mm LED set into the legend strip before the
+     word. Unlit, a dark red lens; lit red while the mic is live (red rule
+     6). The strip's paint wear stays on the word only. */
+  .tape-tool .pk-key-legend:has(> .tape-strip-led) {
+    -webkit-mask: none;
+    mask: none;
+  }
+
+  .tape-legend-text {
+    -webkit-mask: var(--pk-wear) 0 0 / 90px repeat;
+    mask: var(--pk-wear) 0 0 / 90px repeat;
+  }
+
+  .tape-strip-led {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background:
+      radial-gradient(
+        circle at 50% 28%,
+        rgba(236, 176, 160, 0) 56%,
+        rgba(236, 176, 160, 0.4) 80%,
+        rgba(236, 176, 160, 0) 100%
+      ),
+      radial-gradient(circle at 46% 40%, #7e3c2e 0, #652a1f 50%, #461a12 100%);
+    box-shadow:
+      0 0 0 1px #050505,
+      inset 0 0.6px 0.6px rgba(0, 0, 0, 0.5);
+  }
+
+  .tape-strip-led.is-lit {
+    background:
+      radial-gradient(
+        circle at 50% 46%,
+        rgba(255, 240, 216, 0.95) 0,
+        rgba(255, 188, 140, 0.7) 24%,
+        rgba(255, 120, 80, 0) 62%
+      ),
+      radial-gradient(
+        circle at 50% 50%,
+        #ff5a36 0,
+        #f23a1e 55%,
+        #d52811 85%,
+        #b01b0a 100%
+      );
+    box-shadow:
+      0 0 0 1px #050505,
+      0 0 4px 1.5px rgba(250, 70, 40, 0.5);
+  }
+
+  .tape-status {
+    min-width: 0;
+  }
+
+  /* the controller writes its status lines in lower case */
+  .tape-status::first-letter {
+    text-transform: uppercase;
+  }
+
+  /* the deck: Record and Load, the transport, the counter and the speed */
+  .tape-deck {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 22px 24px;
+  }
+
+  .tape-deck-dials {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 22px 24px;
+  }
+
+  /* the dials sit at the right when the deck has the room for one row */
+  @container tape (min-width: 960px) {
+    .tape-deck-dials {
+      margin-left: auto;
+    }
+  }
+
+  .tape-deck > .tape-status {
+    flex: 1 1 220px;
+    align-self: center;
+  }
+
+  /* the note editor */
+  .tape-editor {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+  }
+
+  .tape-editor-top {
+    align-self: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 22px 28px;
+  }
+
+  .tape-grp-note {
+    flex: 1 1 260px;
+    max-width: 380px;
+  }
+
+  .tape-readout {
+    flex: 1 1 auto;
+    height: 40px;
+  }
+
+  .tape-readout > .pk-screen {
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-weight: 500;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .tape-readout-text,
+  .tape-readout-hint {
+    position: relative;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tape-readout-hint {
+    font-family: var(--font-sans);
+    font-stretch: normal;
+    font-size: 14px;
+    color: var(--pk-eink-dim);
+  }
+
+  html[data-theme="dark"] .tape-readout-hint {
+    color: #9a968d;
+  }
+
+  .tape-well-history {
+    margin-left: auto;
+  }
+
+  .tape-edit-wells {
+    align-self: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px 28px;
+  }
+
+  .tape-hint {
+    margin-top: -6px;
+  }
+
+  .tape-hint-touch {
+    display: none;
+  }
+
+  /* the front plate: the take name and Save at the left, the print keys
+     at the right (red last), the status line under them */
+  .tape-front-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 22px 28px;
+  }
+
+  .tape-front > .tape-status {
+    margin-top: 14px;
+  }
+
+  /* an empty status line takes no room (it stays in the page, so the
+     live region still announces the next line) */
+  .tape-front > .tape-status:empty {
+    margin-top: 0;
+  }
+
+  .tape-well-print {
+    margin-left: auto;
+  }
+
+  .tape-save {
+    flex: 1 1 520px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 18px 28px;
+    min-width: 0;
+  }
+
+  .tape-save-name {
+    flex: 1 1 240px;
+    max-width: 400px;
+  }
+
+  /* the field's window level with the key caps beside it */
+  .tape-save-name .pk-field-window {
+    margin-bottom: 1px;
+  }
+
+  /* ---- 01 Takes ---- */
+
+  .tape-section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 20px;
+    margin-bottom: 10px;
+  }
+
+  .tape-section-title h2 {
+    margin: 0;
+  }
+
+  .tape-take {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .tape-take-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+  }
+
+  .tape-take-text {
+    flex: 1 1 auto;
+  }
+
+  .tape-take-text > .pk-engr:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+
+  /* a take's length on a small counter at the start of its row, so the
+     counters line up down the list */
+  .tape-take-time {
+    margin-right: 6px;
+  }
+
+  .tape-take-time > .pk-counter-window {
+    height: 30px;
+  }
+
+  .tape-take-time .pk-drum {
+    min-width: 10px;
+    padding: 0 4px;
+    font-size: 14px;
+  }
+
+  .tape-take-time .tape-counter-sep {
+    width: 5px;
+    font-size: 13px;
+  }
+
+  /* the open take's phrases, indented on an engraved rule */
+  .tape-phrases {
+    margin: 8px 0 4px 6px;
+    padding-left: 20px;
+    background:
+      linear-gradient(
+        90deg,
+        var(--pk-rule) 0 0.6px,
+        var(--pk-rule-lip) 0.6px 1.2px,
+        transparent 1.2px
+      )
+      0 0 / 1.2px 100% no-repeat;
+  }
+
+  .tape-phrases > .pk-row {
+    padding: 5px 0;
+  }
+
+  .tape-phrase-cut > .pk-note {
+    flex: 1 1 auto;
+  }
+
+  .tape-deleted {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-top: 12px;
+  }
+
+  /* ---- 02 Key, 03 Detection, 04 View, 05 Layout ---- */
+
+  .tape-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px 56px;
+    align-items: start;
+  }
+
+  @container tape (min-width: 760px) {
+    .tape-settings {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .tape-section > .pk-rows > .pk-row {
+    gap: 16px;
+  }
+
+  .tape-section-note {
+    padding: 4px 0 6px;
+  }
+
+  .tape-key-window {
+    flex: 0 1 290px;
+    min-width: 0;
+  }
+
+  .tape-set-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .tape-set-value {
+    font-family: var(--font-mono);
+    font-stretch: 82%;
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--pk-fill-soft);
+    text-shadow: var(--pk-engr-shadow);
+  }
+
+  .tape-start-over > .pk-note {
+    flex: 1 1 auto;
+  }
+
+  /* ---- Narrow rooms ---- */
+
+  /* the deck no longer fits one row: the note readout and the take name
+     take their own lines, the keys follow under them */
+  @container tape (max-width: 899px) {
+    .tape-grp-note {
+      flex-basis: 100%;
+      max-width: none;
+    }
+
+    .tape-save {
+      display: contents;
+    }
+
+    .tape-save-name {
+      flex-basis: 100%;
+    }
+  }
+
+  /* phones: the keys share each well's width, the rows stack their keys
+     under the text */
+  @container tape (max-width: 600px) {
+    .tape-deck,
+    .tape-editor-top,
+    .tape-front-row,
+    .tape-save {
+      gap: 20px;
+    }
+
+    .tape-deck > .pk-keys:not(.tape-well-discard),
+    .tape-editor-top > .pk-keys,
+    .tape-well-edit,
+    .tape-well-print,
+    .tape-well-save {
+      display: flex;
+      width: 100%;
+      box-sizing: border-box;
+      margin-left: 0;
+    }
+
+    .tape-deck > .pk-keys:not(.tape-well-discard) > .pk-key,
+    .tape-editor-top > .pk-keys > .pk-key,
+    .tape-well-edit > .pk-key,
+    .tape-well-print > .pk-key,
+    .tape-well-save > .pk-key {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+    }
+
+    .tape-deck .pk-key-legend,
+    .tape-editor .pk-key-legend,
+    .tape-front .pk-key-legend {
+      letter-spacing: 0.07em;
+    }
+
+    .tape-deck-dials {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .tape-save-name {
+      flex-basis: 100%;
+      max-width: none;
+    }
+
+    .tape-grp-note {
+      flex-basis: 100%;
+      max-width: none;
+    }
+
+    .tape-editor-top > .pk-keys {
+      flex: 1 1 0;
+      width: auto;
+    }
+
+    .tape-take-line {
+      flex-wrap: wrap;
+      padding: 4px 0;
+    }
+
+    /* the name wraps under its counter rather than cut short */
+    .tape-take-text > .pk-engr:first-child {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .tape-take-line > .pk-keys {
+      margin-left: auto;
+    }
+
+    .tape-phrases {
+      padding-left: 14px;
+    }
+  }
+
+  /* ---- The phone dock ---- */
+
+  /* the dock holds a second copy of the transport, shown on phones only */
+  .tape-dock {
+    display: none;
+  }
+
+  /* a phone: the transport docks in a full-width bar at the foot of the
+     screen, made of the body's metal (as the Studio and Photo key wells
+     do), and leaves the plate; the page keeps that much room at its end */
+  @media (max-width: 639px) {
+    .tape-tool[data-mode="loaded"] {
+      padding-bottom: calc(101px + env(safe-area-inset-bottom));
+    }
+
+    .tape-tool[data-mode="loaded"] .tape-well-transport {
+      display: none;
+    }
+
+    .tape-dock {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      display: block;
+      box-sizing: border-box;
+      padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+      background-color: var(--pk-face);
+      background-image: var(--pk-face-tone), var(--pk-face-grain);
+      background-size:
+        1400px 900px,
+        200px 200px;
+      background-repeat: no-repeat, repeat;
+      background-blend-mode: soft-light, normal;
+      /* the body's rolled top edge, without its corners */
+      border: 0 solid transparent;
+      border-image:
+        var(--pk-body-edge) 96 96 0 96 / 48px 0 0 0 / 26px 0 0 0 stretch;
+      box-shadow: 0 -10px 18px -10px rgba(20, 18, 14, 0.28);
+    }
+
+    .tape-well-dock {
+      display: flex;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .tape-well-dock > .pk-key {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+    }
+
+    .tape-well-dock .pk-key-legend {
+      letter-spacing: 0.07em;
+    }
+  }
+
+  /* ---- Touch ---- */
+
+  /* the hint in the device's own input language */
+  @media (pointer: coarse) {
+    .tape-hint-kbd {
+      display: none;
+    }
+
+    .tape-hint-touch {
+      display: block;
+    }
   }
 }

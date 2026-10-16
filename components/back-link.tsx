@@ -1,12 +1,13 @@
 'use client';
 
-// A link back to wherever the user came from (the slip page whose "Open
-// in Studio" was pressed, Home, the Slips index...). Falls back to a
-// fixed route when there is no history to return to (opened in a fresh
-// tab, deep link). A plain underlined text link with a 44px target.
+// The Back key: a Leica push key that returns to wherever the user came
+// from (the slip page whose "Open in Studio" was pressed, Home, the Slips
+// index...). Falls back to a fixed route when there is no history to
+// return to (opened in a fresh tab, deep link). It sits in a body's head
+// plate, never loose on the mat.
 
 import { useRouter } from 'next/navigation';
-import { cn } from '@/components/utils';
+import { LeicaKey } from '@/components/hardware/kit/controls';
 
 export function BackLink({
   fallback,
@@ -19,18 +20,14 @@ export function BackLink({
 }) {
   const router = useRouter();
   return (
-    <button
-      type="button"
+    <LeicaKey
+      className={className}
       onClick={() => {
         if (window.history.length > 1) router.back();
         else router.push(fallback);
       }}
-      className={cn(
-        'hw-link inline-flex min-h-[44px] cursor-pointer items-center border-0 bg-transparent p-0 text-sm',
-        className,
-      )}
     >
       {label}
-    </button>
+    </LeicaKey>
   );
 }

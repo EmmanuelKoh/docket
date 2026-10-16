@@ -4,8 +4,8 @@
 // first visit. A slip's next run is shown in the slip's own time zone.
 //
 // The formatters return sentence case ("Fri 16 Oct 2026", "Tomorrow
-// 06:30"). The kit prints them in capitals by CSS (.hw-row-sub does it;
-// add `uppercase` elsewhere), so screen readers get readable words.
+// 06:30"). Capitals, where a page wants them, come from CSS (`uppercase`),
+// so screen readers get readable words.
 // Only Intl here: the boundary lock keeps lib/schedule.js out of app/.
 
 import { cookies } from 'next/headers';

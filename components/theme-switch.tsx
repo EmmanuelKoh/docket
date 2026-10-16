@@ -1,6 +1,6 @@
 'use client';
 
-// The "Dark" switch in the panel. Dark mode is data-theme="dark" on
+// The Dark switch on the nav unit's foot plate. Dark mode is data-theme="dark" on
 // <html>, kept in localStorage under "docket-theme"; the inline script in
 // app/layout.tsx applies it before the first paint. The switch reads the
 // attribute from the page (the server renders it off, and it moves to the
@@ -8,7 +8,7 @@
 // with the client.
 
 import { useSyncExternalStore } from 'react';
-import { SlideSwitch } from '@/components/hardware/slide-switch';
+import { Switch } from '@/components/hardware/kit/switch';
 
 const KEY = 'docket-theme';
 
@@ -38,7 +38,7 @@ function setDark(dark: boolean) {
 export function ThemeSwitch({ className }: { className?: string }) {
   const dark = useSyncExternalStore(subscribe, isDark, () => false);
   return (
-    <SlideSwitch
+    <Switch
       checked={dark}
       label="Dark"
       onChange={setDark}

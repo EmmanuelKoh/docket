@@ -157,15 +157,15 @@ describe('the dashboard layout', () => {
     const online = await line();
     expect(online).toContain('Kitchen printer');
     expect(online).toContain('Online');
-    expect(online).toContain('hw-led--on');
+    expect(online).toContain('pk-led--on');
 
     // a printer that holds a job is printing: red LED, red word
     await threeLive(caller);
     vi.mocked(printersOverview).mockResolvedValueOnce(onePrinter(caller, true));
     const printing = await line();
     expect(printing).toContain('Printing');
-    expect(printing).toContain('hw-led--red');
-    expect(printing).toMatch(/class="[^"]*text-red[^"]*">Printing</);
+    expect(printing).toContain('pk-led--red-on');
+    expect(printing).toMatch(/class="[^"]*pk-engr--red[^"]*">Printing</);
 
     // not seen for 90 seconds: offline, whatever it held
     vi.mocked(printersOverview).mockResolvedValueOnce(
@@ -173,7 +173,7 @@ describe('the dashboard layout', () => {
     );
     const offline = await line();
     expect(offline).toContain('Offline');
-    expect(offline).not.toMatch(/hw-led--(on|red)/);
+    expect(offline).not.toMatch(/pk-led--(on|red)/);
     expect(listCalls()).toEqual([]);
   });
 
@@ -200,27 +200,28 @@ describe('Home', () => {
     ]);
     expect(sizeCalls()).toEqual([[caller]]);
     expect(overviewCalls()).toEqual([[caller]]);
-    // the job a printer holds feeds out of the printer, captioned Printing
-    expect(html).toContain('Printing');
+    // the job a printer holds rises out of the printer, captioned Printing
+    expect(html).toMatch(/class="hm-printing">.*Printing<\/span>/);
     expect(html).toContain('2 waiting');
     expect(html).toContain('No printer yet');
-    // the printed title, not a stat grid
-    expect(html).toMatch(/<h1 class="hw-title[^"]*"[^>]*>Today<\/h1>/);
+    // the title inked on the mat, not a stat grid
+    expect(html).toMatch(/<h1 class="hm-title[^"]*"[^>]*>Today<\/h1>/);
   });
 });
 
 describe('loading.tsx', () => {
-  it('is a skeleton announced as loading: a module with three rows, still and never red', async () => {
+  it('is a skeleton announced as loading: a body with three rows, still and never red', async () => {
     const { default: DashboardLoading } = await import(
       '@/app/(dashboard)/loading'
     );
     const html = renderToStaticMarkup(DashboardLoading());
     expect(html).toMatch(/^<div role="status"/);
     expect(html).toContain('<span class="sr-only">Loading</span>');
-    expect(html).toContain('class="hw-plate"');
-    expect(html.match(/class="hw-row[ "]/g)).toHaveLength(3);
-    expect(html).not.toMatch(/text-red|bg-red|hw-led--red|key-red|flag/);
-    expect(html).not.toMatch(/animate-/); // E moves only when pressed
+    expect(html).toContain('class="pk-body"');
+    expect(html).toContain('class="pk-plate-head"');
+    expect(html.match(/class="pk-row[ "]/g)).toHaveLength(3);
+    expect(html).not.toMatch(/red|pk-led|pk-key|flag/);
+    expect(html).not.toMatch(/animate-/); // the kit moves only when pressed
   });
 });
 
@@ -338,8 +339,8 @@ describe('Studio links', () => {
       'app/(dashboard)/slips/[slug]/page.tsx',
     ]) {
       const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-      // a Link, or a link key (PushKey with href renders a Link)
-      expect(src, f).toMatch(/<(Link|PushKey)\s[^>]*href=\{?[`'"]\/studio/);
+      // a Link, or a link key (a kit Key with href renders a Link)
+      expect(src, f).toMatch(/<(Link|Key)\s[^>]*href=\{?[`'"]\/studio/);
     }
   });
 });

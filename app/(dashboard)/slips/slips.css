@@ -1,0 +1,395 @@
+/* app/(dashboard)/slips/slips.css: the Slips index and a slip's page,
+   built from the parts kit (app/kit.css). Only what the kit does not have:
+   the slip rows (a window showing the top of the receipt, the name as a
+   link that covers the row), the slip rising out of the platen in the
+   slip page's head plate, and the field grids. */
+
+@layer components {
+  /* ---------------------------------------------------------------------
+     Index
+     --------------------------------------------------------------------- */
+
+  /* the deck plate: the counters at the left, New template at the right */
+  .sl-deck {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px 32px;
+  }
+
+  .sl-counts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 36px;
+    padding-bottom: 6px;
+  }
+
+  /* a plate's name: number and category, engraved */
+  .sl-plate-name {
+    margin: 0 0 8px;
+    font: inherit;
+  }
+
+  /* a slip row: the window, the name and its lines, the switch */
+  .sl-row {
+    position: relative;
+    justify-content: flex-start;
+    gap: 24px;
+  }
+
+  .pk-rows--ruled > .sl-row {
+    padding: 16px 0;
+  }
+
+  /* the top of the receipt behind a window in the plate */
+  .sl-window {
+    flex: none;
+    width: 112px;
+    height: 80px;
+    padding: 1px;
+  }
+
+  .sl-paper {
+    position: relative;
+    flex: 1 1 auto;
+    display: block;
+    overflow: hidden;
+    padding: 7px 7px 0;
+    border-radius: 1.5px;
+    background: #fefefe;
+    filter: var(--pk-paper-light);
+  }
+
+  .sl-paper > img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* the paper's grain over the print */
+  .sl-paper::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--pk-paper-grain) 0 0 / 256px repeat;
+    mix-blend-mode: multiply;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  .sl-row-text {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  /* the name is the link; its box covers the whole row, under the switch */
+  .sl-row-link {
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    outline: none;
+  }
+
+  .sl-row-link > .pk-engr {
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+
+  .sl-row-link::after {
+    content: "";
+    position: absolute;
+    inset: 6px -10px;
+    border-radius: 4px;
+  }
+
+  .sl-row-link:hover > .pk-engr {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+  }
+
+  .sl-row-link:focus-visible::after {
+    box-shadow: 0 0 0 2px var(--pk-focus);
+  }
+
+  .sl-row-note {
+    max-width: 64ch;
+  }
+
+  /* rows without switches (templates) run in two columns on a wide
+     screen; each column keeps its own rules */
+  @media (min-width: 1180px) {
+    .sl-rows-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 56px;
+    }
+
+    .pk-rows--ruled.sl-rows-2 > .pk-row:nth-child(2) {
+      background: none;
+    }
+  }
+
+  /* the switch stands above the link's box */
+  .sl-row-ctl {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    margin-left: auto;
+  }
+
+  @media (max-width: 639px) {
+    .sl-row {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 14px 16px;
+    }
+
+    .sl-window {
+      width: 76px;
+      height: 58px;
+    }
+
+    .sl-paper {
+      padding: 5px 5px 0;
+    }
+
+    .sl-row-text {
+      flex-basis: calc(100% - 92px);
+      gap: 7px;
+    }
+
+    .sl-row-note {
+      font-size: 14px;
+    }
+
+    .sl-row-ctl {
+      margin-left: 92px;
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     A slip's page
+     --------------------------------------------------------------------- */
+
+  /* the slip at real size, standing up out of the platen in the head
+     plate. It is laid out in flow above the body (its height comes from
+     the receipt), and its foot runs down into the slot: the head plate is
+     58px, the platen 21px centred in it, and the slip ends 12.5px above
+     the platen's foot, so it reaches 27px below the body's top edge. */
+  .sl-rise {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: -27px;
+  }
+
+  .sl-rise > .pk-slip {
+    z-index: 1;
+  }
+
+  /* the slip's foot, down in the slot (the kit shades it only as the
+     platen's own child; the slip stands outside it here) */
+  .sl-rise > .pk-slip::before {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 14px;
+    background: linear-gradient(
+      rgba(16, 14, 12, 0),
+      rgba(16, 14, 12, 0.025) 30%,
+      rgba(16, 14, 12, 0.06) 48%,
+      rgba(16, 14, 12, 0.3) 62%,
+      rgba(16, 14, 12, 0.72) 76%,
+      rgba(16, 14, 12, 0.86)
+    );
+    pointer-events: none;
+  }
+
+  .sl-blank {
+    margin: 0;
+    padding: 56px 8px 44px;
+    text-align: center;
+    font-size: 14px;
+    color: #4a4741;
+  }
+
+  /* the body answers to its own width: the head plate's layout follows
+     the room the name, the platen and the side group have */
+  .sl-body {
+    container: sl-body / inline-size;
+  }
+
+  /* head plate: the platen across the top (the slip stands in it), under
+     it the name at the left and the side group at the right: the Back
+     key, then the lamp */
+  .sl-head.pk-plate-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "platen platen"
+      "name side";
+    align-items: center;
+    gap: 14px 24px;
+    padding-top: 18.5px;
+    padding-bottom: 14px;
+  }
+
+  .sl-head > .pk-platen {
+    grid-area: platen;
+    justify-self: center;
+  }
+
+  .sl-name {
+    grid-area: name;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .sl-head-side {
+    grid-area: side;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 24px;
+  }
+
+  /* a wide body: one row, the platen centred between the name and the
+     side group */
+  @container sl-body (min-width: 960px) {
+    .sl-head.pk-plate-head {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      grid-template-areas: "name platen side";
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+
+  /* a phone's body: the Back key and the lamp in their own row, the name
+     under them */
+  @container sl-body (max-width: 519px) {
+    .sl-head.pk-plate-head {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        "platen"
+        "side"
+        "name";
+      padding-bottom: 18px;
+    }
+
+    .sl-head-side {
+      justify-content: space-between;
+    }
+  }
+
+  /* the front plate: what the slip is, then Print test */
+  .sl-front {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px 40px;
+  }
+
+  .sl-front > .pk-note {
+    flex: 1 1 320px;
+    max-width: 64ch;
+    padding-bottom: 14px;
+  }
+
+  /* a key well with its status line printed beside it */
+  .sl-act {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 10px 20px;
+    margin-left: auto;
+  }
+
+  .sl-act > [role="status"],
+  .sl-act > [role="alert"] {
+    flex: 0 1 auto;
+    padding-bottom: 14px;
+    text-align: right;
+  }
+
+  .sl-act > [role="status"]:empty {
+    display: none;
+  }
+
+  /* fields on a plate: a grid that gives a long value the whole width */
+  .sl-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 22px 28px;
+    margin-top: 18px;
+  }
+
+  .sl-fields > .sl-wide {
+    grid-column: 1 / -1;
+  }
+
+  .sl-fields > .sl-short {
+    max-width: 180px;
+  }
+
+  .sl-lastrun {
+    margin-top: 10px;
+  }
+
+  /* the Save row closes the form's last plate */
+  .sl-save {
+    margin-top: 26px;
+  }
+
+  @media (max-width: 639px) {
+    .sl-fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* the status line over the front well */
+    .sl-front .sl-act {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .sl-front .sl-act > [role="status"] {
+      flex-basis: 100%;
+      padding-bottom: 0;
+      text-align: left;
+    }
+
+    /* a well of several keys shares the body's width (the kit's fill
+       well); a single key stays its own size at the right */
+    .sl-well:has(> .pk-key:nth-child(2)) {
+      display: flex;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .sl-well:has(> .pk-key:nth-child(2)) > .pk-key {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+    }
+
+    .sl-well:has(> .pk-key:nth-child(2)) .pk-key-legend {
+      letter-spacing: 0.07em;
+    }
+
+    .sl-deck > .pk-keys,
+    .sl-well {
+      margin-left: auto;
+    }
+  }
+}

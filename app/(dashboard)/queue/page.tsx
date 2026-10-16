@@ -1,7 +1,7 @@
 // Queue (design spec: pages, Queue): what the printer holds and what
-// waits, in print order, live (components/queue-list.tsx). Not in the key
-// bank: Home's and the Printer page's Printer modules link here while
-// anything waits or prints.
+// waits, in print order, live (components/queue-list.tsx), as one deck.
+// Not in the nav: the Printer page's Queue key links here, and Home's
+// printer links here while jobs wait.
 //
 // Reads: the queue view (jobs.list of the live jobs, in the viewer's time
 // zone) and slips.list once, to name each job's source ('sms' is "Text
