@@ -26,6 +26,7 @@ import { Lamp } from '@/components/hardware/kit/led';
 import { Row, Rows } from '@/components/hardware/kit/sheet';
 import { SlipSwitch } from '@/components/slip-switch';
 import { slipsRegister } from '@/lib/ops/slips.js';
+import { SlipFeed } from './slip-feed';
 
 export const metadata: Metadata = { title: 'Slips' };
 
@@ -47,7 +48,7 @@ function SlipRow({ slip, tz, now }: { slip: Slip; tz: string; now: number }) {
       ? editedLabel(slip.editedAt, tz, now)
       : '';
   return (
-    <Row className="sl-row">
+    <Row className="sl-row" data-slip={slip.slug}>
       {/* the top of the receipt, seen through a window in the plate */}
       <span className="pk-window sl-window" aria-hidden="true">
         <span className="sl-paper">
@@ -84,6 +85,8 @@ function SlipRow({ slip, tz, now }: { slip: Slip; tz: string; now: number }) {
   );
 }
 
+// The slip under the pointer at real size, fed by a travelling printer in
+// a module at the right (slip-feed.tsx; wide windows only).
 export default async function SlipsPage() {
   const caller = await getCaller();
   if (!caller) redirect('/login');
@@ -97,6 +100,9 @@ export default async function SlipsPage() {
   const on = slips.filter((s) => s.kind === 'system' && s.enabled).length;
   const now = Date.now();
 
+  const first =
+    slips.find((s) => s.kind === 'system' && s.enabled && s.thumb) ??
+    slips.find((s) => s.thumb);
   return (
     <Body as="section" aria-labelledby="slips-name" className="sl-unit">
       <Plate head>
@@ -120,39 +126,45 @@ export default async function SlipsPage() {
         </KeyWell>
       </Plate>
 
-      {groups.map((group, i) => (
-        <Plate
-          key={group.category}
-          seam
-          as="section"
-          aria-labelledby={`slips-${group.category}`}
-        >
-          <h2 id={`slips-${group.category}`} className="sl-plate-name">
-            <PlateTitle number={two(i + 1)}>
-              <span className="pk-engr">{sentence(group.category)}</span>
-            </PlateTitle>
-          </h2>
-          <Rows
-            ruled
-            className={
-              group.slips.length > 3 &&
-              group.slips.every((s) => s.kind === 'template')
-                ? 'sl-rows-2'
-                : undefined
-            }
-          >
-            {group.slips.map((slip) => (
-              <SlipRow key={slip.slug} slip={slip} tz={tz} now={now} />
-            ))}
-          </Rows>
-        </Plate>
-      ))}
+      <div className="sl-stack">
+        <div className="sl-list">
+          {groups.map((group, i) => (
+            <Plate
+              key={group.category}
+              seam
+              as="section"
+              aria-labelledby={`slips-${group.category}`}
+            >
+              <h2 id={`slips-${group.category}`} className="sl-plate-name">
+                <PlateTitle number={two(i + 1)}>
+                  <span className="pk-engr">{sentence(group.category)}</span>
+                </PlateTitle>
+              </h2>
+              <Rows ruled>
+                {group.slips.map((slip) => (
+                  <SlipRow key={slip.slug} slip={slip} tz={tz} now={now} />
+                ))}
+              </Rows>
+            </Plate>
+          ))}
 
-      {groups.length === 0 ? (
-        <Plate seam>
-          <Note>No slips yet. Make a template in Studio.</Note>
+          {groups.length === 0 ? (
+            <Plate seam>
+              <Note>No slips yet. Make a template in Studio.</Note>
+            </Plate>
+          ) : null}
+        </div>
+        <Plate seam className="sl-bed">
+          <SlipFeed
+            slips={slips.map((s) => ({
+              slug: s.slug,
+              title: s.title,
+              thumb: s.thumb,
+            }))}
+            initial={first?.slug ?? ''}
+          />
         </Plate>
-      ) : null}
+      </div>
     </Body>
   );
 }

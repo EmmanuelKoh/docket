@@ -276,7 +276,9 @@ into the well, the current lever key dips lengthwise, the switch cap
 slides, the thumbwheel turns one frame for each step, and the track
 rollers turn as the page scrolls. There are no fades, no springs and no
 pulsing skeletons. Reduced motion turns the travel off and holds the
-rollers still.
+rollers still. The one exception is the Slips feed module, where each
+part moves like its real mechanism (the paper in steps, the carriage on
+its motor, the roller turning with it), described under Slips.
 
 Focus: every control shows a 2px ring in --pk-focus (ink in light, a
 light line in dark). The ring goes round a key and its legend strip;
@@ -435,11 +437,61 @@ between rows:
   slide switch at the right.
 The name is the link to the slip's page. Its target covers the whole
 row, and the switch sits above it, outside the link. Hover underlines
-the name; keyboard focus rings the row. A plate whose rows are all
-templates (four or more) runs in two columns when the window is 1180px
-or wider, each column with its own rules. On a phone the switch goes
+the name; keyboard focus rings the row. On a phone the switch goes
 under the text. With no slips, the body says "No slips yet. Make a
 template in Studio."
+
+Feed module: when the window is 1180px or wider, the category plates
+take the left column and a feed module takes a 428px column at the
+right, joined to them by a seam and running the body's full height.
+Narrower windows show the rows only.
+- A travelling printer rides down the module. The carriage runs on a
+  rod at the module's left edge and on a flush way at its right (a white
+  shoe), driven by a friction roller on the rod and a small motor. A
+  flat cable from the carriage folds down through a brush strip into a
+  slot in the deck. The cable's amber is the polyimide's material
+  colour, not an accent.
+- The slip under the pointer (once the pointer has rested on a row for
+  120 ms) or under keyboard focus hangs out of the printer at real size
+  (the 320px slip) from under the tear bar.
+- Changing slips is stop-motion, like the printer's stepper motor. The
+  slip in the printer steps back into the slot in quarters, then the
+  next steps out in eighths, about 12 steps a second. The last row the
+  pointer rests on wins.
+- While the page scrolls, the printer holds 260px below the window's
+  top. A motor drives it along the module at up to 420 px/s, so a fast
+  scroll leaves it behind and it catches up without overshooting. Wheel
+  steps glide (a 140 ms ease) instead of jumping.
+- At rest, with the page at its top, the carriage sits against the top
+  support.
+- The drive turns with the carriage's travel: the roller, its shaft and
+  the motor coupling, each with two black set screws a quarter turn
+  apart, so a screw is always passing over the top. It is the only part
+  that turns smoothly. Parts bolted to the deck stay still.
+- The printer can be grabbed and pushed along the rod. It stays where it
+  is left until the page scrolls; then the motor takes it back.
+- The parts are Blender renders through a shift-lens camera: the eye
+  550 mm above the page and 120 mm in front of the window's bottom edge
+  (1 mm = 4px), its sensor parallel to the page. Flat things (the slip,
+  the deck) stay at real size everywhere. Raised parts show true
+  perspective, so near the top of the window the printer's front faces
+  look taller and near the bottom they flatten. The head unit is
+  rendered at 11 heights. One WebGL 2 canvas warps the nearest render to
+  the printer's place using its height map, and mixes the light from the
+  two renders either side. Only the feed module uses this camera; the
+  rest of the dashboard keeps the kit's slanted view (the same camera
+  with the eye infinitely far away).
+- Light: one lamp above the window's top left, a soft white bounce card
+  in front of the window's bottom edge (a tenth of the lamp's power),
+  and the slip's paper bouncing light into the printer. Nothing is
+  painted on: no drawn highlights, and the chamfers keep each part's own
+  finish, so they catch light only where the lamp or the card reflects
+  in them. The rod and the way are the same all along, so their light
+  belongs to the window: their pictures stay fixed to the window while
+  the deck scrolls.
+- Reduced motion: no motor, no glide and no stepped feed. The carriage
+  follows the scroll exactly and a single static render shows. Without
+  WebGL 2 the static render shows too.
 
 Slip page: one machine body. Nothing sits loose on the mat.
 - The head plate has the slip's title engraved at the left, the platen

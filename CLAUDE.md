@@ -248,6 +248,17 @@ bring-up.
 - Local dev: `DATABASE_URL= npm run dev`, plus `node agent/heartbeat.js`
   and `node agent/printer-agent.js` only if the ESP32 isn't covering
   those (they act for `OWNER_ID`; set it to your account id).
+- UI work: `npm run sandbox` runs `next dev` on :3400 against a
+  throwaway store in `data/sandbox` (no `.env` database, Redis, Blob or
+  API key), seeds an admin, templates, jobs, a paired printer and
+  invites, and runs a stand-in printer (`-- --hold` keeps jobs waiting,
+  `-- --keep` reuses the last store). It prints the sign-in. Next allows
+  one `next dev` per folder: stop `npm run dev` first. Dev-only pages
+  (404 in production): `/kit` shows every kit part in every state,
+  `/compare?page=/queue&w=390` shows a page in light and dark side by
+  side. `npm run sandbox:grammar` checks every page against the page
+  grammar at desktop and phone width; `node scripts/sandbox/shoot.mjs
+  <route> <out.png>` takes a signed-in screenshot.
 - Accounts: `DATABASE_URL= node scripts/create-user.js "Name" email`
   makes an admin (hidden password prompt; dev server stopped).
 - Code edits hot-reload under `npm run dev`.
