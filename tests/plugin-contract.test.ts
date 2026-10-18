@@ -132,7 +132,8 @@ it('lib/ and app/ neither read a passive flag nor branch on a module id', () => 
         fs.readFileSync(p, 'utf8')
           .split('\n')
           .forEach((line, i) => {
-            if (banned.test(line))
+            // an event listener's { passive } option is not the plugin flag
+            if (banned.test(line) && !line.includes('addEventListener('))
               hits.push(`${path.relative(root, p)}:${i + 1}`);
           });
       }
