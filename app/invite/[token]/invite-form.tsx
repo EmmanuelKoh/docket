@@ -58,6 +58,9 @@ export function InviteForm({
 
   return (
     <form
+      // POST, so a submit before the script loads never puts the password
+      // in the URL
+      method="post"
       className="contents"
       onSubmit={(e) => {
         e.preventDefault();
