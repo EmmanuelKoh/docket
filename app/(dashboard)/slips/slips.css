@@ -386,16 +386,17 @@
 
      x: px from .sl-mech's left edge (the plate's content edge; the plate
      runs -28..400). The deck, in px from .sl-mech's top or bottom (B): the
-     rod x 0-16, a tile from 72 to B-64 between its supports (-28..72,
-     B-64..B+40), the cable slot x 67-93 with its brushes (6..B-6), the
-     flush way x 334-354 (0..B). The head unit, in px from .sl-head-unit's
-     box origin (module y 121 at rest): the printer's front meets the desk
-     at row 147.92 and the slip leaves it at row 145.4 under the tear bar;
-     the static render (.sl-cast) and the lens (.sl-lens) draw the
-     carriage, the printer, the cable and the shadow they cast. The
-     carriage runs on its motor (--sl-y from the script), or with reduced
-     motion on one scroll timeline. The script snaps .sl-mech to the
-     device pixel grid (--sl-snap; --sl-bf for the parts placed from B). */
+     rod x 0-16 (16..B-16) between its supports (-100..100, B-150..B+60,
+     each with its shadow), the cable slot x 67-93 with its brushes
+     (6..B-6), the flush way x 334-354 (0..B). The head unit, in px from .sl-head-unit's
+     box origin (module y 92 at rest, the carriage against the top
+     support): the printer's front meets the desk at row 147.92 and the
+     slip leaves it at row 145.4 under the tear bar; the static render
+     (.sl-cast) and the lens (.sl-lens) draw the carriage, the printer,
+     the cable and the shadow they cast. The carriage runs on its motor
+     (--sl-y from the script), or with reduced motion on one scroll
+     timeline. The script snaps .sl-mech to the device pixel grid
+     (--sl-snap; --sl-bf for the parts placed from B). */
   .sl-stack {
     display: flex;
     flex-direction: column;
@@ -526,40 +527,48 @@
       pointer-events: none;
     }
 
-    /* the deck: the rod between its supports, cut edge to edge (their
-       shadows would double where they overlapped) */
+    /* the deck. The rod and the way are the same all along, so the lamp's
+       light on them belongs to the window: each is a strip as tall as the
+       window (window y -40..1640) held still while its box scrolls
+       (--sl-mx, the module's left edge in the window, from the script).
+       The supports and the way's ends are rendered where they are seen:
+       the top with the page at its top, the bottom at its end. */
     .sl-rod {
-      left: -14.01px;
-      top: 72px;
-      bottom: calc(64px + var(--sl-bf, 0px));
-      width: 68px;
-      background: var(--sl-rod) 0 0 / 68px 8px repeat-y;
+      left: -16.01px;
+      top: 16px;
+      bottom: calc(16px + var(--sl-bf, 0px));
+      width: 72px;
+      background:
+        var(--sl-rod) calc(var(--sl-mx, 0px) - 16.01px) -40px / 72px 1680px
+        no-repeat fixed;
     }
 
     .sl-support {
-      left: -24.51px;
-      width: 100px;
+      left: -24.01px;
+      width: 124px;
     }
 
     .sl-support.t {
-      top: -28px;
-      height: 100px;
-      background: var(--sl-support-t) 0 0 / 100px 100px no-repeat;
+      top: -100px;
+      height: 200px;
+      background: var(--sl-support-t) 0 0 / 124px 200px no-repeat;
     }
 
     .sl-support.b {
-      bottom: calc(-40px + var(--sl-bf, 0px));
-      height: 104px;
-      background: var(--sl-support-b) 0 0 / 100px 104px no-repeat;
+      bottom: calc(-60px + var(--sl-bf, 0px));
+      height: 210px;
+      background: var(--sl-support-b) 0 0 / 124px 210px no-repeat;
     }
 
     /* the flush way under the right end, its ends as its pseudo-elements */
     .sl-way {
-      left: 329.99px;
+      left: 327.99px;
       top: 40px;
       bottom: calc(40px + var(--sl-bf, 0px));
-      width: 28px;
-      background: var(--sl-way) 0 0 / 28px 8px repeat-y;
+      width: 32px;
+      background:
+        var(--sl-way) calc(var(--sl-mx, 0px) + 327.99px) -40px / 32px 1680px
+        no-repeat fixed;
     }
 
     .sl-way::before,
@@ -567,18 +576,18 @@
       content: "";
       position: absolute;
       left: 0;
-      width: 28px;
+      width: 32px;
       height: 40px;
     }
 
     .sl-way::before {
       top: -40px;
-      background: var(--sl-way-t) 0 0 / 28px 40px no-repeat;
+      background: var(--sl-way-t) 0 0 / 32px 40px no-repeat;
     }
 
     .sl-way::after {
       bottom: -40px;
-      background: var(--sl-way-b) 0 0 / 28px 40px no-repeat;
+      background: var(--sl-way-b) 0 0 / 32px 40px no-repeat;
     }
 
     /* the cable slot and its brushes, under the extension */
@@ -613,7 +622,7 @@
     .sl-head-unit {
       position: relative;
       z-index: 2;
-      margin-top: 121px;
+      margin-top: 92px;
       translate: 0 var(--sl-y, 0px);
     }
 
@@ -685,9 +694,27 @@
   }
 
   /* the carriage on its own motor (slip-feed.tsx): the scroll timeline
-     steps aside and --sl-y comes from the motor */
+     steps aside and --sl-y comes from the motor. The printer and the
+     carriage above it can be grabbed (the ::before is the carriage's
+     reach above the printer) */
   .sl-motor .sl-head-unit {
     animation: none;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .sl-motor .sl-head-unit::before {
+    content: "";
+    position: absolute;
+    left: -16px;
+    top: -90px;
+    width: 390px;
+    height: 90px;
+  }
+
+  .sl-held .sl-head-unit {
+    cursor: grabbing;
   }
 
   @keyframes sl-travel {

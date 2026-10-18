@@ -24,7 +24,8 @@
 //
 // Each part moves like its mechanism: the carriage on its motor (it
 // catches up with the page at a limited speed), the roller turning
-// smoothly with the travel, the paper in the stepper's steps. .sl-mech is
+// smoothly with the travel, the paper in the stepper's steps. The printer
+// can be grabbed and pushed along the rod. .sl-mech is
 // snapped to the device pixel grid so the deck's sprites never resample.
 //
 // Rows carry data-slip; the slip follows real pointer movement (not rows
@@ -38,12 +39,13 @@ import { startLens } from './slip-lens';
 
 type FeedSlip = { slug: string; title: string; thumb: string | null };
 
-// Where the head origin (the printer lid's back edge) rests in the
-// module, home against the top support (the cable's crest rises 114px
-// above it); where it holds below the viewport's top while the page
-// scrolls, low enough that it starts travelling early and the deck
-// behind it stays in view; and the room kept clear below its slip.
-const REST = 121;
+// Where the head unit's box origin rests in the module: home, the
+// carriage's back face (92px behind the box origin, at desk level) against
+// the top support's front face (module y 40); where it holds below the
+// viewport's top while the page scrolls, low enough that it starts
+// travelling early and the deck behind it stays in view; and the room kept
+// clear below its slip.
+const REST = 92;
 const HOLD = 260;
 const FOOT = 40;
 
@@ -109,6 +111,7 @@ export function SlipFeed({
       snap = offGrid(laid, dpr);
       top = laid - snap;
       m.style.setProperty('--sl-snap', `${snap}px`);
+      m.style.setProperty('--sl-mx', `${box.left}px`);
       m.style.setProperty('--sl-bf', `${offGrid(top + box.height, dpr)}px`);
       travel = Math.max(0, m.clientHeight - FOOT - h.offsetHeight - REST);
       const start = top + REST - HOLD;
@@ -157,10 +160,37 @@ export function SlipFeed({
         prev = 0;
       } else run = requestAnimationFrame(drive);
     };
+    // a hand on the carriage: grab the printer and push it along the rod;
+    // it stays where it is left until the page scrolls, and then the motor
+    // takes it back
+    let grab: { y: number; at: number; id: number } | null = null;
     const place = () => {
+      if (grab) return;
       if (!motor) set(goal());
       else if (!run) run = requestAnimationFrame(drive);
     };
+    const down = (e: PointerEvent) => {
+      if (!motor || e.button !== 0) return;
+      e.preventDefault();
+      cancelAnimationFrame(run);
+      run = 0;
+      prev = 0;
+      speed = 0;
+      grab = { y: e.clientY, at, id: e.pointerId };
+      h.setPointerCapture(e.pointerId);
+      m.classList.add('sl-held');
+    };
+    const push = (e: PointerEvent) => {
+      if (grab?.id !== e.pointerId) return;
+      at = Math.min(travel, Math.max(0, grab.at + e.clientY - grab.y));
+      set(at);
+    };
+    const release = (e: PointerEvent) => {
+      if (grab?.id !== e.pointerId) return;
+      grab = null;
+      m.classList.remove('sl-held');
+    };
+    const still = (e: Event) => e.preventDefault();
     measure();
     at = goal();
     set(at);
@@ -171,11 +201,28 @@ export function SlipFeed({
     });
     seen.observe(m);
     seen.observe(h);
+    // the module moves sideways with the window's width, not its own size
+    const resize = () => {
+      measure();
+      place();
+    };
     window.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('resize', resize);
+    h.addEventListener('pointerdown', down);
+    h.addEventListener('pointermove', push);
+    h.addEventListener('pointerup', release);
+    h.addEventListener('pointercancel', release);
+    h.addEventListener('dragstart', still);
     return () => {
       cancelAnimationFrame(run);
       seen.disconnect();
       window.removeEventListener('scroll', place);
+      window.removeEventListener('resize', resize);
+      h.removeEventListener('pointerdown', down);
+      h.removeEventListener('pointermove', push);
+      h.removeEventListener('pointerup', release);
+      h.removeEventListener('pointercancel', release);
+      h.removeEventListener('dragstart', still);
       m.classList.remove('sl-motor');
     };
   }, []);

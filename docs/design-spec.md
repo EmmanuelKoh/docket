@@ -462,8 +462,14 @@ Narrower windows show the rows only.
   top. A motor drives it along the module at up to 420 px/s, so a fast
   scroll leaves it behind and it catches up without overshooting. Wheel
   steps glide (a 140 ms ease) instead of jumping.
-- The drive roller turns with the carriage's travel. It is the only part
+- At rest, with the page at its top, the carriage sits against the top
+  support.
+- The drive turns with the carriage's travel: the roller, its shaft and
+  the motor coupling, each with two black set screws a quarter turn
+  apart, so a screw is always passing over the top. It is the only part
   that turns smoothly. Parts bolted to the deck stay still.
+- The printer can be grabbed and pushed along the rod. It stays where it
+  is left until the page scrolls; then the motor takes it back.
 - The parts are Blender renders through a shift-lens camera: the eye
   550 mm above the page and 120 mm in front of the window's bottom edge
   (1 mm = 4px), its sensor parallel to the page. Flat things (the slip,
@@ -478,7 +484,11 @@ Narrower windows show the rows only.
 - Light: one lamp above the window's top left, a soft white bounce card
   in front of the window's bottom edge (a tenth of the lamp's power),
   and the slip's paper bouncing light into the printer. Nothing is
-  painted on: no drawn highlights.
+  painted on: no drawn highlights, and the chamfers keep each part's own
+  finish, so they catch light only where the lamp or the card reflects
+  in them. The rod and the way are the same all along, so their light
+  belongs to the window: their pictures stay fixed to the window while
+  the deck scrolls.
 - Reduced motion: no motor, no glide and no stepped feed. The carriage
   follows the scroll exactly and a single static render shows. Without
   WebGL 2 the static render shows too.
