@@ -122,8 +122,10 @@ and the Printer page every 3s while a pairing is pending.
 - `scripts/`: account, plugin and template tools, `print-calibration.js`
   (grayscale wedges through the real pipeline; signs in with
   `DOCKET_EMAIL`/`DOCKET_PASSWORD`), `tape-eval/` (`npm run tape:eval`
-  scores every `data/clips/*.truth.json` fixture). `agent/` and
-  `transport/` are laptop stand-ins for the ESP32.
+  scores every `data/clips/*.truth.json` fixture), `render/` (the
+  Blender scene behind the Slips feed module's images; read
+  `docs/rendering.md` first). `agent/` and `transport/` are laptop
+  stand-ins for the ESP32.
 
 ## Storage
 
@@ -204,6 +206,10 @@ and the Printer page every 3s while a pairing is pending.
 `docs/template-authoring.md` is the constraint sheet for writing receipt
 templates (Satori's CSS dialect, thermal-paper rules); give it to any
 LLM asked to design one.
+
+`docs/rendering.md` explains how the Slips feed module's Blender renders
+are made and used (the shift-lens camera, the lights, the layers, the page's
+warp, the rules and recipes); its source is `scripts/render/`.
 
 `docs/design-spec.md` is the visual source of truth (the units
 direction: each page is one machine body built from the parts kit, both

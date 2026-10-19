@@ -414,32 +414,32 @@
 
   :root {
     --sl-cast: image-set(
-      url(/hardware/feed/head-light-2x.png) 2x,
-      url(/hardware/feed/head-light-1x.png) 1x
+      url(/hardware/feed/v1/head-light-2x.png) 2x,
+      url(/hardware/feed/v1/head-light-1x.png) 1x
     );
     --sl-rod: image-set(
-      url(/hardware/feed/feed-rod-light-2x.png) 2x,
-      url(/hardware/feed/feed-rod-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-rod-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-rod-light-1x.png) 1x
     );
     --sl-support-t: image-set(
-      url(/hardware/feed/feed-support-t-light-2x.png) 2x,
-      url(/hardware/feed/feed-support-t-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-support-t-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-support-t-light-1x.png) 1x
     );
     --sl-support-b: image-set(
-      url(/hardware/feed/feed-support-b-light-2x.png) 2x,
-      url(/hardware/feed/feed-support-b-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-support-b-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-support-b-light-1x.png) 1x
     );
     --sl-way: image-set(
-      url(/hardware/feed/feed-way-light-2x.png) 2x,
-      url(/hardware/feed/feed-way-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-light-1x.png) 1x
     );
     --sl-way-t: image-set(
-      url(/hardware/feed/feed-way-end-t-light-2x.png) 2x,
-      url(/hardware/feed/feed-way-end-t-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-end-t-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-end-t-light-1x.png) 1x
     );
     --sl-way-b: image-set(
-      url(/hardware/feed/feed-way-end-b-light-2x.png) 2x,
-      url(/hardware/feed/feed-way-end-b-light-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-end-b-light-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-end-b-light-1x.png) 1x
     );
     --sl-slot: image-set(
       url(/hardware/feed/feed-slot-light-2x.png) 2x,
@@ -457,32 +457,32 @@
 
   html[data-theme="dark"] {
     --sl-cast: image-set(
-      url(/hardware/feed/head-dark-2x.png) 2x,
-      url(/hardware/feed/head-dark-1x.png) 1x
+      url(/hardware/feed/v1/head-dark-2x.png) 2x,
+      url(/hardware/feed/v1/head-dark-1x.png) 1x
     );
     --sl-rod: image-set(
-      url(/hardware/feed/feed-rod-dark-2x.png) 2x,
-      url(/hardware/feed/feed-rod-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-rod-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-rod-dark-1x.png) 1x
     );
     --sl-support-t: image-set(
-      url(/hardware/feed/feed-support-t-dark-2x.png) 2x,
-      url(/hardware/feed/feed-support-t-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-support-t-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-support-t-dark-1x.png) 1x
     );
     --sl-support-b: image-set(
-      url(/hardware/feed/feed-support-b-dark-2x.png) 2x,
-      url(/hardware/feed/feed-support-b-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-support-b-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-support-b-dark-1x.png) 1x
     );
     --sl-way: image-set(
-      url(/hardware/feed/feed-way-dark-2x.png) 2x,
-      url(/hardware/feed/feed-way-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-dark-1x.png) 1x
     );
     --sl-way-t: image-set(
-      url(/hardware/feed/feed-way-end-t-dark-2x.png) 2x,
-      url(/hardware/feed/feed-way-end-t-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-end-t-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-end-t-dark-1x.png) 1x
     );
     --sl-way-b: image-set(
-      url(/hardware/feed/feed-way-end-b-dark-2x.png) 2x,
-      url(/hardware/feed/feed-way-end-b-dark-1x.png) 1x
+      url(/hardware/feed/v1/feed-way-end-b-dark-2x.png) 2x,
+      url(/hardware/feed/v1/feed-way-end-b-dark-1x.png) 1x
     );
     --sl-slot: image-set(
       url(/hardware/feed/feed-slot-dark-2x.png) 2x,
