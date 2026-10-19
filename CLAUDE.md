@@ -205,6 +205,10 @@ and the Printer page every 3s while a pairing is pending.
 templates (Satori's CSS dialect, thermal-paper rules); give it to any
 LLM asked to design one.
 
+`docs/rendering.md` explains how the Slips feed module's Blender renders
+are made and used (the shift-lens camera, the lights, the layers, the page's
+warp, the rules and recipes); its source is `scripts/render/`.
+
 `docs/design-spec.md` is the visual source of truth (the units
 direction: each page is one machine body built from the parts kit, both
 themes, strict accent rules). **Update it whenever the UI changes**; it

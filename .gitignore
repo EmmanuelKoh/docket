@@ -49,3 +49,9 @@ __pycache__/
 .impeccable/prompts/
 .impeccable/review/
 .impeccable/questions/
+
+# render pipeline outputs (scripts/render; the page ships what pack.py and deck.py write to public/)
+scripts/render/out/
+scripts/render/layers/
+scripts/render/deck/
+scripts/render/__pycache__/
