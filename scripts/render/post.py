@@ -31,7 +31,7 @@ for f in sorted(glob.glob(os.path.join(OUT, 'lay_%s_%s_L*.npz' % (theme, tag))))
     h = np.clip(np.round(P['H'] / meta['zs'] * 255), 0, 255).astype(np.uint8)
     s = np.clip(P['S'], 0, 1)
     n = meta['name']
-    Image.fromarray(col, 'RGBA').save(os.path.join(D, n + '_c.png'))
+    Image.fromarray(col).save(os.path.join(D, n + '_c.png'))
     Image.fromarray(h).save(os.path.join(D, n + '_h.png'))
     Image.fromarray((s * 255 + 0.5).astype(np.uint8)).save(os.path.join(D, n + '_s.png'))
     json.dump(meta, open(os.path.join(D, n + '.json'), 'w'), indent=1)

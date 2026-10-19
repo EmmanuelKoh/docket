@@ -1,6 +1,7 @@
-# Shared geometry for build.py (Blender) and compare.py (python3): the shipped scenes' numbers and both projections.
-# Model frame = carriage.py's world frame in CSS px (4 px = 1 mm): x from .sl-mech's left edge, y toward the top of
-# the page (away from the viewer), z up from the desk. The oblique (shipped) drawing: screen y = -(y + K z).
+# Shared geometry for build.py (Blender) and the post tools (python3): the module's numbers and both projections.
+# Model frame in CSS px (4 px = 1 mm): x from .sl-mech's left edge, y toward the top of the page (away from the
+# viewer), z up from the desk. The kit's slanted drawing, which the design was first made in: screen y = -(y + K z).
+# docs/rendering.md explains the shift-lens camera.
 K = 0.62
 ZT = 58.0645            # carriage top plane / printer lid top (14.5 mm)
 ZLEDGE = 16.129         # printer front ledge
@@ -17,7 +18,7 @@ def wy(s, z=ZT):
 AXY = wy(-40, AXZ)                                   # 12.72
 Y_BACK, Y_BEAMF, Y_BEAMB, Y_CAPF, Y_LID = wy(-88), wy(-2), wy(-22), wy(112), wy(0)   # 52, -34, 14, -148, -36
 
-# live page, 1440 x 900, printer pinned (shots/live-*.json): head-unit origin and the module box
+# the live page at 1440 x 900 with the printer pinned (measured): the head origin and the module box
 import os
 # HEAD_X / HEAD_Y / MECH_TOP / CROP from the environment place the scene elsewhere in the window (stage 3 renders)
 HEAD = (float(os.environ.get('HEAD_X', '992')), float(os.environ.get('HEAD_Y', '260')))   # review fix 1: 257.6 was the beam front edge (s -2)

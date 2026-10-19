@@ -6,9 +6,18 @@ covers how the scene is built, what gets rendered, how the page uses the
 renders, the rules learned while making it, and how to change it.
 
 The code lives in `scripts/render/` (the Blender scene and the tools that
-turn renders into page assets) and `app/(dashboard)/slips/` (the page).
+turn renders into page images) and `app/(dashboard)/slips/` (the page).
 `docs/design-spec.md` describes what the module looks like and how it moves;
-this document describes how it is made.
+this document describes how it is made. Update both when the module changes.
+
+## Before you start
+
+- macOS on Apple silicon or Intel. Blender 5.2 (5.2.2 LTS was used) at
+  `/Applications/Blender.app`; set `BLENDER` to the binary if it lives
+  elsewhere (Homebrew installs `/opt/homebrew/bin/Blender`).
+- `python3` with numpy and Pillow built with WebP support, and zsh.
+- For the page checks: `npm install`, Google Chrome, and the sandbox running
+  (`npm run sandbox`).
 
 ## The camera
 
@@ -35,42 +44,52 @@ and the camera's sensor is parallel to the desk. At 1 mm = 4 CSS px, in a
 - `HEAD`: where the head origin (the back edge of the printer's lid top, at
   z = 58.06) lands in the window. `MECH_TOP` and `MECH_H` place the module.
   `CROP` is the window rectangle rendered. All four can be set from the
-  environment (`HEAD_X`, `HEAD_Y`, `MECH_TOP`, `MECH_H`, `CROP`).
+  environment (`HEAD_X`, `HEAD_Y`, `MECH_TOP`, `MECH_H`, `CROP`). The
+  defaults (head at window (992, 260), module 1258.6 tall) are the 1440 x 900
+  page with the printer pinned; the render scripts override them.
 - `proj(x, y, z)` takes a model point to window px through the shift lens.
   `plan(x, y)` is the same at z = 0.
 
 ## The scene
 
-`scripts/render/build.py` builds the module from the shipped design's
-numbers. Primitives, the machined-metal material and the room light come from
-`scripts/render/parts.py`.
+`scripts/render/build.py` builds the module. Primitives, the machined-metal
+material, the render settings and the room light come from
+`scripts/render/parts.py` (build.py runs everything above that file's
+`if MODE` line).
 
 ### Light
 
 There is one lamp, one bounce card and the room. Nothing else lights the
 scene, and nothing is painted on.
 
-| Item | Numbers | Why |
+| Item | Numbers (build.py) | Why |
 |---|---|---|
-| Lamp | 200 mm disc at (-120, -120, 400) mm from the window's top left, aimed at the window centre. Power set so a flat white surface at the window centre gets 2.16 (sun units) | The key light. Fixed to the window, so the printer's light changes as it moves down the page |
-| Bounce card | 400 x 120 mm soft rectangle, 160 mm in front of the window's bottom edge and 130 mm up, aimed at the window centre, a tenth of the lamp's power, unseen by the camera | A photographer's white card. It lifts the front faces a little. It is close to the desk, so in practice it gives about 20% of the desk's light, and its long soft shadows show; that is real, not a bug |
-| Invisible paper | A white 80 mm sheet (x 42-362) leaving the slot at z 2.4, drooping to the desk over 72 px, then flat. Unseen by the camera, casts no shadow | It bounces light into the printer and shows in the tear bar, as a real slip would. Hide it in anything that records the desk (see the rules) |
-| Room | `env.npz`: an ambient map and a soft key per theme, from the old lab renderer | Fills the shadows and gives metal something to reflect. It cannot be regenerated; keep the file |
-| Desk | A shadow catcher (it records only shadows) in the page's ground colour (`ground.json`) | The page draws the desk; the renders carry only the shadows on it |
+| Lamp | `LAMP_WIN`, `LAMP_SIZE`, `LAMP_E`: a 200 mm disc at (-120, -120, 400) mm from the window's top left, aimed at the window centre. `calibrate_lamp` sets its power so a flat white surface at the window centre gets 2.16 (sun units) | The key light. Fixed to the window, so the printer's light changes as it moves down the page |
+| Bounce card | `CARD_F` (0.10 of the lamp's power; the env var `CARD_F` overrides it), `CARD_WIN`, `CARD_SIZE`: a 400 x 120 mm soft rectangle, 160 mm in front of the window's bottom edge and 130 mm up, aimed at the window centre, unseen by the camera | A photographer's white card. It lifts the front faces a little. It sits close to the desk, so it gives roughly 15 to 20% of the desk's light (estimates differ with how you model it), and its long soft shadows show; that is real, not a bug |
+| Invisible paper | `build_paper` (env `PAPER=0` drops it): a white 80 mm sheet (x 42-362) leaving the slot at z 2.4, drooping to the desk over 72 px, then flat. Unseen by the camera, casts no shadow | It bounces light into the printer and shows in the tear bar, as a real slip would. Hide it in anything that records the desk (see the rules) |
+| Room | `env.npz` (loaded in `parts.py` `setup_world`): an ambient map and a soft key per theme, made by an earlier renderer that is not in this repo | Fills the shadows and gives metal something to reflect. It cannot be regenerated; keep the file. Its orientation is already correct (an early version had the soft key 180 degrees off); do not rotate it in Blender |
+| Desk | A shadow catcher (it records only shadows) in the page's ground colour, `DESK_LIN` / `ground.json` | The page draws the desk; the renders carry only the shadows on it. The colour also tints the light the desk bounces into the parts |
+
+`ground.json` is the colour under the module on the live page, measured from
+screenshots of `/slips` at 1440 x 900 (window (1150, 800), in each theme): the
+plate with its tone overlay, not a CSS token. If the page's ground changes,
+measure it again, update `ground.json` and `DESK_LIN`, and re-render.
 
 ### Materials
+
+`make_all_mats` in build.py.
 
 | Part | Finish |
 |---|---|
 | Carriage casting | Light theme: satin aluminium with bead-blast grain. Dark theme: black anodize |
-| Bearing cover, motor strap | The opposite finish to the casting in each theme (black anodize in light, satin aluminium in dark) |
+| Bearing cover, motor strap | The opposite finish to the casting in each theme (black anodize in light, satin aluminium in dark), so a bolted-on part reads as its own part |
 | Printer | Moulded near-black plastic (`#161513`), edge radius 0.7, a stipple texture and a little mottling |
 | Rod | Ground steel, anisotropic along its length |
 | Way | Lapped steel lands with lengthwise grain and a polished track where the shoe runs; a dark slot floor |
 | Shoe tongue | White acetal |
 | Flat cable | Amber polyimide, semi-gloss. The amber is the material's colour, not an accent |
 | Drive | Polyurethane tyre with a worn band, steel boss, bronze bushings, steel shafts, a coupling |
-| Screws | Black oxide socket screws, only at real joints (`meta_*.json` lists each joint). The roller boss and the coupling carry two set screws each, a quarter turn apart |
+| Screws | Black oxide socket screws, only at real joints. `screw()` records each joint; a full render writes the list (the `screws` key of `out/meta_<theme>_<tag>.json`). The roller boss and the coupling carry two set screws each, a quarter turn apart, the coupling's half a turn from the boss's |
 | Supports | The casting's finish |
 
 Every edge is rounded by Cycles' Bevel shader node, not by geometry (geometric
@@ -78,7 +97,22 @@ bevels on boolean results collapse). The edges keep the part's own material,
 so a chamfer catches light only where the lamp or the card reflects in it.
 That is `BK_EDGE=face`, which the render scripts set. Without it the old
 bright-cut edge band comes back (a shinier metal plus a white diffuse share on
-every edge), which is not physical.
+every edge), which is not physical. For a thin part, use a Bevel radius
+smaller than the part (the globals are `RL` 2.5 and `RD` 1.5).
+
+### Names and indexes that matter
+
+The render modes pick parts by object name and pass index. Name new parts so
+they do not collide.
+
+| What | Picks | Where |
+|---|---|---|
+| The drive (turns in the drive frames) | names starting `tyre`, `boss`, `rscrew`, `rshaft`, `cpl`, `cscrew`, `mshaft` | `run_roll` |
+| The deck (pass index 3) | everything `build_deck` makes, except `tongue` (it rides with the carriage) | `main` |
+| Deck parts kept as cut-outs in the head unit's renders | names starting `desk`, `rod`, `sub`, `land`, `wayfloor` | `run_layers`, `run_roll` |
+| The supports (hidden for the strip, rendered alone otherwise) | deck names starting `sup`, `screw` | `main` (`HIDE_SUP`) |
+| The rod inside the cap | `rodin` (`inner_rod`) | `run_layers`, `run_roll` |
+| The tear bar (exempt from the reflection darkening) | pass index 7 | `post.py`, `compare.py` |
 
 ### The one departure from plain physics
 
@@ -86,14 +120,15 @@ A polished surface shows what it reflects, not where light lands, so a
 shadow falling on the motor can or the rod barely shows. `compare.py` and
 `post.py` darken metal reflections where the lamp is blocked (`KV` 0.85, from
 a lamp-only visibility pair) and by ambient occlusion (`KA` 1.0). The tear
-bar is exempt (object index 7): it sits in the printer's shadow and reflects
-the room in front. This is deliberate; keep it.
+bar is exempt: it sits in the printer's shadow and reflects the room in
+front. This is deliberate; keep it.
 
 ## What gets rendered
 
-Everything renders on the CPU (`Blender -b --factory-startup`); the Metal GPU
-hangs in Blender 5.2. `render-all.sh` runs it all, both themes, in about 45
-minutes; `render-head.sh` redoes only the head unit and the drive.
+Everything renders on the CPU; the Metal GPU hangs in Blender 5.2.
+`render-all.sh` runs it all, both themes, in about 32 minutes on a 10-core
+Mac; `render-head.sh` redoes only the head unit and the drive (about 20).
+Both stop at the first failed render and print `ALL DONE` only on success.
 
 | Render | Switches | What it holds |
 |---|---|---|
@@ -101,25 +136,40 @@ minutes; `render-head.sh` redoes only the head unit and the drive.
 | Drive | `ROLL=48 HEAD_X=928 HEAD_Y=260` | The tyre, boss, shafts, coupling and their set screws at 48 angles, at the hold height. Everything else is cut out but still lights and shades them |
 | Rod and way strip | `HIDE_HEAD HIDE_SUP PAPER=0`, crop window y -40..1640 | The rod and the way the full height of a window, with the rod's shadow |
 | Supports | `HIDE_HEAD ROD_HOLD PAPER=0` | The top support where it is seen (the page at its top, module top at window y 237) and the bottom one (the page at its end, module bottom at window y 801). The rod is cut out but still casts |
-| Full render | no mode switch | The whole module at one position, for review: `python3 compare.py post <tag>` writes `out/render-<theme>-<tag>.png` |
+| Full render | no mode switch | The whole module at one position, for review: `python3 compare.py post <tag> [light|dark]` writes `out/render-<theme>-<tag>.png` (both themes unless one is named) |
 
 `HEAD_X=928` puts the module 208 px right of the eye. Across window widths the
 module sits 142 px (1180 wide) to 272 px (1440 wide) right of the eye
-(`checks/measure.mjs`); the page's warp covers the difference.
+(`checks/measure.mjs`). The camera, lamp and card are fixed to the window;
+between heights only they move, never the model.
 
-The camera, lamp and card are fixed to the window; between heights only they
-move, never the model.
+The warp on the page is accurate while `|D| * z / (2200 - z)` stays under
+about 3 px, `D` being how far the printer is from the render it uses. With
+parts up to 70 px tall that allows about 90 px: the column's 125 px spacing
+(62 px at most to the nearest render) and the 65 px of sideways spread fit. A
+taller part, or a wider spread of window positions, needs more renders.
 
-## Turning renders into page assets
+Renders are not bit-identical from run to run. A full re-render from these
+scripts matched the shipped images within 7 levels of 255 (most files within
+1 or 2; the colour atlases differ only in sampling speckle), with `head.json`
+identical. Use that as the bar when checking a re-render.
+
+## Turning renders into page images
 
 | Step | Does |
 |---|---|
 | `post.py <theme> col` | Each height: the reflection darkening, then colour as straight-alpha sRGB, height as u8 (255 = 128 px), shadow as the linear share of light lost |
 | `deckpost.py strip supa supb` | The same darkening for the deck renders |
 | `deck.py` | Cuts the rod and way strips and the supports. Converts shadow from a linear share to the alpha that darkens the page's ground by that share, feathers sprite sides, and makes each support carry only the shade the rod strip under it lacks |
-| `pack.py` | Packs the column into atlases, writes the drive frames, the static fallback and `head.json` |
+| `pack.py` | Packs the column into atlases, writes the drive frames, the static fallback and `head.json`, and warns if the page does not point at this version's folder |
 
-What ships in `public/hardware/feed/`:
+The images go to `public/hardware/feed/<version>/`, the version being
+`scripts/render/version.txt` (now `v1`). Files under `/hardware` are served
+with a one-year immutable cache (`next.config.mjs`), so a changed image must
+never reuse a published file name. Every re-render ships under a new version:
+see the recipe below.
+
+What ships in `public/hardware/feed/v1/`:
 
 | File | Holds |
 |---|---|
@@ -129,15 +179,22 @@ What ships in `public/hardware/feed/`:
 | `roll-<theme>.png` | The drive's 48 frames side by side |
 | `feed-rod-*`, `feed-way-*` | Window-height strips |
 | `feed-support-{t,b}-*`, `feed-way-end-{t,b}-*` | The supports and the way's ends |
-| `feed-slot-*` | The cable slot and its brushes (earlier sprites, kept by choice; flat, so the camera change does not show) |
 | `head.json` | The manifest (below) |
+
+The cable slot and its brushes (`public/hardware/feed/feed-slot-*`, outside
+the version folder) come from the earlier renderer, which is not in this
+repo; nothing here regenerates them. They are flat and dark, so camera and
+light changes leave them close enough. If they ever must change, they need
+building in `build.py` (`build_bristles` exists but is unused).
 
 `head.json`: `scale` (2), `anchor_y` (147.92), `eye_front` (480, px in front
 of the window's bottom edge), and per theme: `atlas`, `cell`, `crop` (CSS px),
-`zs` (height scale), `zmax`, `eye_h` (2200), `ground`, `roll` (`n`, frame
-`size`, origin `o`, eye-relative anchor `e`, height `z`) and `cells`. Each cell
-has its atlas origin `cell`, its crop origin `o` in head-unit px, and `e`, the
-eye-relative position of its desk-level anchor.
+`zs` (height scale), `zmax`, `eye_h` (2200), `ground`, `fallback` (the render
+the static image is made from and its origin), `roll` (`n`, frame `size`,
+origin `o`, eye-relative anchor `e`, height `z`) and `cells`. Each cell has its
+`name`, its atlas origin `cell`, its crop origin `o` in head-unit px, `e`, the
+eye-relative position of its desk-level anchor, and `head`, the window
+position it was rendered at.
 
 ## How the page uses them
 
@@ -146,7 +203,8 @@ The head unit's box (`.sl-head-unit`) is anchored at desk level: its origin is
 Flat things stay put relative to it and raised parts lean, which is what the
 camera does.
 
-`slip-lens.ts` (one WebGL 2 canvas over the head unit):
+`slip-lens.ts` (one WebGL 2 canvas over the head unit, started only while the
+window is 1180 px or wider, where the module shows):
 
 1. Finds the head unit's place against the eye:
    `e = (left - innerWidth / 2, top + 147.92 - (innerHeight + 480))`.
@@ -159,8 +217,8 @@ camera does.
    alone gives the outline.
 5. Mixes the two renders' shadows and draws them as black at the alpha that
    darkens the ground by that share.
-6. Draws the drive frame for the carriage's travel (`frame = travel / 12 px`
-   as an angle, 48 frames a turn) over the drive, warped the same way.
+6. Draws the drive frame for the carriage's travel (`travel / 12 px` as an
+   angle, 48 frames a turn) over the drive, warped the same way.
 
 It draws only when the head unit moves in the window, the carriage travels or
 the window resizes, and reloads its textures on a theme switch.
@@ -226,35 +284,50 @@ Each of these was learned by getting it wrong.
    unit's colour render: where one is in front of the head unit it leaves a
    transparent hole (the page's deck sprite shows there), and it still casts
    shadows and bounces light.
-9. Render on the CPU, bevel with the shader node, and keep the environment
-   rotation fix in `parts.py`.
-10. Judge renders against a full render and check cast shadows. Do not
+9. Render on the CPU, bevel with the shader node, and leave `env.npz` as it
+   is.
+10. Never reuse a published image name. `/hardware` is cached for a year.
+11. Judge renders against a full render and check cast shadows. Do not
     pass on a summary of a render you have not looked at.
 
 ## Recipes
 
-Re-render after any scene change and look before shipping:
+Look before you render everything (both themes, low samples):
 
 ```
 cd scripts/render
-BK_EDGE=face Blender -b --factory-startup --python build.py -- light 32 2 look
-python3 compare.py post look light       # out/render-light-look.png
-./render-all.sh                          # or ./render-head.sh
+B=${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}
+for t in light dark; do BK_EDGE=face $B -b --factory-startup --python build.py -- $t 32 2 look > out/log_look_$t.txt 2>&1; done
+python3 compare.py post look              # out/render-{light,dark}-look.png
 ```
 
-Then check the page with the sandbox running (`npm run sandbox`):
-`node scripts/render/checks/shots.mjs <outdir>` (both themes at three
-scrolls), `motion.mjs` (frames and frame times during a catch-up), `rm.mjs`
-(reduced motion), `drag.mjs` (grab and push).
+Ship a re-render:
+
+1. Bump `scripts/render/version.txt` (`v1` to `v2`).
+2. Run `./render-all.sh` (or, for head-unit changes only, copy the deck's
+   images from the old folder into the new one and run `./render-head.sh`).
+3. Point the page at the new folder:
+   `sed -i '' 's#hardware/feed/v1/#hardware/feed/v2/#' 'app/(dashboard)/slips/slips.css' 'app/(dashboard)/slips/slip-lens.ts'`.
+4. Delete the old folder (`git rm -r public/hardware/feed/v1`).
+5. Check the page with the sandbox running: `node scripts/render/checks/shots.mjs <outdir>`
+   (both themes at three scrolls), `motion.mjs` (frames and frame times
+   during a catch-up; frames held at 16.7 ms, p95 16.8, when this was
+   written), `rm.mjs` (reduced motion), `drag.mjs` (grab and push). They
+   print JSON and save screenshots; you judge them.
+6. Update `docs/design-spec.md` if what the module looks like or does
+   changed, and this document if any number or rule changed.
+
+Changes:
 
 - To change a material or the light, edit `build.py` (`make_all_mats`,
-  `setup_card`, `LAMP_*`) or `parts.py`, then `render-all.sh`.
+  `setup_card`, `CARD_F`, `LAMP_*`) or `parts.py`, then ship a re-render
+  with `render-all.sh`.
 - To change the carriage, printer, cable or drive, edit `build_carriage`,
-  `build_printer`, `build_cable` or `build_drive`, then `render-head.sh`.
-  Anything built there rides with the carriage and appears in the column.
-  A part that turns with the drive also goes in `run_roll`'s list and inside
-  the drive crop (x -1 to 42).
-- To add a deck part, build it in `build_deck` (it gets object index 3). If it
+  `build_printer`, `build_cable` or `build_drive`, then ship with
+  `render-head.sh`. Anything built there rides with the carriage and appears
+  in the column. A part that turns with the drive needs a drive name (see
+  the names table) and must fit the drive crop (x -1 to 42).
+- To add a deck part, build it in `build_deck` (it gets pass index 3). If it
   is the same along its length, cut it from the strip render in `deck.py` and
   give it a window-fixed box in `slips.css`. If it is a single object, render
   it where it is usually seen (like the supports) and, if it sits over a
@@ -263,8 +336,22 @@ scrolls), `motion.mjs` (frames and frame times during a catch-up), `rm.mjs`
   `slip-feed.tsx` and the head unit's `margin-top` in `slips.css`. `REST` is
   the carriage's back face (52 px behind the box origin at desk level) meeting
   the top support's front face (module y 40): 40 + 52.
-- To use this camera elsewhere, measure where the new module sits at several
-  window sizes (`checks/measure.mjs`), set `HEAD_X`, `CROP` and the column's
-  heights in a new run script, and keep the lamp, card and room as they are,
-  so the new parts match these. The page side is `slip-lens.ts` with a new
-  manifest.
+
+### Using this camera for another module
+
+It can be done, but the code is written for this one module:
+
+- `build.py` is a script, not a library: it builds and renders on load, and
+  takes its helpers from `parts.py` by running part of that file. The camera,
+  lamp, card, room and pass setup (`setup_camera`, `setup_lamp`,
+  `setup_card`, `build_paper`, `exr`, `grab`, `run_layers`) would need moving
+  into a shared module first.
+- `geo.py`'s anchors (`HEAD`, the lid top at z 58.06, `wy`) and the page's
+  desk-level anchor (147.92) are the Slips printer's. A new module needs its
+  own.
+- `slip-lens.ts` names its folder, files, elements (`.sl-head-unit`,
+  `.sl-cast`) and anchor, and picks renders along y only.
+- The checks open `/slips` and its elements; copy and adapt them
+  (`measure.mjs` gives a module's position at several window widths).
+- Keep the lamp, card and room exactly as they are, so the new parts match
+  these.

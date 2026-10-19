@@ -377,15 +377,13 @@ def make_all_mats():
     if not DARK:
         edge = ('#e8e9ea', 0.14, 0.2, '#e8e9ea')
         M['sup'] = machined('sup', '#cfd1d3', 0.6, 0.55, 0.5, edge, Z_SUP, RL, grain=(3.1, 0.45, 0.65, GA0, GA1), band=LBAND)
-        # change 1: the bearing cover is a separate black-anodized part on the satin carriage
+        # the bearing cover is a separate black-anodized part on the satin carriage
         M['cover'] = machined('cover', '#1f1e1d', 0.0, 0.55, 0.4, ('#c8c8c5', 0.08, DDIFF, '#f2f2ee'), ZT, RD,
                               chamfer=True, band=DBAND)
         M['way'] = machined('way', '#8e9194', 0.85, 0.42, 0.5, ('#d8dadc', 0.12, 0.2, '#e0e2e4'), 0.05, 0.5, band=LBAND)
     else:
         edge = ('#c8c8c5', 0.08, DDIFF, '#f2f2ee')
         M['sup'] = machined('sup', '#1f1e1d', 0.0, 0.55, 0.4, edge, Z_SUP, RD, chamfer=True, band=DBAND)
-        # change 1, dark: a slightly deeper, glossier black so the cover reads as its own part on the anodized carriage
-        M['cover'] = machined('cover', '#131313', 0.0, 0.42, 0.45, edge, ZT, RD, chamfer=True, band=DBAND)
         M['way'] = machined('way', '#4b4c4d', 0.8, 0.45, 0.5, ('#9a9c9e', 0.12, 0.2, '#a0a2a4'), 0.05, 0.5, band=LBAND)
     # screwed-on parts take the opposite finish to the carriage (user, 2026-10-17): the bearing cover and the motor
     # strap are black anodize on the satin carriage, and satin aluminium on the black-anodized one
@@ -568,8 +566,9 @@ def build_drive(M, objs):
 
 
 def cable_path():
-    """carriage.py's fold: flat from under the strap's back foot to y 44, r4 up 85 deg, crest r12 through -175 deg,
-    then the leg straight down behind the carriage into the slot. -> list of (y, z) on the centre line."""
+    """the flat cable's fold: flat from under the strap's back foot to y 44, an arc up (CAB_R1, CAB_A1), the crest
+    arc, then the leg down behind the carriage into the slot (read the code below for the radii and angles in use).
+    -> list of (y, z) on the centre line."""
     z0 = ZT + 0.5 * CAB['t']
     pts = [(CAB['y0'], z0)]
     y, z, h = CAB['flat_to'], z0, 0.0

@@ -11,7 +11,7 @@ ground by that share, and feathered to nothing at the sprites' sides. Module x 0
 import json, os
 import numpy as np
 from PIL import Image
-HERE = os.path.dirname(os.path.abspath(__file__)); PUB = os.path.join(os.path.dirname(os.path.dirname(HERE)), 'public', 'hardware', 'feed')
+HERE = os.path.dirname(os.path.abspath(__file__)); PUB = os.path.join(os.path.dirname(os.path.dirname(HERE)), 'public', 'hardware', 'feed', open(os.path.join(HERE, 'version.txt')).read().strip())
 X0 = 922.5103
 GROUND = json.load(open(os.path.join(HERE, 'ground.json')))
 
@@ -73,6 +73,7 @@ def over_strip(p, shadow, strip, rows, c_off, on):
     return q
 
 
+os.makedirs(PUB, exist_ok=True)
 boxes = {}
 for theme in ('light', 'dark'):
     st, ss = load(theme, 'strip')                      # window y -40 .. 1640

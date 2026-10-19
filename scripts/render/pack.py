@@ -10,7 +10,7 @@ import glob, json, os
 import numpy as np
 from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
-PUB = os.path.join(os.path.dirname(os.path.dirname(HERE)), 'public', 'hardware', 'feed')
+PUB = os.path.join(os.path.dirname(os.path.dirname(HERE)), 'public', 'hardware', 'feed', open(os.path.join(HERE, 'version.txt')).read().strip())
 ANCHOR_Y = 147.92          # the printer's front at the desk (model y -147.92) in head-unit px
 EYE_REF = (720.0, 1380.0)
 HOLD = 260.0
@@ -24,6 +24,7 @@ def srgb(x):
     x = np.clip(x, 0, 1); return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
 
+os.makedirs(PUB, exist_ok=True)
 man = {'scale': 2.0, 'anchor_y': ANCHOR_Y, 'eye_front': 480.0, 'themes': {}}
 OUT = os.path.join(HERE, 'out')
 for theme in ('light', 'dark'):
@@ -80,3 +81,9 @@ for theme in ('light', 'dark'):
         print(f, os.path.getsize(os.path.join(PUB, f)) // 1024, 'KB')
 json.dump(man, open(os.path.join(PUB, 'head.json'), 'w'), indent=1)
 print('cells', len(man['themes'].get('light', {}).get('cells', [])))
+# the page must point at this version's folder (the /hardware files are cached for good, so a re-render ships under a
+# new folder name; docs/rendering.md)
+V = os.path.basename(PUB); ROOT = os.path.dirname(os.path.dirname(HERE))
+for f in ('app/(dashboard)/slips/slips.css', 'app/(dashboard)/slips/slip-lens.ts'):
+    if '/hardware/feed/%s/' % V not in open(os.path.join(ROOT, f)).read():
+        print('WARNING: %s does not point at /hardware/feed/%s/ yet' % (f, V))

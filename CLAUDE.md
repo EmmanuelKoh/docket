@@ -122,8 +122,10 @@ and the Printer page every 3s while a pairing is pending.
 - `scripts/`: account, plugin and template tools, `print-calibration.js`
   (grayscale wedges through the real pipeline; signs in with
   `DOCKET_EMAIL`/`DOCKET_PASSWORD`), `tape-eval/` (`npm run tape:eval`
-  scores every `data/clips/*.truth.json` fixture). `agent/` and
-  `transport/` are laptop stand-ins for the ESP32.
+  scores every `data/clips/*.truth.json` fixture), `render/` (the
+  Blender scene behind the Slips feed module's images; read
+  `docs/rendering.md` first). `agent/` and `transport/` are laptop
+  stand-ins for the ESP32.
 
 ## Storage
 

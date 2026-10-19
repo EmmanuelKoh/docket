@@ -207,7 +207,9 @@ export function startLens(
     const g = ++gen;
     const theme =
       document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-    const f = '/hardware/feed/';
+    // the renders' folder: a re-render ships under a new version (the
+    // /hardware files are cached for good; docs/rendering.md)
+    const f = '/hardware/feed/v1/';
     try {
       man = man ?? ((await (await fetch(`${f}head.json`)).json()) as Manifest);
       const s = man.themes[theme];

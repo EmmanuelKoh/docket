@@ -232,8 +232,26 @@ export function SlipFeed({
   // motion keeps the static render
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (!head.current || !lens.current) return;
-    return startLens(head.current, lens.current);
+    const h = head.current;
+    const cv = lens.current;
+    if (!h || !cv) return;
+    // the module shows only in wide windows (slips.css): load nothing
+    // until it does
+    const wide = window.matchMedia('(min-width: 1180px)');
+    let stop: (() => void) | null = null;
+    const sync = () => {
+      if (wide.matches && !stop) stop = startLens(h, cv);
+      else if (!wide.matches && stop) {
+        stop();
+        stop = null;
+      }
+    };
+    sync();
+    wide.addEventListener('change', sync);
+    return () => {
+      wide.removeEventListener('change', sync);
+      stop?.();
+    };
   }, []);
 
   // the wheel glide: every wheel step moves a target and the page eases
